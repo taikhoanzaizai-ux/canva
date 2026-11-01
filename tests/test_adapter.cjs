@@ -3,7 +3,23 @@ const context={globalThis:{},document:{},setTimeout,Promise,console};vm.createCo
 vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),context);
 const adapter=context.globalThis.SKSTAdapter;
 assert.equal(adapter.norm('Nhón GÓT chân'),'nhon got chan');
+const accessibleCopy={textContent:'Âm thanhÂm thanh',querySelectorAll:()=>[{remove:()=>accessibleCopy.textContent='Âm thanh'}]};
+assert.equal(adapter.label({getAttribute:()=>null,cloneNode:()=>accessibleCopy}),'Âm thanh','Ignore Canva aria-hidden duplicate tab captions');
 const scene={positive:['heel','senior'],negative:['ballet'],preferred:'Senior heel raise'};
 assert(adapter.score({title:'Senior heel raise'},scene)>adapter.score({title:'ballet heel raise'},scene));
 assert(adapter.score({title:'ballet heel raise'},scene)<-50);
-console.log('Adapter ranking: passed; live Canva mutations require installed extension validation.');
+const select=(...inputs)=>adapter.uploadInput({querySelectorAll:()=>inputs});
+const canvaInput={accept:'*/*',disabled:false};
+assert.equal(select(canvaInput),canvaInput,'Observed Canva wildcard input accepts MP3');
+const imageOnly={accept:'image/*',disabled:false},audio={accept:'.MP3, .WAV',disabled:false};
+assert.equal(select(imageOnly,canvaInput,audio),audio,'Prefer audio-compatible input');
+assert.equal(select(imageOnly),null,'Do not send voice to image-only picker');
+assert.equal(select({accept:'*/*',disabled:true}),null,'Disabled upload is not ready');
+assert.equal(select(),null,'Missing lazy-loaded input must wait');
+const duration={getAttribute:key=>key==='placeholder'?'--':null};
+assert.equal(adapter.durationInput({querySelectorAll:()=>[duration]}),duration,'Observed Canva duration uses placeholder, not aria-label');
+assert(adapter.audioOnTimeline('test.mp3',{querySelectorAll:selector=>{
+ assert(selector.includes('[role="button"]'));
+ return [{getAttribute:k=>k==='aria-label'?'test.mp3, đoạn âm thanh':null}];
+}}),'Audio timeline DIV role=button must be recognized');
+console.log('Adapter ranking and Canva upload-input regression checks passed. Live full timeline still requires browser validation.');

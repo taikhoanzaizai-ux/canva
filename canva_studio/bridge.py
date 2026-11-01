@@ -1,8 +1,13 @@
 """Authenticated loopback bridge. Stores no Canva cookies or passwords."""
-import base64, json, secrets, threading, time
+import base64, hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .core import atomic_json, valid_canva, VERSION
+MIN_EXTENSION_VERSION='0.2.2'
+
+def compatible_extension(value):
+    try:return tuple(int(p) for p in value.split('.'))>=tuple(int(p) for p in MIN_EXTENSION_VERSION.split('.'))
+    except (AttributeError,ValueError):return False
 
 class Engine:
     def __init__(self, folder):
@@ -55,6 +60,10 @@ class Engine:
                 return dict(task=None,mode='other_client')
             self.browser={**body,'seen':time.time()}
             if self.state['mode']!='running':return dict(task=None,mode=self.state['mode'])
+            if not compatible_extension(body.get('extension_version')):
+                message='Cần cài tiện ích SKST '+MIN_EXTENSION_VERSION+' từ thư mục TienIch_Canva cạnh ứng dụng, rồi tải lại tab Canva.'
+                if self.state['message']!=message:self.log(message)
+                return dict(task=None,mode='extension_outdated')
             if self.running and self.running['client']!=body.get('client'):return dict(task=None,mode='busy')
             if not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
@@ -111,8 +120,10 @@ def serve(engine,port=8766):
                     if not engine.running or engine.running['id']!='voice' or engine.state['mode']!='running':raise ValueError('Không có lệnh tải voice.')
                     path=Path(engine.state['voice'])
                     if path.stat().st_size>80*1024*1024:raise ValueError('Voice vượt 80 MB. Hãy chọn đoạn ngắn hơn.')
-                    v=dict(name=path.name,data=base64.b64encode(path.read_bytes()).decode())
-                elif self.path=='/ping':v=dict(ok=True,version=VERSION)
+                    payload=path.read_bytes();suffix=path.suffix.lower()
+                    mime={'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'}.get(suffix,'audio/mpeg')
+                    v=dict(name='SKST_voice_'+hashlib.sha256(payload).hexdigest()[:16]+suffix,mime=mime,data=base64.b64encode(payload).decode())
+                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],message=engine.state['message'])
                 else:return self.send(404,dict(error='Không tìm thấy'))
                 self.send(200,v)
             except Exception as exc:self.send(400,dict(error=str(exc)))

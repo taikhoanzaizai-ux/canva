@@ -42,7 +42,7 @@ class EngineTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.e=Engine(self.tmp.name)
         self.e.configure(dict(scenes=[dict(id=1,start=0,duration=4,text='test',queries=['test'])]),'https://www.canva.com/design/abc/def/edit','voice.mp3')
-        self.client=dict(client='A',url=self.e.state['target']);self.e.start()
+        self.client=dict(client='A',url=self.e.state['target'],extension_version='0.2.2');self.e.start()
     def tearDown(self):self.tmp.cleanup()
     def test_durable_insert_intent_blocks_duplicate(self):
         self.e.state['voice_done']=True;t=self.e.next_task(self.client)['task'];self.e.check(dict(id=t['id'],client='A',stage='insert_intent'))
@@ -53,6 +53,11 @@ class EngineTests(unittest.TestCase):
         self.assertIsNone(self.e.next_task(dict(client='X',url='https://wrong.test'))['task'])
         self.assertEqual(self.e.next_task(self.client)['task']['kind'],'voice')
         self.assertIsNone(self.e.next_task({**self.client,'client':'B'})['task'])
+    def test_old_extension_cannot_start_mutation(self):
+        old={k:v for k,v in self.client.items() if k!='extension_version'}
+        response=self.e.next_task(old)
+        self.assertEqual(response['mode'],'extension_outdated');self.assertIsNone(response['task']);self.assertIsNone(self.e.running)
+        self.assertIn('0.2.2',self.e.state['message'])
     def test_full_lifecycle(self):
         for id_ in ['voice','1','export']:
             task=self.e.next_task(self.client)['task'];self.assertEqual(task['id'],id_)
@@ -68,6 +73,19 @@ class EngineTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError):urllib.request.urlopen(req)
             req.add_header('X-SKST-Token',self.e.token)
             self.assertTrue(json.load(urllib.request.urlopen(req))['ok'])
+        finally:server.shutdown();server.server_close()
+    def test_voice_upload_uses_unique_content_identity(self):
+        import hashlib
+        audio=Path(self.tmp.name)/'voice-cut.mp3';audio.write_bytes(b'first voice')
+        self.e.state['voice']=str(audio);self.e.next_task(self.client)
+        server=serve(self.e,18767)
+        try:
+            def fetch_voice():
+                req=urllib.request.Request('http://127.0.0.1:18767/voice',data=json.dumps(dict(id='voice',client='A')).encode(),headers={'Content-Type':'application/json','X-SKST-Token':self.e.token},method='POST')
+                return json.load(urllib.request.urlopen(req))
+            a=fetch_voice();self.assertEqual(a['name'],'SKST_voice_'+hashlib.sha256(b'first voice').hexdigest()[:16]+'.mp3')
+            audio.write_bytes(b'different voice');b=fetch_voice()
+            self.assertNotEqual(a['name'],b['name']);self.assertEqual(b['mime'],'audio/mpeg')
         finally:server.shutdown();server.server_close()
 
 if __name__=='__main__':unittest.main()

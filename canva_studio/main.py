@@ -8,7 +8,7 @@ if getattr(sys,'frozen',False):
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script
-from canva_studio.bridge import Engine, serve
+from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio import updater
 from canva_studio.storage import data_dir, migrate_legacy
 
@@ -267,7 +267,9 @@ class App:
         st=self.engine.state;n=len(st['scenes']);done=len(st['done']);self.progress['value']=100*done/max(1,n)
         self.status.set(f'{done}/{n} cảnh  •  '+st['message'])
         b=self.engine.browser;online=b and time.time()-b.get('seen',0)<10
-        self.connection.set('Đã kết nối Canva • '+b.get('title','') if online else 'Chưa kết nối tiện ích / chưa mở đúng thiết kế')
+        if online and not compatible_extension(b.get('extension_version')):
+            self.connection.set('Tiện ích đang cũ. Cài lại SKST '+MIN_EXTENSION_VERSION+' từ thư mục TienIch_Canva cạnh ứng dụng.')
+        else:self.connection.set('Đã kết nối Canva • '+b.get('title','') if online else 'Chưa kết nối tiện ích / chưa mở đúng thiết kế')
         self.root.after(500,self.tick)
     def close(self):
         self.engine.pause();self.save_settings()

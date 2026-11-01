@@ -1,4 +1,4 @@
-SKST CANVA STUDIO — BẢN THỬ 0.2.1 PORTABLE
+SKST CANVA STUDIO — BẢN THỬ 0.2.2 PORTABLE
 
 Ứng dụng độc lập, không phải sản phẩm của Canva. Chỉ dùng kho video Canva trong tài khoản của bạn. Không cần khóa AI, không lấy mật khẩu hay cookie.
 
@@ -56,3 +56,6 @@ Sau khi cập nhật tiện ích, vào trang quản lý tiện ích bấm Tải 
 Khi chuyển từ 0.2.0 hoặc cũ hơn lên bản portable 0.2.1, tải gói SKST_Canva_Studio_Windows.zip đầy đủ và giải nén trên ổ bạn muốn. Lần chuyển cấu trúc này không dùng gói Update cũ. Sau đó tiếp tục dùng nút cập nhật trong ứng dụng.
 Tệp cập nhật không xóa voice mẫu và công cụ có sẵn. GitHub không chứa voice, video và dự án riêng của bạn.
 Video MP4 Canva tải theo thư mục tải xuống của trình duyệt. Nếu muốn MP4 cùng ổ ứng dụng, chọn thư mục tải xuống trên ổ đó trong trình duyệt.
+
+SỬA BƯỚC TẢI VOICE TRONG 0.2.2
+Sau khi cập nhật, kiểm tra tiện ích hiển thị phiên bản 0.2.2. Nếu còn bản cũ, gỡ tiện ích cũ và cài lại từ thư mục TienIch_Canva cạnh EXE đang dùng; tải lại tab Canva. Sao chép mã mới từ ứng dụng, dán lại vào tiện ích rồi bấm Bắt đầu/Tiếp tục. Thiết kế đang dừng trước bước tải voice có thể tiếp tục; ứng dụng không xóa danh sách cảnh đã phân tích.
