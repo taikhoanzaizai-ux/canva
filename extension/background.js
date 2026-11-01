@@ -1,5 +1,41 @@
 const editorURL=value=>/^https:\/\/www\.canva\.com\/design\/[^/]+\/[^/]+\/edit(?:[?#]|$)/.test(value||'');
 const canonical=value=>(value||'').split('?')[0].split('#')[0];
+let lastBundleCheck=0;
+function reloadDecision(installed,disk,state){
+  const parse=v=>/^\d+(?:\.\d+){2,3}$/.test(v||'')?v.split('.').map(Number):null;
+  const a=parse(installed.version),b=parse(disk.version);
+  if(!a||!b||disk.manifest_version!==installed.manifest_version||disk.name!==installed.name)return 'none';
+  let newer=false;
+  for(let i=0;i<Math.max(a.length,b.length);i++){
+    if((b[i]||0)>(a[i]||0)){newer=true;break;}
+    if((b[i]||0)<(a[i]||0))return 'none';
+  }
+  if(!newer)return 'none';
+  for(const key of ['permissions','host_permissions','optional_permissions','optional_host_permissions']){
+    if(JSON.stringify([...(installed[key]||[])].sort())!==JSON.stringify([...(disk[key]||[])].sort()))return 'permission_change';
+  }
+  const matches=m=>(m.content_scripts||[]).flatMap(s=>s.matches||[]).sort();
+  if(JSON.stringify(matches(installed))!==JSON.stringify(matches(disk)))return 'permission_change';
+  if(state.active_task||!['idle','ready','paused','attention','complete'].includes(state.mode))return 'busy';
+  return 'reload';
+}
+async function refreshLocalBundle(token,force){
+  if(!force&&Date.now()-lastBundleCheck<8000)return null;
+  lastBundleCheck=Date.now();
+  const installed=chrome.runtime.getManifest();
+  const response=await fetch(chrome.runtime.getURL('manifest.json')+'?skst='+Date.now(),{cache:'no-store'});
+  if(!response.ok)return null;
+  const disk=await response.json();
+  if(disk.version===installed.version)return null;
+  const state=await bridgeFetch('ping',{},token);
+  const decision=reloadDecision(installed,disk,state);
+  if(decision==='permission_change')throw Error('Tiện ích mới cần quyền khác. Tải lại tiện ích trong Chrome và xác nhận quyền trước khi dùng.');
+  if(decision!=='reload')return null;
+  // Desktop app has already downloaded and verified these local files from
+  // GitHub Releases. Never fetch/eval remote JavaScript or interrupt a task.
+  setTimeout(()=>chrome.runtime.reload(),300);
+  return {reloading:true,version:disk.version};
+}
 async function bridgeFetch(route,body,token){
   const response=await fetch('http://127.0.0.1:8766/'+route,{
     method:'POST',headers:{'Content-Type':'application/json','X-SKST-Token':token||''},
@@ -30,6 +66,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (!['next','checkpoint','result','voice','ping'].includes(route)) throw Error('Lệnh không hợp lệ');
       const {token,enabled} = await chrome.storage.local.get(['token','enabled']);
       if (!enabled) {respond({disabled:true});return;}
+      if(popup||route==='next'){
+        const refresh=await refreshLocalBundle(token,popup);
+        if(refresh){respond(refresh);return;}
+      }
       let data=await bridgeFetch(route,popup?{}:{...message.body,url:sender.url,extension_version:chrome.runtime.getManifest().version},token);
       if(popup){
         const tab=await attachController(data);
@@ -44,4 +84,11 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       respond(data);
     } catch(e) {respond({error:e.message});}
   })();return true;
+});
+chrome.runtime.onInstalled.addListener(()=>{
+  (async()=>{
+    const {token,enabled}=await chrome.storage.local.get(['token','enabled']);
+    if(!enabled||!token)return;
+    try{const data=await bridgeFetch('ping',{},token);await attachController(data);}catch{}
+  })();
 });

@@ -20,7 +20,11 @@ Voice mẫu riêng tư không được đưa lên GitHub. Người đã cài gó
 
 Từ **0.2.0**, bấm **Kiểm tra cập nhật** ở góc trên phải. Ứng dụng kiểm tra GitHub Releases, tải gói `SKST_Canva_Studio_Update.zip`, đối chiếu SHA-256 do GitHub cung cấp, rồi đóng và mở lại sau khi cài. Bản cũ được sao lưu; bản mới không khởi động được sẽ phục hồi bản trước.
 
-Cấu hình, tiến độ, voice đã cắt, log, cache, file tạm và bản cập nhật nằm trong **`Data` cạnh EXE**, trên đúng ổ bạn giải nén. Thư viện chạy ở `_internal`, không bung vào Temp ổ C. Tệp voice và công cụ có sẵn được giữ khi cập nhật. Khi tiện ích được sửa, tải lại tiện ích trong trang quản lý tiện ích và tải lại tab Canva.
+Cấu hình, tiến độ, voice đã cắt, log, cache, file tạm và bản cập nhật nằm trong **`Data` cạnh EXE**, trên đúng ổ bạn giải nén. Thư viện chạy ở `_internal`, không bung vào Temp ổ C. Tệp voice và công cụ có sẵn được giữ khi cập nhật.
+
+Từ **0.2.4**, nút **Cập nhật ứng dụng + tiện ích từ GitHub** tải cả EXE và `TienIch_Canva`. Tiện ích đọc phiên bản manifest cục bộ, tự nạp lại khi đang rảnh, rồi gắn bộ dựng trở lại. Không tải/eval JavaScript từ GitHub trong trình duyệt. Nếu quyền thay đổi, Chrome vẫn cần bạn xác nhận; đang dựng thì hoãn nạp lại.
+
+**Cài lần đầu một lần:** dùng `TienIch_Canva` cạnh EXE làm thư mục cố định. Có thể tải riêng `SKST_Canva_Extension.zip` từ Releases. Trong Kết nối & công cụ, nút **Kiểm tra tiện ích Chrome đang dùng** chỉ rõ đường dẫn đăng ký cũ nếu trình duyệt đang dùng bản khác. Ứng dụng không tự sửa Chrome Preferences hoặc cài ngầm tiện ích. Các bản trước 0.2.4 cần cài bản tiện ích này một lần để có cơ chế tự nạp lại.
 
 **Chuyển từ 0.2.0 trở xuống lên 0.2.1:** tải `SKST_Canva_Studio_Windows.zip` đầy đủ, giải nén trên ổ muốn dùng và giữ nguyên `_internal`. Đây là lần chuyển cấu trúc nên không dùng gói Update cũ. Các lần sau dùng nút cập nhật trong bản portable. Dữ liệu AppData cũ được sao chép sang `Data` nếu chưa có dự án portable; bản gốc được giữ dự phòng.
 

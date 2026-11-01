@@ -11,6 +11,8 @@ from canva_studio.core import VERSION, load_transcript, read_script, make_plan, 
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio import updater
 from canva_studio.storage import data_dir, migrate_legacy
+from canva_studio.storage import application_dir
+from canva_studio.companion import companion_status
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
 DATA=data_dir()
@@ -68,6 +70,9 @@ class App:
         self.token_entry=ttk.Entry(token,width=48,state='readonly',textvariable=self.token_var);self.token_entry.pack(side='left')
         ttk.Button(token,text='Sao chép mã',command=self.copy_token).pack(side='left',padx=8)
         ttk.Button(settings,text='Mở thư mục tiện ích để cài',command=self.extension_folder).pack(anchor='w',pady=8)
+        ttk.Button(settings,text='Cập nhật ứng dụng + tiện ích từ GitHub',command=self.check_update).pack(anchor='w',pady=3)
+        ttk.Button(settings,text='Kiểm tra tiện ích Chrome đang dùng',command=self.inspect_companion).pack(anchor='w',pady=3)
+        ttk.Label(settings,text='Cập nhật GitHub bao gồm tiện ích trong TienIch_Canva. Cài thư mục này một lần; các bản sau tiện ích tự nạp lại khi không dựng.',wraplength=950).pack(anchor='w',pady=5)
         ttk.Label(settings,text='Thư mục dữ liệu portable: '+str(DATA),wraplength=950).pack(anchor='w',pady=5)
         ttk.Button(settings,text='Mở thư mục dữ liệu',command=lambda:os.startfile(str(DATA))).pack(anchor='w',pady=3)
         ttk.Label(settings,text='Nhận diện voice trên máy bằng Whisper',font=('Segoe UI',13,'bold')).pack(anchor='w',pady=(20,8))
@@ -129,6 +134,14 @@ class App:
         bundled=Path(sys.executable).parent/'CongCu/ffmpeg.exe'
         return str(bundled) if bundled.is_file() else shutil.which('ffmpeg') or ''
     def copy_token(self):self.root.clipboard_clear();self.root.clipboard_append(self.engine.token)
+    def inspect_companion(self):
+        info=companion_status(application_dir())
+        text='Tiện ích đi kèm: '+info['version']+'\nThư mục cố định:\n'+info['folder']
+        if not info['registrations']:text+='\n\nChưa tìm thấy bản SKST đăng ký trong Chrome/Cốc Cốc/Edge. Cài thư mục trên một lần.'
+        for item in info['registrations']:
+            text+='\n\n'+item['browser']+' ('+item['profile']+') đang nạp:\n'+item['path']
+        if info['mismatches']:text+='\n\nCó bản đang nạp từ thư mục khác nên không nhận tệp cập nhật ở đây. Gỡ bản cũ và chọn đúng thư mục cố định trên một lần.'
+        messagebox.showinfo('Tiện ích đi kèm và tự cập nhật',text)
     def choose_voice(self):
         p=filedialog.askopenfilename(filetypes=[('Voice','*.mp3 *.wav *.m4a *.aac *.flac'),('Tất cả','*.*')]);
         if p:self.voice.set(p)

@@ -57,4 +57,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release create '${{ steps.version.outputs.tag }}' dist/SKST_Canva_Studio_Windows.zip dist/SKST_Canva_Studio_Update.zip dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'SKST Canva Studio ${{ steps.version.outputs.tag }}' --notes-file CHANGELOG.md --latest
+          gh release create '${{ steps.version.outputs.tag }}' dist/SKST_Canva_Studio_Windows.zip dist/SKST_Canva_Studio_Update.zip dist/SKST_Canva_Extension.zip dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'SKST Canva Studio ${{ steps.version.outputs.tag }}' --notes-file CHANGELOG.md --latest

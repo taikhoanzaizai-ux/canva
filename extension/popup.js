@@ -5,6 +5,7 @@ async function probe(){
  try{
   const r=await chrome.runtime.sendMessage({type:'probe'});
   if(!r||r.error)throw Error(r?.error||'Tiện ích chưa phản hồi. Hãy tải lại tiện ích và tab Canva.');
+  if(r.reloading){status.textContent='Đang tự nạp tiện ích '+r.version+'. Chờ một chút rồi mở lại biểu tượng SKST.';return;}
   if(r.disabled){status.textContent='Chưa bật kết nối.';return;}
   status.textContent='Đã kết nối ứng dụng '+r.version+(r.attached?' và tab Canva. ':'. ')+(r.mode==='running'?'Đang dựng theo lệnh Bắt đầu.':(r.message||'Quay lại ứng dụng và bấm Bắt đầu.'));
  }catch(e){status.textContent=e.message;}

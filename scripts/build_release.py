@@ -48,6 +48,11 @@ def build():
                 z.write(p,('SKST_Canva_Studio/' if kind=='Windows' else '')+rel)
         with zipfile.ZipFile(target) as z:assert z.testzip() is None
         releases.append(target)
+    companion=out/'SKST_Canva_Extension.zip'
+    with zipfile.ZipFile(companion,'w',zipfile.ZIP_DEFLATED) as z:
+        for p in sorted((stage/'TienIch_Canva').iterdir()):
+            if p.is_file():z.write(p,'TienIch_Canva/'+p.name)
+    releases.append(companion)
     (out/'SHA256SUMS.txt').write_text('\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name for p in releases)+'\n',encoding='utf8')
     print('Built version',VERSION)
 

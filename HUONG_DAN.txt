@@ -1,4 +1,4 @@
-SKST CANVA STUDIO — BẢN THỬ 0.2.3 PORTABLE
+SKST CANVA STUDIO — BẢN THỬ 0.2.4 PORTABLE
 
 Ứng dụng độc lập, không phải sản phẩm của Canva. Chỉ dùng kho video Canva trong tài khoản của bạn. Không cần khóa AI, không lấy mật khẩu hay cookie.
 
@@ -62,3 +62,7 @@ Sau khi cập nhật, kiểm tra tiện ích hiển thị phiên bản 0.2.2. N�
 
 KẾT NỐI TRONG 0.2.3
 Tiện ích cần phiên bản 0.2.3 và quyền scripting trên Canva để tự gắn bộ dựng vào đúng tab đang mở. Sau cập nhật, tải lại hoặc cài lại tiện ích từ TienIch_Canva cạnh EXE; chấp nhận quyền trên Canva. Mỗi lần mở ứng dụng, sao chép mã của phiên mới vào tiện ích. Bấm Kết nối Canva để tiện ích xác nhận cả ứng dụng và tab. Sau đó bấm Bắt đầu/Tiếp tục. Nếu chưa nhận được tín hiệu, ứng dụng báo nguyên nhân ngay; nếu mất kết nối giữa chừng, tiến độ được giữ và dừng có thông báo sau 25 giây.
+
+CẬP NHẬT TIỆN ÍCH TÍCH HỢP TỪ 0.2.4
+Trong Kết nối & công cụ có nút Cập nhật ứng dụng + tiện ích từ GitHub. Gói cập nhật chứa cả phần mềm và thư mục TienIch_Canva. Khi không dựng, tiện ích nhận phiên bản tệp cục bộ mới và tự nạp lại. Khi có quyền mới, Chrome yêu cầu bạn xác nhận. Không sửa chính sách Chrome và không cài ngầm.
+Cài bản tiện ích 0.2.4 từ thư mục cố định cạnh EXE một lần. Nếu cần tải riêng, vào GitHub Releases lấy SKST_Canva_Extension.zip. Nút Kiểm tra tiện ích Chrome đang dùng sẽ chỉ rõ Chrome đang nạp thư mục nào; nếu còn thư mục cũ, chọn lại thư mục cố định một lần để các cập nhật sau vào đúng nơi.

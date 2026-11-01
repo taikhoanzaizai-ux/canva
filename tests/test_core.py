@@ -42,7 +42,7 @@ class EngineTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.e=Engine(self.tmp.name)
         self.e.configure(dict(scenes=[dict(id=1,start=0,duration=4,text='test',queries=['test'])]),'https://www.canva.com/design/abc/def/edit','voice.mp3')
-        self.client=dict(client='A',url=self.e.state['target'],extension_version='0.2.3');self.e.start()
+        self.client=dict(client='A',url=self.e.state['target'],extension_version='0.2.4');self.e.start()
     def tearDown(self):self.tmp.cleanup()
     def test_durable_insert_intent_blocks_duplicate(self):
         self.e.state['voice_done']=True;t=self.e.next_task(self.client)['task'];self.e.check(dict(id=t['id'],client='A',stage='insert_intent'))
@@ -57,7 +57,7 @@ class EngineTests(unittest.TestCase):
         old={k:v for k,v in self.client.items() if k!='extension_version'}
         response=self.e.next_task(old)
         self.assertEqual(response['mode'],'extension_outdated');self.assertIsNone(response['task']);self.assertIsNone(self.e.running)
-        self.assertIn('0.2.3',self.e.state['message'])
+        self.assertIn('0.2.4',self.e.state['message'])
     def test_heartbeat_before_project_target_is_configured(self):
         target=self.e.state['target'];self.e.state['target']=''
         self.e.next_task(self.client)

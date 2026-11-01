@@ -3,7 +3,7 @@ import base64, hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .core import atomic_json, valid_canva, VERSION
-MIN_EXTENSION_VERSION='0.2.3'
+MIN_EXTENSION_VERSION='0.2.4'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -151,7 +151,7 @@ def serve(engine,port=8766):
                     payload=path.read_bytes();suffix=path.suffix.lower()
                     mime={'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'}.get(suffix,'audio/mpeg')
                     v=dict(name='SKST_voice_'+hashlib.sha256(payload).hexdigest()[:16]+suffix,mime=mime,data=base64.b64encode(payload).decode())
-                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],message=engine.state['message'],target=engine.state['target'],connection=engine.connection_status())
+                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],active_task=bool(engine.running),message=engine.state['message'],target=engine.state['target'],connection=engine.connection_status())
                 else:return self.send(404,dict(error='Không tìm thấy'))
                 self.send(200,v)
             except Exception as exc:self.send(400,dict(error=str(exc)))

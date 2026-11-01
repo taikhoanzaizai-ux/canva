@@ -10,3 +10,5 @@ The updater must only use published releases from the fixed repository, require 
 
 Storage is portable from 0.2.1: Data, Temp, Cache, update downloads and backups stay beside the executable. Build onedir, never onefile (which extracts into system Temp). Keep runtime updates restricted to explicitly validated _internal names, reject traversal and never include Data in release ZIPs. Do not silently fall back to AppData when the install folder is read-only. Import legacy AppData non-destructively. Full Windows ZIP is required once when moving from 0.2.0 to the new onedir layout.
 
+Companion updates ship inside the verified desktop update plus a separate extension ZIP. Keep one manual browser registration to TienIch_Canva beside the app; never edit Chrome Preferences, install via policy/registry, or promise GitHub-native Chrome updates. Self-reload may read only local bundled manifest/code, only when idle and permissions unchanged. Never fetch/eval remote JS. Test busy, permission-change and downgrade cases; maintain the standalone extension release asset.
+
