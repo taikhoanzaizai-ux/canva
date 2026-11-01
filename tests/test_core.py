@@ -1,7 +1,7 @@
 import json,tempfile,unittest,threading,urllib.request,urllib.error
 from pathlib import Path
 from canva_studio.core import make_plan,describe,load_transcript,align_script,valid_canva
-from canva_studio.bridge import Engine,serve
+from canva_studio.bridge import Engine,serve,MIN_EXTENSION_VERSION
 
 class PlannerTests(unittest.TestCase):
     def test_continuous_and_max_duration(self):
@@ -42,7 +42,7 @@ class EngineTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.e=Engine(self.tmp.name)
         self.e.configure(dict(scenes=[dict(id=1,start=0,duration=4,text='test',queries=['test'])]),'https://www.canva.com/design/abc/def/edit','voice.mp3')
-        self.client=dict(client='A',url=self.e.state['target'],extension_version='0.2.4');self.e.start()
+        self.client=dict(client='A',url=self.e.state['target'],extension_version=MIN_EXTENSION_VERSION);self.e.start()
     def tearDown(self):self.tmp.cleanup()
     def test_durable_insert_intent_blocks_duplicate(self):
         self.e.state['voice_done']=True;t=self.e.next_task(self.client)['task'];self.e.check(dict(id=t['id'],client='A',stage='insert_intent'))
@@ -57,7 +57,7 @@ class EngineTests(unittest.TestCase):
         old={k:v for k,v in self.client.items() if k!='extension_version'}
         response=self.e.next_task(old)
         self.assertEqual(response['mode'],'extension_outdated');self.assertIsNone(response['task']);self.assertIsNone(self.e.running)
-        self.assertIn('0.2.4',self.e.state['message'])
+        self.assertIn(MIN_EXTENSION_VERSION,self.e.state['message'])
     def test_heartbeat_before_project_target_is_configured(self):
         target=self.e.state['target'];self.e.state['target']=''
         self.e.next_task(self.client)
@@ -76,6 +76,11 @@ class EngineTests(unittest.TestCase):
             task=self.e.next_task(self.client)['task'];self.assertEqual(task['id'],id_)
             self.e.result(dict(id=id_,client='A',asset='unique' if id_=='1' else None))
         self.assertEqual(self.e.state['mode'],'complete');self.assertEqual(self.e.state['used'],['unique'])
+    def test_resume_after_two_completed_scenes_keeps_voice(self):
+        self.e.state.update(scenes=[dict(id=1,start=0,duration=2.76),dict(id=2,start=2.76,duration=3.98),dict(id=3,start=6.74,duration=4.84)],done=[1,2],voice_done=True,mode='attention',phase={})
+        self.e.start();task=self.e.next_task(self.client)['task']
+        self.assertEqual(task['id'],'3');self.assertEqual(task['scene']['start'],6.74)
+        self.assertEqual(self.e.state['done'],[1,2]);self.assertTrue(self.e.state['voice_done'])
     def test_paused_checkpoint_denies_click(self):
         self.e.next_task(self.client);self.e.pause()
         self.assertFalse(self.e.check(dict(id='voice',client='A'))['continue_'])

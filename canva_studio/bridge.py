@@ -3,7 +3,7 @@ import base64, hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .core import atomic_json, valid_canva, VERSION
-MIN_EXTENSION_VERSION='0.2.4'
+MIN_EXTENSION_VERSION='0.2.5'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 

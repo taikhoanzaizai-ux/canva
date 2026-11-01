@@ -3,6 +3,11 @@ const context={globalThis:{},document:{},setTimeout,Promise,console};vm.createCo
 vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),context);
 const adapter=context.globalThis.SKSTAdapter;
 assert.equal(adapter.norm('Nhón GÓT chân'),'nhon got chan');
+const transition={getAttribute:k=>k==='aria-label'?'Thêm chuyển cảnh':null};
+const persistentMenu={getAttribute:k=>k==='role'?'menu':null,querySelectorAll:()=>[transition]};
+assert(adapter.timelineTransitionMenu(persistentMenu),'Persistent transition control between two clips is not a dismissible popup');
+assert(!adapter.timelineTransitionMenu({...persistentMenu,querySelectorAll:()=>[transition,{getAttribute:()=>null}]}),'A real multi-item popup is still dismissible');
+assert(!adapter.timelineTransitionMenu({...persistentMenu,getAttribute:()=> 'dialog'}),'Dialogs are not ignored');
 const accessibleCopy={textContent:'Âm thanhÂm thanh',querySelectorAll:()=>[{remove:()=>accessibleCopy.textContent='Âm thanh'}]};
 assert.equal(adapter.label({getAttribute:()=>null,cloneNode:()=>accessibleCopy}),'Âm thanh','Ignore Canva aria-hidden duplicate tab captions');
 const scene={positive:['heel','senior'],negative:['ballet'],preferred:'Senior heel raise'};

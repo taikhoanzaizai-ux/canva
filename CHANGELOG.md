@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.2.5
+
+- Sửa lỗi dừng sau hai cảnh: nút Thêm chuyển cảnh nằm cố định giữa các cảnh không còn bị nhận nhầm là bảng nổi phải đóng.
+- Giữ nguyên tiến độ, tiếp tục từ cảnh chưa làm; thêm kiểm thử cho nút cố định, popup nhiều mục và hộp thoại.
+
 ## 0.2.4
 
 - Tích hợp rõ cập nhật ứng dụng và tiện ích trong một quy trình GitHub; phát hành thêm gói `SKST_Canva_Extension.zip` riêng.

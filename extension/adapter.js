@@ -43,7 +43,12 @@
   function audioOnTimeline(name,root=document){
     return [...root.querySelectorAll('button,[role="button"]')].some(e=>label(e).includes(name)&&label(e).includes('đoạn âm thanh'));
   }
-  const menus=()=>[...document.querySelectorAll('[role="menu"],[role="dialog"]')].filter(visible);
+  function timelineTransitionMenu(element){
+    if(element.getAttribute('role')!=='menu')return false;
+    const items=[...element.querySelectorAll('[role="menuitem"]')];
+    return items.length===1&&label(items[0])==='Thêm chuyển cảnh';
+  }
+  const menus=()=>[...document.querySelectorAll('[role="menu"],[role="dialog"]')].filter(e=>visible(e)&&!timelineTransitionMenu(e));
   const endButton=()=>[...document.querySelectorAll('button,[role="button"]')].filter(e=>label(e)==='Thêm nội dung đa phương tiện/cảnh trống').at(-1);
   const timeline=()=>[...document.querySelectorAll('[data-role="timeline-scene"]')].map(e=>{
     let parent=e.parentElement;
@@ -183,7 +188,7 @@
     await wait(()=>/Đang tải xuống|Nếu quá trình tải xuống/.test(document.body.innerText),'Canva chưa bắt đầu xuất video',30000);
     return {};
   }
-  globalThis.SKSTAdapter={norm,label,score,timeline,cards,uploadInput,durationInput,audioOnTimeline,run:async(task,check,voice)=>{
+  globalThis.SKSTAdapter={norm,label,score,timeline,cards,uploadInput,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice)=>{
     guard=()=>check();await guard();
     const checkpoint=(stage,extra={})=>check(stage,extra);
     if(task.kind==='scene')return sceneTask(task,checkpoint);
