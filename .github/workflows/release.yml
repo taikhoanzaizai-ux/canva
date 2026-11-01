@@ -23,6 +23,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -v
           node tests/test_adapter.cjs
+          node tests/test_background.cjs
           node --check extension/background.js
           node --check extension/content.js
       - name: Check published version

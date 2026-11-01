@@ -3,7 +3,9 @@ import base64, hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .core import atomic_json, valid_canva, VERSION
-MIN_EXTENSION_VERSION='0.2.2'
+MIN_EXTENSION_VERSION='0.2.3'
+
+def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
 def compatible_extension(value):
     try:return tuple(int(p) for p in value.split('.'))>=tuple(int(p) for p in MIN_EXTENSION_VERSION.split('.'))
@@ -14,7 +16,7 @@ class Engine:
         self.folder=Path(folder);self.folder.mkdir(parents=True,exist_ok=True)
         self.lock=threading.RLock(); self.token=secrets.token_urlsafe(24)
         self.state=dict(mode='idle',message='Chọn voice để bắt đầu.',scenes=[],done=[],phase={},used=[],target='',voice='',voice_done=False,export_done=False)
-        self.browser={}; self.running=None
+        self.browser={}; self.peers={};self.running=None;self.last_activity=0;self.last_diagnostic=0
         self.events=[]
         self.path=self.folder/'project.json'
         if self.path.exists():
@@ -42,7 +44,23 @@ class Engine:
             if len(self.state['scenes'])>50:raise ValueError('Bản thử hỗ trợ tối đa 50 cảnh mỗi dự án. Hãy chọn đoạn ngắn hơn.')
             if self.state['phase'].get('stage') in ('insert_intent','upload_intent','export_intent'):
                 raise ValueError('Lần trước dừng giữa thao tác. Kiểm tra Canva rồi dùng nút Xử lý cảnh bị dở; ứng dụng sẽ không tự chèn trùng.')
-            self.running=None;self.state['mode']='running';self.log('Đang chờ tiện ích kết nối đúng thiết kế Canva…')
+            self.running=None;self.last_activity=time.time();self.state['mode']='running';self.log('Đang chờ tiện ích kết nối đúng thiết kế Canva…')
+    def connection_status(self,target=None):
+        with self.lock:
+            now=time.time();fresh=[p for p in self.peers.values() if now-p.get('seen',0)<12]
+            url=canonical_url(target or self.state['target'])
+            matching=[p for p in fresh if not url or canonical_url(p.get('url'))==url]
+            ready=next((p for p in sorted(matching,key=lambda p:p['seen'],reverse=True) if compatible_extension(p.get('extension_version'))),None)
+            if ready:return dict(ready=True,code='ready',message='Đã kết nối tab Canva • '+ready.get('title',''),peer=ready)
+            if matching:return dict(ready=False,code='outdated',message='Tiện ích đang cũ. Cài SKST '+MIN_EXTENSION_VERSION+' từ TienIch_Canva cạnh EXE rồi kết nối lại.')
+            if fresh:return dict(ready=False,code='wrong_design',message='Tiện ích đang ở thiết kế khác. Mở đúng link trong ứng dụng rồi bấm Kết nối Canva trên tiện ích.')
+            return dict(ready=False,code='disconnected',message='Chưa có tín hiệu từ tab Canva. Mở tiện ích SKST trên tab Canva, dán mã của phiên này và bấm Kết nối Canva.')
+    def watchdog(self,now=None):
+        with self.lock:
+            now=time.time() if now is None else now
+            if self.state['mode']=='running' and now-self.last_activity>25:
+                self.state['mode']='attention'
+                self.log('Mất tín hiệu từ tiện ích Canva. Bấm Kết nối Canva trên tiện ích rồi Bắt đầu/Tiếp tục; tiến độ đã được giữ.')
     def recover(self, action):
         with self.lock:
             if self.state['mode']=='running':raise ValueError('Hãy tạm dừng trước.')
@@ -53,17 +71,23 @@ class Engine:
             self.running=None;self.save()
     def next_task(self, body):
         with self.lock:
-            canonical=lambda u:u.split('?')[0].split('#')[0]
-            if canonical(body.get('url',''))!=canonical(self.state['target']):return dict(task=None,mode='wrong_design')
+            now=time.time()
+            if body.get('client') and valid_canva(canonical_url(body.get('url'))):
+                self.peers={k:v for k,v in self.peers.items() if now-v['seen']<60}
+                self.peers[body['client']]={**body,'seen':now}
+                if now-self.last_diagnostic>5:
+                    atomic_json(self.folder/'connection.json',dict(seen=now,url=body.get('url'),extension_version=body.get('extension_version'),mode=self.state['mode']))
+                    self.last_diagnostic=now
+            if canonical_url(body.get('url'))!=canonical_url(self.state['target']):return dict(task=None,mode='wrong_design')
+            if not compatible_extension(body.get('extension_version')):
+                message='Cần cài tiện ích SKST '+MIN_EXTENSION_VERSION+' từ thư mục TienIch_Canva cạnh ứng dụng, rồi kết nối lại trên tab Canva.'
+                if self.state['mode']=='running' and self.state['message']!=message:self.log(message)
+                return dict(task=None,mode='extension_outdated')
+            if self.state['mode']!='running':return dict(task=None,mode=self.state['mode'])
             old=self.browser
             if old and old.get('client')!=body.get('client') and time.time()-old.get('seen',0)<15:
                 return dict(task=None,mode='other_client')
             self.browser={**body,'seen':time.time()}
-            if self.state['mode']!='running':return dict(task=None,mode=self.state['mode'])
-            if not compatible_extension(body.get('extension_version')):
-                message='Cần cài tiện ích SKST '+MIN_EXTENSION_VERSION+' từ thư mục TienIch_Canva cạnh ứng dụng, rồi tải lại tab Canva.'
-                if self.state['message']!=message:self.log(message)
-                return dict(task=None,mode='extension_outdated')
             if self.running and self.running['client']!=body.get('client'):return dict(task=None,mode='busy')
             if not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
@@ -73,11 +97,15 @@ class Engine:
                 else:return dict(task=None,mode='complete')
             task['phase']=self.state['phase'] if self.state['phase'].get('id')==task['id'] else {}
             self.running=dict(id=task['id'],client=body.get('client'))
+            self.last_activity=now
             return dict(task=task,mode='running')
     def check(self, body):
         with self.lock:
             if not self.running or self.running['id']!=str(body.get('id')) or self.running['client']!=body.get('client'):raise ValueError('Phiên thao tác không còn hợp lệ.')
             if self.state['mode']!='running':return dict(continue_=False)
+            self.last_activity=time.time()
+            if body.get('client') in self.peers:self.peers[body['client']]['seen']=self.last_activity
+            if self.browser.get('client')==body.get('client'):self.browser['seen']=self.last_activity
             stage=body.get('stage')
             if stage:
                 self.state['phase']={**body,'id':str(body['id'])}; self.save()
@@ -123,7 +151,7 @@ def serve(engine,port=8766):
                     payload=path.read_bytes();suffix=path.suffix.lower()
                     mime={'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'}.get(suffix,'audio/mpeg')
                     v=dict(name='SKST_voice_'+hashlib.sha256(payload).hexdigest()[:16]+suffix,mime=mime,data=base64.b64encode(payload).decode())
-                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],message=engine.state['message'])
+                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],message=engine.state['message'],target=engine.state['target'],connection=engine.connection_status())
                 else:return self.send(404,dict(error='Không tìm thấy'))
                 self.send(200,v)
             except Exception as exc:self.send(400,dict(error=str(exc)))

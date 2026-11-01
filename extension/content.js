@@ -1,8 +1,12 @@
 (() => {
   if(window.__skstContentStarted)return;window.__skstContentStarted=true;
   const client=crypto.randomUUID();let busy=false;
+  chrome.runtime.onMessage.addListener((message,sender,respond)=>{
+    if(message.type==='skst_controller_ping'){respond({ready:true,version:chrome.runtime.getManifest().version});return;}
+  });
   async function api(route,body={}){
     const result=await chrome.runtime.sendMessage({type:'bridge',route,body:{...body,client,title:document.title}});
+    if(!result)throw Error('Tiện ích chưa phản hồi. Bấm Kết nối Canva để gắn lại bộ dựng.');
     if(result?.error)throw Error(result.error);
     if(result?.disabled)throw Error('Đã ngắt tiện ích');
     return result;
@@ -23,4 +27,5 @@
     }finally{busy=false;}
   }
   setInterval(cycle,1700);
+  cycle();
 })();

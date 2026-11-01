@@ -236,6 +236,8 @@ class App:
                 self.engine.configure(self.plan,u,self.prepared_voice or self.voice.get())
             elif not st['voice']:
                 st['voice']=self.voice.get()
+            connection=self.engine.connection_status(u)
+            if not connection['ready']:raise ValueError(connection['message'])
             self.engine.start()
         except Exception as e:messagebox.showerror('Chưa thể bắt đầu',str(e))
     def recover(self):
@@ -264,12 +266,10 @@ class App:
                 if self.script.get('1.0','end').strip() and not self.plan.get('script_aligned'):note+=' Chưa khớp chắc chắn kịch bản: đang dùng lời nhận diện từ voice.'
                 if n>50:note+=' Vượt 50 cảnh: chọn khoảng thời gian ngắn hơn rồi phân tích lại.'
                 self.notice.set(note)
+        self.engine.watchdog()
         st=self.engine.state;n=len(st['scenes']);done=len(st['done']);self.progress['value']=100*done/max(1,n)
         self.status.set(f'{done}/{n} cảnh  •  '+st['message'])
-        b=self.engine.browser;online=b and time.time()-b.get('seen',0)<10
-        if online and not compatible_extension(b.get('extension_version')):
-            self.connection.set('Tiện ích đang cũ. Cài lại SKST '+MIN_EXTENSION_VERSION+' từ thư mục TienIch_Canva cạnh ứng dụng.')
-        else:self.connection.set('Đã kết nối Canva • '+b.get('title','') if online else 'Chưa kết nối tiện ích / chưa mở đúng thiết kế')
+        self.connection.set(self.engine.connection_status()['message'])
         self.root.after(500,self.tick)
     def close(self):
         self.engine.pause();self.save_settings()

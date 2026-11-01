@@ -6,7 +6,7 @@ async function probe(){
   const r=await chrome.runtime.sendMessage({type:'probe'});
   if(!r||r.error)throw Error(r?.error||'Tiện ích chưa phản hồi. Hãy tải lại tiện ích và tab Canva.');
   if(r.disabled){status.textContent='Chưa bật kết nối.';return;}
-  status.textContent='Đã kết nối ứng dụng '+r.version+'. '+(r.message||'Quay lại ứng dụng và bấm Bắt đầu.');
+  status.textContent='Đã kết nối ứng dụng '+r.version+(r.attached?' và tab Canva. ':'. ')+(r.mode==='running'?'Đang dựng theo lệnh Bắt đầu.':(r.message||'Quay lại ứng dụng và bấm Bắt đầu.'));
  }catch(e){status.textContent=e.message;}
 }
 chrome.storage.local.get(['token','enabled']).then(v=>{token.value=v.token||'';if(v.enabled)probe();else status.textContent='Chưa bật kết nối.';});
