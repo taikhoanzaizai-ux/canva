@@ -1,19 +1,19 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-function harness(tabs,diskVersion,updateVersion){
+function harness(tabs,diskVersion,updateVersion,options={}){
  const manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8'));
  const local={token:'test-token',enabled:true};const calls={fetch:[],inject:[],reload:0,created:[]};let listener,attached=false;
  const chrome={
   runtime:{id:'own',getURL:p=>'chrome-extension://own/'+p,getManifest:()=>manifest,onMessage:{addListener:fn=>listener=fn},onInstalled:{addListener:()=>{}},reload:()=>calls.reload++},
   storage:{local:{get:async()=>local,set:async value=>Object.assign(local,value)}},
-  tabs:{create:async spec=>{calls.created.push(spec);return {id:77,url:spec.url};},get:async()=>({id:77,url:'https://www.canva.com/design/new/token/edit'}),query:async()=>tabs,sendMessage:async(id,msg)=>({ready:true})},
+  tabs:{create:async spec=>{calls.created.push(spec);return {id:77,url:spec.url};},get:async()=>({id:77,url:options.finalURL||'https://www.canva.com/design/new/token/edit'}),query:async()=>tabs,sendMessage:async(id,msg)=>({ready:true})},
   scripting:{executeScript:async spec=>{calls.inject.push(spec);attached=true;}}
  };
- const context={chrome,URL,AbortSignal,setTimeout,Promise,console,fetch:async(url,opts)=>{
+ const context={chrome,URL,URLSearchParams,AbortSignal,setTimeout,Promise,console,fetch:async(url,opts)=>{
   if(url.startsWith('chrome-extension://'))return {ok:true,json:async()=>({...manifest,version:diskVersion||manifest.version})};
   calls.fetch.push({url,body:JSON.parse(opts.body)});
   if(url.endsWith('/checkpoint'))return {ok:true,json:async()=>({continue_:true})};
   if(url.endsWith('/companion/update')&&updateVersion)return {ok:true,json:async()=>({manifest:{...manifest,version:updateVersion},mode:'paused',active_task:false})};
-  return {ok:true,json:async()=>({ok:true,version:manifest.version,target:'https://www.canva.com/design/target/token/edit',mode:'paused',active_task:false,connection:{ready:attached}})};
+  return {ok:true,json:async()=>({ok:true,version:manifest.version,target:'https://www.canva.com/design/target/token/edit',mode:'paused',active_task:false,connection:{ready:attached},...options.state})};
  }};
  vm.createContext(context);vm.runInContext(fs.readFileSync('extension/background.js','utf8'),context);
  return {calls,manifest,decision:context.reloadDecision,message:(msg,sender)=>new Promise(resolve=>listener(msg,sender,resolve))};
@@ -25,7 +25,19 @@ function harness(tabs,diskVersion,updateVersion){
  assert.equal(h.calls.inject[0].files.join(','),'adapter.js,content.js','Inject bundled controller only');
  const bad=harness([{id:3,active:true,url:'https://example.com/'}]);
  const denied=await bad.message({type:'probe'},{id:'own',url:'chrome-extension://own/popup.html'});
- assert(denied.error);assert.equal(bad.calls.inject.length,0,'Never inject outside Canva');
+ assert(denied.connected_only);assert.equal(bad.calls.inject.length,0,'Never inject outside Canva');
+ const closed=harness([],null,null,{finalURL:'https://www.canva.com/design/target/token/edit'});
+ const reopened=await closed.message({type:'probe',open_editor:true},{id:'own',url:'chrome-extension://own/popup.html'});
+ assert(reopened.attached);assert.equal(closed.calls.created[0].url,'https://www.canva.com/design/target/token/edit','Connect opens saved design automatically');
+ const nonce='abcdefghijklmnopqrstuvwx';
+ const creating=harness([],null,null,{finalURL:'https://www.canva.com/design/new/token/edit#skst_start='+nonce,state:{target:'',bootstrap_nonce:nonce,create_url:'https://www.canva.com/design?create&type=TADUvCyAV_U#skst_start='+nonce}});
+ const started=await creating.message({type:'probe',open_editor:true},{id:'own',url:'chrome-extension://own/popup.html'});
+ assert(started.attached);assert.equal(creating.calls.created.length,1,'Create missing horizontal video from popup');
+ await creating.message({type:'probe',open_editor:true},{id:'own',url:'chrome-extension://own/popup.html'});
+ assert.equal(creating.calls.created.length,1,'Repeated Connect reuses created tab');
+ const paired=harness([],null,null,{state:{target:'',create_url:''}});
+ const pairedResult=await paired.message({type:'probe',open_editor:true},{id:'own',url:'chrome-extension://own/popup.html'});
+ assert(pairedResult.connected_only);assert.equal(paired.calls.created.length,0,'Pairing before planning does not require a manual tab or create an unrelated design');
  const outsider=harness([]);
  const refused=await outsider.message({type:'probe'},{id:'wrong',url:'https://example.com/'});
  assert(refused.error);assert.equal(outsider.calls.fetch.length,0,'Untrusted sender cannot reach local bridge');

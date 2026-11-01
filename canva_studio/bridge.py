@@ -4,7 +4,7 @@ from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.3.1'
+MIN_EXTENSION_VERSION='0.3.2'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -69,6 +69,17 @@ class Engine:
             self.start()
             self.state.update(mode='opening_resume',bootstrap_deadline=time.time()+120,auto_start=True)
             self.log('Đang mở lại đúng thiết kế trong Chrome để tiếp tục tiến độ…')
+
+    def editor_status(self):
+        from .browser import CREATE_VIDEO
+        with self.lock:
+            nonce=self.state.get('bootstrap_nonce','')
+            return dict(create_url=CREATE_VIDEO+'#skst_start='+nonce if nonce and not self.state['target'] else '',bootstrap_nonce=nonce)
+    def prepare_editor(self):
+        with self.lock:
+            if self.state.get('bootstrap_nonce') and not self.state['target'] and self.state['mode']=='attention':
+                self.wait_for_created_tab()
+            return dict(ok=True,target=self.state['target'],mode=self.state['mode'],**self.editor_status())
 
     def pause(self):
         with self.lock:self.state['mode']='paused';self.log('Đã tạm dừng. Thao tác đang thực hiện sẽ dừng ở điểm kiểm tra tiếp theo.')
@@ -220,7 +231,8 @@ def serve(engine,port=8766):
                     with engine.lock:
                         if engine.state['mode']=='running' or engine.running:raise ValueError('Hãy chờ tác vụ kết thúc hoặc tạm dừng trước khi cập nhật tiện ích.')
                         v=dict(manifest=update_manifest(application_dir(),body.get('extension_id')),mode=engine.state['mode'],active_task=False)
-                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],active_task=bool(engine.running),message=engine.state['message'],target=engine.state['target'],connection=engine.connection_status())
+                elif self.path=='/prepare_editor':v=engine.prepare_editor()
+                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],active_task=bool(engine.running),message=engine.state['message'],target=engine.state['target'],connection=engine.connection_status(),**engine.editor_status())
                 else:return self.send(404,dict(error='Không tìm thấy'))
                 self.send(200,v)
             except Exception as exc:self.send(400,dict(error=str(exc)))

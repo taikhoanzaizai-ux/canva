@@ -43,16 +43,49 @@ async function bridgeFetch(route,body,token){
   });
   const data=await response.json();if(!response.ok)throw Error(data.error||'Không kết nối được ứng dụng');return data;
 }
-async function attachController(data){
+let editorOpening=null;
+async function ensureEditor(data,allowOpen){
   const tabs=await chrome.tabs.query({url:'https://www.canva.com/design/*'});
   let candidates=tabs.filter(t=>editorURL(t.url));
   if(data.target)candidates=candidates.filter(t=>canonical(t.url)===canonical(data.target));
-  const tab=candidates.find(t=>t.active)||(candidates.length===1?candidates[0]:null);
-  if(!tab)throw Error(data.target?'Chưa mở đúng thiết kế trong ứng dụng. Bấm Mở Canva rồi kết nối lại.':'Mở một tab chỉnh sửa Video Canva rồi kết nối lại.');
-  await chrome.scripting.executeScript({target:{tabId:tab.id},files:['adapter.js','content.js']});
-  const ready=await chrome.tabs.sendMessage(tab.id,{type:'skst_controller_ping'});
-  if(!ready?.ready)throw Error('Tab Canva chưa nhận bộ dựng. Tải lại tab rồi kết nối lại.');
-  return tab;
+  else if(data.bootstrap_nonce)candidates=candidates.filter(t=>new URLSearchParams(new URL(t.url).hash.slice(1)).get('skst_start')===data.bootstrap_nonce);
+  else return null; // Pairing alone does not select an unrelated existing design.
+  let tab=candidates.find(t=>t.active)||candidates.at(-1);
+  if(tab)return tab;
+  if(!allowOpen)return null;
+  const address=data.target||data.create_url;
+  if(!address)return null;
+  const u=new URL(address);
+  const create=u.origin==='https://www.canva.com'&&u.pathname==='/design'&&u.searchParams.has('create')&&u.searchParams.get('type')==='TADUvCyAV_U'&&/^#skst_start=[A-Za-z0-9_-]{24}$/.test(u.hash);
+  if(!editorURL(address)&&!create)throw Error('Chỉ mở thiết kế Video trên Canva.');
+  const key='editor:'+address;
+  const saved=(await chrome.storage.local.get([key]))[key];
+  if(saved){try{tab=await chrome.tabs.get(saved);}catch{tab=null;}}
+  if(!tab){tab=await chrome.tabs.create({url:address,active:true});await chrome.storage.local.set({[key]:tab.id});}
+  for(let i=0;i<60;i++){
+    tab=await chrome.tabs.get(tab.id);
+    if(editorURL(tab.url)&&(!data.target||canonical(tab.url)===canonical(data.target))&&(!data.bootstrap_nonce||new URLSearchParams(new URL(tab.url).hash.slice(1)).get('skst_start')===data.bootstrap_nonce))return tab;
+    await new Promise(r=>setTimeout(r,1000));
+  }
+  throw Error('Canva chưa tải xong. Giữ tab vừa mở; tiện ích sẽ dùng lại tab đó khi kết nối lại.');
+}
+async function attachController(data,allowOpen=false){
+  if(editorOpening)return editorOpening;
+  editorOpening=(async()=>{
+    const tab=await ensureEditor(data,allowOpen);
+    if(!tab)return null;
+    let lastError;
+    for(let i=0;i<15;i++){
+      try{
+        await chrome.scripting.executeScript({target:{tabId:tab.id},files:['adapter.js','content.js']});
+        const ready=await chrome.tabs.sendMessage(tab.id,{type:'skst_controller_ping'});
+        if(ready?.ready)return tab;
+      }catch(e){lastError=e;}
+      await new Promise(r=>setTimeout(r,500));
+    }
+    throw Error('Chưa gắn được bộ dựng vào tab mới: '+(lastError?.message||'trang đang tải'));
+  })();
+  try{return await editorOpening;}finally{editorOpening=null;}
 }
 async function openNextDesign(body,sender,token){
   const href=new URL(body.create_url);
@@ -118,8 +151,14 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         await attachController({target:data.target});
       }
       if(popup){
-        const tab=await attachController(data);
-        for(let i=0;i<6;i++){
+        if(message.open_editor){
+          const prepared=await bridgeFetch('prepare_editor',{},token);data={...data,...prepared};
+        }
+        const tab=await attachController(data,!!message.open_editor);
+        if(!tab){
+          respond({...data,connected_only:true,message:'Đã ghép nối ứng dụng. Chọn voice rồi bấm Bắt đầu trong phần mềm; Chrome và Video khổ ngang sẽ tự mở.'});return;
+        }
+        for(let i=0;i<24;i++){
           data=await bridgeFetch('ping',{},token);
           if(data.connection?.ready)break;
           await new Promise(r=>setTimeout(r,250));

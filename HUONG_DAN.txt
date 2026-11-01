@@ -80,3 +80,7 @@ Chọn voice gốc và kịch bản, để trống Link Canva rồi bấm Bắt 
 Nếu đang có tiến độ: bấm Tiếp tục sẽ mở đúng thiết kế đã lưu. Không tạo thiết kế khác để thay thế tiến độ.
 Chrome phải đăng nhập Canva sẵn; không tự nhập mật khẩu hay xử lý CAPTCHA. Nếu chưa nhận tab sau 120 giây, kiểm tra đăng nhập/tiện ích/ghép nối. Giữ tab đã tạo để tránh tạo trùng.
 Không cần cài thêm quyền cho bản này; chỉ hoạt động trên Canva và kết nối nội bộ đã có.
+
+TỪ BẢN 0.3.2
+Nút Kết nối Canva không còn đòi tự mở tab chỉnh sửa. Nếu phần mềm đang chờ thiết kế mới, nút tự tạo Video khổ ngang, chờ trang tải và gắn bộ dựng. Nếu có link dự án, tự mở lại đúng link đó. Bấm lại sẽ dùng tab đã mở.
+Nếu chưa chọn voice/chưa bấm Bắt đầu, tiện ích chỉ xác nhận ghép nối thành công; tiếp tục từ phần mềm, không cần tạo tab thủ công.

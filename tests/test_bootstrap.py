@@ -50,3 +50,17 @@ class BootstrapTests(unittest.TestCase):
         with patch('canva_studio.companion.registered_extensions',return_value=[dict(browser='Chrome',profile='Default'),dict(browser='Chrome',profile='Profile 2')]),patch('canva_studio.browser.subprocess.Popen') as run:
             with self.assertRaises(ValueError):open_chrome('https://www.canva.com/design/one/token/edit')
             run.assert_not_called()
+
+    def test_popup_gets_public_creation_link_not_pairing_secret(self):
+        with tempfile.TemporaryDirectory() as d:
+            e=Engine(d);address=e.bootstrap(self.plan(),'v')
+            status=e.editor_status()
+            self.assertEqual(status['create_url'],address);self.assertNotIn(e.token,address)
+            e.watchdog(e.state['bootstrap_deadline']+1)
+            self.assertEqual(e.state['mode'],'attention')
+            prepared=e.prepare_editor()
+            self.assertEqual(prepared['mode'],'opening');self.assertEqual(prepared['create_url'],address)
+    def test_connect_does_not_resume_explicit_pause(self):
+        with tempfile.TemporaryDirectory() as d:
+            e=Engine(d);e.bootstrap(self.plan(),'v');e.pause();e.prepare_editor()
+            self.assertEqual(e.state['mode'],'paused')

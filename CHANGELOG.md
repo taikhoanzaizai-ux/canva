@@ -1,5 +1,12 @@
 # Các bản cập nhật
 
+## 0.3.2
+
+- Sửa vòng lặp yêu cầu tự mở tab: nút Kết nối Canva tự mở đúng thiết kế đã lưu hoặc tạo Video khổ ngang đang được phần mềm chờ, rồi gắn bộ dựng khi trang tải xong.
+- Khi chỉ ghép nối và chưa chọn voice, không yêu cầu mở tab; báo sẵn sàng để bấm Bắt đầu trong phần mềm.
+- Dùng lại tab đang mở khi bấm Kết nối nhiều lần; chỉ nhận tab mang dấu khởi tạo đúng dự án, không chọn nhầm tab Canva cũ.
+- Không tự bỏ trạng thái Tạm dừng khi người dùng chỉ bấm Kết nối.
+
 ## 0.3.1
 
 - Bắt đầu tự động: nếu chưa phân tích thì phân tích voice, mở Chrome đúng hồ sơ có SKST, tạo Video khổ ngang, tự nhận link và dựng; không cần tạo thiết kế/dán link thủ công.
