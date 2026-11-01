@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.3.2'
+VERSION = '0.3.3'
 
 def norm(text):
     return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower().replace('đ','d')) if unicodedata.category(c) != 'Mn')
@@ -111,14 +111,22 @@ def load_transcript(path):
             for i,line in enumerate(lines):
                 m=re.match(r'([\d:,.]+)\s*-->\s*([\d:,.]+)',line)
                 if m: segments.append(dict(start=sec(m[1]),end=sec(m[2]),text=' '.join(lines[i+1:])));break
-    previous=-1
-    for s in segments:
-        s['start'],s['end']=float(s['start']),float(s['end'])
-        if not all(math.isfinite(s[x]) for x in ['start','end']) or s['start']<0 or s['end']<=s['start'] or s['start']<previous-.05:
-            raise ValueError('Mốc thời gian phụ đề không hợp lệ hoặc chồng lấn.')
-        previous=s['end']
-    if not segments: raise ValueError('Không có lời đọc có mốc thời gian.')
-    return segments
+    previous=-1;cleaned=[]
+    for index,s in enumerate(segments,1):
+        try:s['start'],s['end']=float(s['start']),float(s['end'])
+        except (KeyError,TypeError,ValueError):raise ValueError(f'Đoạn lời đọc {index} thiếu mốc thời gian dạng số.') from None
+        finite=all(math.isfinite(s[x]) for x in ['start','end'])
+        words=s.get('words') or []
+        if not isinstance(words,list) or any(not isinstance(w,dict) for w in words):raise ValueError(f'Dữ liệu từ ở đoạn lời đọc {index} không hợp lệ.')
+        empty=not str(s.get('text','')).strip() and not any(str(w.get('word',w.get('text',''))).strip() for w in words)
+        # Whisper emits empty zero-length markers at pauses. They carry no
+        # speech and must neither invalidate the transcript nor move its end.
+        if finite and s['start']>=0 and s['end']==s['start'] and empty:continue
+        if not finite or s['start']<0 or s['end']<=s['start'] or s['start']<previous-.05:
+            raise ValueError(f'Mốc thời gian đoạn lời đọc {index} không hợp lệ hoặc chồng lấn ({s["start"]} → {s["end"]} giây).')
+        previous=s['end'];cleaned.append(s)
+    if not cleaned: raise ValueError('Không có lời đọc có mốc thời gian.')
+    return cleaned
 
 def align_script(segments, script):
     """Restore script spelling at monotonic exact anchors; never invent timestamps.

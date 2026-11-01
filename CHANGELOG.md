@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.3.3
+
+- Bỏ qua dấu nghỉ rỗng có thời lượng bằng 0 do Whisper tạo, không hủy cả bài; không đổi mốc lời đọc xung quanh. Vẫn chặn đoạn có lời nhưng thời lượng bằng 0, mốc âm/không hữu hạn và chồng lấn thực sự.
+- Báo rõ số đoạn và mốc thời gian nếu dữ liệu thực sự sai.
+- Dùng lại kết quả nhận diện cục bộ khi tệp WAV đã giải mã khớp từng byte và JSON hợp lệ, tránh nhận diện lại toàn bài sau lỗi chia cảnh. Không sửa bản nhận diện gốc.
+
 ## 0.3.2
 
 - Sửa vòng lặp yêu cầu tự mở tab: nút Kết nối Canva tự mở đúng thiết kế đã lưu hoặc tạo Video khổ ngang đang được phần mềm chờ, rồi gắn bộ dựng khi trang tải xong.

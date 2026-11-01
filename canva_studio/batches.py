@@ -1,5 +1,5 @@
 """Sample-aligned local voice parts, cut only at planned scene boundaries."""
-import json,os,subprocess
+import hashlib,json,os,subprocess
 from pathlib import Path
 from .core import split_batches,atomic_json
 
@@ -24,3 +24,23 @@ def prepare_parts(plan,source,ffmpeg,folder):
         part['voice']=str(path);part['voice_duration']=actual
     atomic_json(folder/'parts.json',dict(source=str(source),source_duration=duration,parts=parts))
     return parts
+
+
+def cached_transcript(projects,clip):
+    """Reuse recognition only when the decoded WAV bytes are identical."""
+    from .core import load_transcript
+    projects=Path(projects).resolve();clip=Path(clip).resolve()
+    def digest(path):
+        with path.open('rb') as f:return hashlib.file_digest(f,'sha256').digest()
+    expected=None
+    for output in sorted(projects.glob('*/transcript.json'),key=lambda p:p.stat().st_mtime,reverse=True):
+        candidate=output.with_name('recognition.wav')
+        try:
+            if candidate.resolve()==clip or not candidate.resolve().is_relative_to(projects) or not output.resolve().is_relative_to(projects):continue
+            if candidate.stat().st_size!=clip.stat().st_size:continue
+            if expected is None:expected=digest(clip)
+            if digest(candidate)!=expected:continue
+            load_transcript(output)
+            return output
+        except (OSError,ValueError,KeyError,TypeError):continue
+    return None

@@ -10,7 +10,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio.browser import open_chrome,chrome_path
-from canva_studio.batches import probe_duration, prepare_parts
+from canva_studio.batches import probe_duration, prepare_parts, cached_transcript
 from canva_studio import updater
 from canva_studio.storage import data_dir, migrate_legacy
 from canva_studio.storage import application_dir
@@ -183,11 +183,15 @@ class App:
             if c['transcript']:
                 seg=load_transcript(c['transcript']);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,c['a'],c['b'],c['o'])
             else:
-                out=job/'transcript.json'; log=(DATA/'whisper.log').open('w',encoding='utf8')
-                env=os.environ.copy();env['PATH']=str(Path(c['ffmpeg']).parent)+os.pathsep+env.get('PATH','')
-                self.process=subprocess.Popen([c['python'],str(BASE/'canva_studio/transcribe_worker.py'),str(clip),str(out),c['model']],stdout=log,stderr=log,env=env,creationflags=NO_WINDOW)
-                code=self.process.wait();log.close();self.process=None
-                if code:raise ValueError('Whisper chưa chạy được. Xem whisper.log trong thư mục dữ liệu; kiểm tra đúng Python có Whisper.')
+                out=job/'transcript.json'
+                cached=cached_transcript(DATA/'Projects',clip)
+                if cached:shutil.copy2(cached,out)
+                else:
+                    log=(DATA/'whisper.log').open('w',encoding='utf8')
+                    env=os.environ.copy();env['PATH']=str(Path(c['ffmpeg']).parent)+os.pathsep+env.get('PATH','')
+                    self.process=subprocess.Popen([c['python'],str(BASE/'canva_studio/transcribe_worker.py'),str(clip),str(out),c['model']],stdout=log,stderr=log,env=env,creationflags=NO_WINDOW)
+                    code=self.process.wait();log.close();self.process=None
+                    if code:raise ValueError('Whisper chưa chạy được. Xem whisper.log trong thư mục dữ liệu; kiểm tra đúng Python có Whisper.')
                 seg=load_transcript(out);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,0,c['b']-c['a'],c['o'])
                 plan['source_start']=c['a']
                 for scene in plan['scenes']:scene['source_start']=round(scene['source_start']+c['a'],3)
