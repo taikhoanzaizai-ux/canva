@@ -1,4 +1,4 @@
-SKST CANVA STUDIO — BẢN THỬ 0.2.0
+SKST CANVA STUDIO — BẢN THỬ 0.2.1 PORTABLE
 
 Ứng dụng độc lập, không phải sản phẩm của Canva. Chỉ dùng kho video Canva trong tài khoản của bạn. Không cần khóa AI, không lấy mật khẩu hay cookie.
 
@@ -44,12 +44,15 @@ FFmpeg và FFprobe đã có trong thư mục CongCu của gói tải về; ứng
 Các đường dẫn này chỉ tự nhận nếu tồn tại. Trên máy khác, chọn môi trường Python có gói openai-whisper và mô hình .pt, hoặc dùng SRT/JSON. Gói ứng dụng không kèm mô hình Whisper dung lượng lớn.
 
 DỮ LIỆU
-Tiến độ và cấu hình lưu tại %LOCALAPPDATA%\SKST Canva Studio.
+Tiến độ, cấu hình, voice đã cắt, nhật ký, bộ nhớ đệm, tệp tạm và cập nhật lưu trong thư mục Data cạnh SKST Canva Studio.exe. Giải nén ở ổ D thì các dữ liệu này ở ổ D. Giữ nguyên thư mục _internal để ứng dụng chạy tại chỗ, không bung thư viện ra Temp ổ C.
+Lần đầu, dữ liệu AppData cũ được sao chép sang Data nếu chưa có dự án portable. Bản gốc được giữ dự phòng. Trong Kết nối & công cụ có nút Mở thư mục dữ liệu.
 Voice chỉ được tải đến Canva khi bạn bấm Bắt đầu cho thiết kế đã chọn. Không có máy chủ của bên phát triển, không thu thập thống kê. Nhật ký Whisper nằm trong whisper.log.
 Quyền tiện ích giới hạn ở Canva và cầu nối nội bộ. Có thể gỡ tiện ích trong trang quản lý trình duyệt; xóa thư mục ứng dụng để gỡ bản portable.
 
 CẬP NHẬT TỪ GITHUB
 Kho chính: https://github.com/taikhoanzaizai-ux/canva
 Bấm Kiểm tra cập nhật ở góc trên phải ứng dụng. Khi có bản mới đã phát hành, đọc thay đổi, tải rồi chọn cài. Ứng dụng kiểm tra tệp, lưu tiến độ, sao lưu bản cũ và mở lại bản mới. Nếu bản mới không mở được, ứng dụng phục hồi bản trước.
-Sau khi cập nhật tiện ích, vào trang quản lý tiện ích bấm Tải lại cho SKST, rồi tải lại tab Canva. Các bản 0.1.x cần thay EXE bằng 0.2.0 một lần để có nút cập nhật.
+Sau khi cập nhật tiện ích, vào trang quản lý tiện ích bấm Tải lại cho SKST, rồi tải lại tab Canva.
+Khi chuyển từ 0.2.0 hoặc cũ hơn lên bản portable 0.2.1, tải gói SKST_Canva_Studio_Windows.zip đầy đủ và giải nén trên ổ bạn muốn. Lần chuyển cấu trúc này không dùng gói Update cũ. Sau đó tiếp tục dùng nút cập nhật trong ứng dụng.
 Tệp cập nhật không xóa voice mẫu và công cụ có sẵn. GitHub không chứa voice, video và dự án riêng của bạn.
+Video MP4 Canva tải theo thư mục tải xuống của trình duyệt. Nếu muốn MP4 cùng ổ ứng dụng, chọn thư mục tải xuống trên ổ đó trong trình duyệt.

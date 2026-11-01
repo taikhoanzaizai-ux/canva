@@ -19,6 +19,12 @@ class ReleaseTests(unittest.TestCase):
         for path in ['../SKST Canva Studio.exe','/SKST Canva Studio.exe','C:/SKST Canva Studio.exe','TienIch_Canva/../../project.json','settings.json','TienIch_Canva/CON.js','./SKST Canva Studio.exe','TienIch_Canva/adapter.js:evil','TienIch_Canva//adapter.js']:
             self.assertFalse(u.allowed_file(path),path)
         self.assertTrue(u.allowed_file(u.EXE_NAME));self.assertTrue(u.allowed_file('TienIch_Canva/adapter.js'))
+        for path in ['_internal/../Data/project.json','_internal/_tk_data/../../Data/settings.json','_internal//python311.dll','_internal/Data/project.json','_internal/evil.exe']:
+            self.assertFalse(u.allowed_file(path),path)
+        self.assertTrue(u.allowed_file('_internal/python311.dll'))
+        self.assertTrue(u.allowed_file('_internal/_tk_data/ttk/ttk.tcl'))
+        self.assertTrue(u.allowed_file('_internal/_tcl_data/tzdata/Asia/Ho_Chi_Minh'))
+        self.assertFalse(u.allowed_file('_internal/_tcl_data/tzdata/../../../../Data/project.json'))
 
 class InstallTests(unittest.TestCase):
     def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)

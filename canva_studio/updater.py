@@ -56,6 +56,17 @@ def allowed_file(relative):
     if p.as_posix()!=relative or '\\' in relative or ':' in relative or p.is_absolute() or not p.parts or any(x in ('..','.') or x.endswith(('.', ' ')) for x in p.parts):return False
     if any(re.match(r'(?i)^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)',x) for x in p.parts):return False
     if len(p.parts)==1:return p.name in {EXE_NAME,'HUONG_DAN.txt','version.json'}
+    if p.parts[0]=='_internal':
+        # Runtime files only. Explicitly reject every traversal component before
+        # checking the small set of runtime folders and binary names.
+        parts=relative.split('/')
+        if any(part in ('','..','.') for part in parts) or '\\' in relative or ':' in relative:return False
+        if len(parts)==2:
+            return p.name in {'base_library.zip','HUONG_DAN.txt','tcl86t.dll','tk86t.dll','ucrtbase.dll'} or bool(re.fullmatch(r'(?:python3\d{1,2}|api-ms-win-[a-z0-9-]+|VCRUNTIME140(?:_1)?|libcrypto[-_a-z0-9]*|libssl[-_a-z0-9]*|libffi[-_a-z0-9]*)\.dll',p.name,re.I)) or bool(re.fullmatch(r'[a-zA-Z0-9_]+\.pyd',p.name))
+        if parts[1]=='canva_studio':return relative=='_internal/canva_studio/transcribe_worker.py'
+        if parts[1]=='_tcl_data' and len(parts)>3 and parts[2]=='tzdata':
+            return all(re.fullmatch(r'[A-Za-z0-9_+.-]+',part) and part not in {'.','..'} for part in parts[3:])
+        return parts[1] in {'_tcl_data','_tk_data','tcl8'} and (p.name in {'tclIndex','README'} or p.suffix.lower() in {'.tcl','.tm','.enc','.msg','.txt','.terms','.gif','.png','.xbm','.xpm','.eps'})
     return p.parts[0]=='TienIch_Canva' and len(p.parts)==2 and p.name in {'manifest.json','adapter.js','content.js','background.js','popup.html','popup.js'}
 
 def extract_verified(archive,destination,expected_digest):
@@ -109,6 +120,7 @@ def install_files(staged,target,backup):
         for src in files:
             relative=src.relative_to(staged);dst=(target/relative).resolve()
             if not dst.is_relative_to(target):raise ValueError('Đường dẫn đích vượt thư mục ứng dụng.')
+            if relative.parts[0]=='_internal' and not dst.is_relative_to((target/'_internal').resolve()):raise ValueError('Đường dẫn thư viện vượt thư mục _internal.')
             dst.parent.mkdir(parents=True,exist_ok=True)
             saved=backup/relative;existed=dst.exists()
             if existed:saved.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(dst,saved)
@@ -136,9 +148,12 @@ def launch_installer(staged,data_dir,version):
     if not getattr(sys,'frozen',False):raise ValueError('Chức năng cài cập nhật dùng trong bản EXE Windows.')
     folder=Path(staged).parent;helper=folder/'SKST Update Helper.exe'
     shutil.copy2(sys.executable,helper)
+    support=Path(sys.executable).parent/'_internal'
+    if support.is_dir():shutil.copytree(support,folder/'_internal',dirs_exist_ok=True)
     info=dict(parent_pid=os.getpid(),staged=str(Path(staged).resolve()),target=str(Path(sys.executable).parent),backup=str(folder/'backup'),data_dir=str(data_dir),version=version,health=str(folder/'health.json'))
     manifest=folder/'install.json';manifest.write_text(json.dumps(info),encoding='utf8')
-    subprocess.Popen([str(helper),'--apply-update',str(manifest)],creationflags=0x08000000,close_fds=True)
+    env=os.environ.copy();env['SKST_DATA_DIR']=str(data_dir);env['PYINSTALLER_RESET_ENVIRONMENT']='1'
+    subprocess.Popen([str(helper),'--apply-update',str(manifest)],env=env,creationflags=0x08000000,close_fds=True)
 
 def wait_parent(pid):
     if os.name!='nt':raise RuntimeError('Trình cập nhật này dành cho Windows.')
@@ -157,7 +172,7 @@ def apply_manifest(path):
         wait_parent(int(info['parent_pid']))
         changes=install_files(info['staged'],info['target'],info['backup'])
         health=Path(info['health']);health.unlink(missing_ok=True)
-        env=os.environ.copy();env['SKST_DATA_DIR']=info['data_dir'];env['SKST_UPDATE_HEALTH']=str(health)
+        env=os.environ.copy();env['SKST_DATA_DIR']=info['data_dir'];env['SKST_UPDATE_HEALTH']=str(health);env['PYINSTALLER_RESET_ENVIRONMENT']='1'
         proc=subprocess.Popen([str(Path(info['target'])/EXE_NAME)],env=env,close_fds=True)
         deadline=time.time()+35
         while time.time()<deadline:
@@ -173,5 +188,7 @@ def apply_manifest(path):
             except subprocess.TimeoutExpired:pass
         if changes:rollback(changes)
         (path.parent/'result.txt').write_text(str(e),encoding='utf8')
-        if changes:subprocess.Popen([str(Path(info['target'])/EXE_NAME)],close_fds=True)
+        if changes:
+            env=os.environ.copy();env['PYINSTALLER_RESET_ENVIRONMENT']='1'
+            subprocess.Popen([str(Path(info['target'])/EXE_NAME)],env=env,close_fds=True)
         return 1

@@ -2,6 +2,7 @@
 /outputs/
 /build/
 /dist/
+/Data/
 __pycache__/
 *.py[cod]
 *.spec

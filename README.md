@@ -20,9 +20,13 @@ Voice mẫu riêng tư không được đưa lên GitHub. Người đã cài gó
 
 Từ **0.2.0**, bấm **Kiểm tra cập nhật** ở góc trên phải. Ứng dụng kiểm tra GitHub Releases, tải gói `SKST_Canva_Studio_Update.zip`, đối chiếu SHA-256 do GitHub cung cấp, rồi đóng và mở lại sau khi cài. Bản cũ được sao lưu; bản mới không khởi động được sẽ phục hồi bản trước.
 
-Cấu hình và tiến độ nằm ở `%LOCALAPPDATA%\SKST Canva Studio`, tách khỏi thư mục cài. Tệp voice, thư mục công cụ và dữ liệu có sẵn không bị xóa bởi bản cập nhật. Khi tiện ích được sửa, tải lại tiện ích trong trang quản lý tiện ích và tải lại tab Canva.
+Cấu hình, tiến độ, voice đã cắt, log, cache, file tạm và bản cập nhật nằm trong **`Data` cạnh EXE**, trên đúng ổ bạn giải nén. Thư viện chạy ở `_internal`, không bung vào Temp ổ C. Tệp voice và công cụ có sẵn được giữ khi cập nhật. Khi tiện ích được sửa, tải lại tiện ích trong trang quản lý tiện ích và tải lại tab Canva.
 
-**Bản 0.1.x chưa có nút cập nhật:** thay EXE bằng bản 0.2.0 một lần. Sau đó dùng nút trong ứng dụng cho các bản tiếp theo. Không cập nhật trong lúc đang dựng hoặc nhận diện voice.
+**Chuyển từ 0.2.0 trở xuống lên 0.2.1:** tải `SKST_Canva_Studio_Windows.zip` đầy đủ, giải nén trên ổ muốn dùng và giữ nguyên `_internal`. Đây là lần chuyển cấu trúc nên không dùng gói Update cũ. Các lần sau dùng nút cập nhật trong bản portable. Dữ liệu AppData cũ được sao chép sang `Data` nếu chưa có dự án portable; bản gốc được giữ dự phòng.
+
+Tệp MP4 tải từ Canva dùng thư mục tải xuống của trình duyệt. Để lưu MP4 cùng ổ, chọn thư mục tải xuống của trình duyệt trên ổ đó. Ứng dụng không thay đổi thư mục hồ sơ hoặc thiết lập của trình duyệt.
+
+Sau khi chuyển sang bản portable, dùng nút trong ứng dụng cho các bản tiếp theo. Không cập nhật trong lúc đang dựng hoặc nhận diện voice.
 
 ## Phát triển và phát hành
 

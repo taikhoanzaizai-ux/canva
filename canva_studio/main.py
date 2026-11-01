@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, queue, shutil, subprocess, sys, threading, time, webbrowser
+import json, os, queue, shutil, subprocess, sys, tempfile, threading, time, webbrowser
 from pathlib import Path
 if getattr(sys,'frozen',False):
     # Tcl caches library directories when _tkinter is first imported.
@@ -10,14 +10,20 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script
 from canva_studio.bridge import Engine, serve
 from canva_studio import updater
+from canva_studio.storage import data_dir, migrate_legacy
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
-DATA=Path(os.environ['SKST_DATA_DIR']) if os.environ.get('SKST_DATA_DIR') else Path(os.environ.get('LOCALAPPDATA',Path.home()))/'SKST Canva Studio'
+DATA=data_dir()
 NO_WINDOW=0x08000000 if os.name=='nt' else 0
 
 class App:
     def __init__(self,root):
         self.root=root;root.title('SKST Canva Studio • Bản thử '+VERSION);root.geometry('1130x820');root.minsize(940,700)
+        legacy=Path(os.environ.get('LOCALAPPDATA',Path.home()))/'SKST Canva Studio'
+        imported=0
+        if '--self-test' not in sys.argv:
+            try:imported=migrate_legacy(DATA,legacy)
+            except (OSError,ValueError) as e:messagebox.showwarning('Dữ liệu cũ',str(e)+'\nDữ liệu gốc vẫn được giữ. Bạn có thể chuyển lại sau.')
         self.engine=Engine(DATA); self.server=serve(self.engine,int(os.environ.get('SKST_PORT','8766')));self.tasks=queue.Queue();self.worker_busy=False;self.process=None
         self.segments=None;self.plan=None;self.settings={};self.prepared_voice='';self.update_busy=False
         try:self.settings=json.loads((DATA/'settings.json').read_text(encoding='utf8'))
@@ -62,6 +68,8 @@ class App:
         self.token_entry=ttk.Entry(token,width=48,state='readonly',textvariable=self.token_var);self.token_entry.pack(side='left')
         ttk.Button(token,text='Sao chép mã',command=self.copy_token).pack(side='left',padx=8)
         ttk.Button(settings,text='Mở thư mục tiện ích để cài',command=self.extension_folder).pack(anchor='w',pady=8)
+        ttk.Label(settings,text='Thư mục dữ liệu portable: '+str(DATA),wraplength=950).pack(anchor='w',pady=5)
+        ttk.Button(settings,text='Mở thư mục dữ liệu',command=lambda:os.startfile(str(DATA))).pack(anchor='w',pady=3)
         ttk.Label(settings,text='Nhận diện voice trên máy bằng Whisper',font=('Segoe UI',13,'bold')).pack(anchor='w',pady=(20,8))
         self.python=tk.StringVar(value=self.settings.get('python',self.detect_python()));self.model=tk.StringVar(value=self.settings.get('model',self.detect_model()));self.ffmpeg=tk.StringVar(value=self.settings.get('ffmpeg',self.detect_ffmpeg()))
         for label,var in [('Python có Whisper',self.python),('Mô hình Whisper (.pt)',self.model),('FFmpeg (.exe)',self.ffmpeg)]:
@@ -73,6 +81,7 @@ class App:
         if self.engine.state['scenes']:
             self.plan=dict(scenes=self.engine.state['scenes']);self.populate();self.voice.set(self.engine.state['voice'])
         self.root.protocol('WM_DELETE_WINDOW',self.close);self.root.after(350,self.tick)
+        if imported:self.engine.log('Đã sao chép dữ liệu cũ vào '+str(DATA))
         if os.environ.get('SKST_UPDATE_HEALTH'):
             atomic_json(os.environ['SKST_UPDATE_HEALTH'],dict(version=VERSION,ready=True))
     def check_update(self):
@@ -278,7 +287,7 @@ def main():
         root.update_idletasks();gc.collect()
         token_visible=app.token_entry.get()==app.engine.token and len(app.token_entry.get())>=20
         app.copy_token();root.update_idletasks();copy_ok=root.clipboard_get()==app.engine.token
-        report=dict(version=VERSION,ui_opened=True,demo_scenes=len(app.tree.get_children()) if app.plan else 0,ffmpeg_found=Path(app.ffmpeg.get()).is_file(),whisper_found=Path(app.python.get()).is_file(),model_found=Path(app.model.get()).is_file(),pairing_code_visible=token_visible,pairing_copy_ok=copy_ok,update_button=app.update_button.cget('text')=='Kiểm tra cập nhật',canva_live_tested=False)
+        report=dict(version=VERSION,ui_opened=True,demo_scenes=len(app.tree.get_children()) if app.plan else 0,ffmpeg_found=Path(app.ffmpeg.get()).is_file(),whisper_found=Path(app.python.get()).is_file(),model_found=Path(app.model.get()).is_file(),pairing_code_visible=token_visible,pairing_copy_ok=copy_ok,update_button=app.update_button.cget('text')=='Kiểm tra cập nhật',portable_data=str(DATA),portable_temp=tempfile.gettempdir(),runtime_extracts_to_temp=bool(getattr(sys,'frozen',False) and Path(sys._MEIPASS).name!='_internal'),canva_live_tested=False)
         if not token_visible or not copy_ok:raise RuntimeError('Pairing-code regression check failed')
         atomic_json(DATA/'self-test.json',report);app.close();return
     root.mainloop()
