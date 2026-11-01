@@ -66,3 +66,10 @@ Tiện ích cần phiên bản 0.2.3 và quyền scripting trên Canva để t�
 CẬP NHẬT TIỆN ÍCH TÍCH HỢP TỪ 0.2.4
 Trong Kết nối & công cụ có nút Cập nhật ứng dụng + tiện ích từ GitHub. Gói cập nhật chứa cả phần mềm và thư mục TienIch_Canva. Khi không dựng, tiện ích nhận phiên bản tệp cục bộ mới và tự nạp lại. Khi có quyền mới, Chrome yêu cầu bạn xác nhận. Không sửa chính sách Chrome và không cài ngầm.
 Cài bản tiện ích 0.2.4 từ thư mục cố định cạnh EXE một lần. Nếu cần tải riêng, vào GitHub Releases lấy SKST_Canva_Extension.zip. Nút Kiểm tra tiện ích Chrome đang dùng sẽ chỉ rõ Chrome đang nạp thư mục nào; nếu còn thư mục cũ, chọn lại thư mục cố định một lần để các cập nhật sau vào đúng nơi.
+
+TỪ BẢN 0.3.0: NGƯỜI THẬT VÀ NHIỀU PHẦN
+Chọn voice GỐC đầy đủ (không chọn voice-cut.mp3 của bản thử). Để trống Đến giây để lấy đến hết tệp; điền mốc nếu chỉ muốn một đoạn.
+Phân tích & chia cảnh tạo các phần tối đa 50 cảnh, cắt WAV đúng cuối từng phần và kiểm tra thời lượng. Phần cuối ít hơn 50 nếu voice đã hết, không tạo cảnh/voice giả để bù.
+Mở Video khổ ngang trống và Bắt đầu. Khi đủ cảnh, tiện ích kiểm tra cuối hình, cuối voice và số cảnh trên Canva, rồi tự mở tab Video khổ ngang và tải voice phần tiếp theo. Giữ các tab đó mở; lịch sử đường dẫn/mốc voice nằm trong Data/project.json.
+Không tái sử dụng clip giữa các phần. Chỉ chọn kết quả có mô tả người thật và liên quan; hoạt hình/3D/đồ họa bị loại. Lọc dựa trên mô tả stock, không phải nhận dạng hình ảnh bằng AI; clip không rõ nội dung sẽ không được chọn.
+Dự án cũ đã có cảnh sai được giữ nguyên. Chọn voice gốc, Phân tích lại và dùng thiết kế trống để dựng bản mới, tránh chèn vào bản cũ.

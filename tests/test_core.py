@@ -72,9 +72,9 @@ class EngineTests(unittest.TestCase):
         self.e.next_task({**self.client,'url':'https://www.canva.com/design/other/design/edit'})
         self.assertEqual(self.e.connection_status()['code'],'wrong_design')
     def test_full_lifecycle(self):
-        for id_ in ['voice','1','export']:
+        for id_ in ['voice','1','audit','export']:
             task=self.e.next_task(self.client)['task'];self.assertEqual(task['id'],id_)
-            self.e.result(dict(id=id_,client='A',asset='unique' if id_=='1' else None))
+            self.e.result(dict(id=id_,client='A',asset='unique' if id_=='1' else None,verified_duration=4,verified_count=1))
         self.assertEqual(self.e.state['mode'],'complete');self.assertEqual(self.e.state['used'],['unique'])
     def test_resume_after_two_completed_scenes_keeps_voice(self):
         self.e.state.update(scenes=[dict(id=1,start=0,duration=2.76),dict(id=2,start=2.76,duration=3.98),dict(id=3,start=6.74,duration=4.84)],done=[1,2],voice_done=True,mode='attention',phase={})
@@ -114,7 +114,7 @@ class KeywordRepairTests(unittest.TestCase):
         from canva_studio.core import describe
         for text in ['Ở cuối video là bộ 6 động tác đơn giản, tập ngay tại nhà,','không cần dụng cụ. Đặc biệt có một động tác chỉ mất 20 giây mỗi lần,']:
             self.assertIn('senior home exercise',describe(text)['queries'])
-        self.assertIn('blood clot vein',describe('tắc nghẽn mạch máu')['queries'])
+        self.assertIn('senior leg massage',describe('tắc nghẽn mạch máu')['queries'])
         self.assertNotIn('blood clot vein',describe('hợp tác chăm sóc sức khỏe')['queries'])
     def test_repair_preserves_done_custom_and_inflight(self):
         from canva_studio.core import repair_pending_keywords

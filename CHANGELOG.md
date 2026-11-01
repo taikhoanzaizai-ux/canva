@@ -1,5 +1,14 @@
 # Các bản cập nhật
 
+## 0.3.0
+
+- Mặc định chỉ video người thật: chặn hoạt hình, 3D, khung neon, ký hiệu và mô phỏng; yêu cầu cả dấu hiệu người thật lẫn từ khóa liên quan. Chủ đề nội tạng dùng bác sĩ/người bệnh thay cho đồ họa.
+- Khoảng nghỉ kế thừa cảnh sinh hoạt theo ngữ cảnh; không tìm stock bằng chữ Khoảng nghỉ.
+- Phân tích hết voice gốc khi để trống Đến giây. Chia 50 cảnh/phần rồi cắt WAV chính xác theo biên cảnh, kiểm tra FFprobe; phần cuối có thể ít hơn 50 khi hết voice.
+- Tự mở tab Video khổ ngang, chuyển voice và cảnh tiếp theo sau khi đối chiếu số cảnh và thời lượng trên Canva; giữ lịch sử thiết kế, mốc voice và danh sách clip đã dùng qua mọi phần.
+- Cuộn tới cuối vùng timeline thật để tránh đọc nhầm cảnh cuối đang hiển thị khi Canva ẩn các cảnh ngoài khung nhìn; kiểm tra số cảnh sau thao tác chèn.
+- Không ghi đè thiết kế cũ hoặc thay các cảnh đã dựng. Bản cũ có đồ họa cần chọn voice gốc và dựng lại trên thiết kế trống.
+
 ## 0.2.8
 
 - Áp dụng sửa từ khóa cho mọi chủ đề/kịch bản: tránh khớp một phần từ như gian→gan, thân→thận và tác→tắc.

@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.2.8'
+VERSION = '0.3.0'
 
 def norm(text):
     return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower().replace('đ','d')) if unicodedata.category(c) != 'Mn')
@@ -36,7 +36,7 @@ TOPICS = [
  ('ấm|râm ran|đầu gối', ['xoa bóp bắp chân','chăm sóc đôi chân'], ['calf','massage','leg'], []),
 ]
 
-def describe(text):
+def topic_description(text):
     # Vietnamese accents distinguish thân/thận/thần and tác/tắc. Keep them.
     t = unicodedata.normalize('NFC', str(text)).casefold()
     for pattern, queries, positive, negative in TOPICS:
@@ -44,6 +44,47 @@ def describe(text):
             return dict(queries=queries, positive=positive, negative=negative, review=False)
     words = re.sub(r'[^\w\s]', ' ', text).split()
     return dict(queries=[' '.join(words[:10]) or 'người cao tuổi dưỡng sinh'], positive=['senior','elderly'], negative=['baby','ballet'], review=True)
+
+REAL_NEGATIVE=['animation','animated','cartoon','illustration','3d','render','cgi','graphic','neon','rainbow','question mark','skeleton','anatomy','hoạt hình','minh họa','mô phỏng','ballet','baby','child']
+
+def describe(text):
+    desc=topic_description(text)
+    t=unicodedata.normalize('NFC',str(text)).casefold()
+    replacements=[
+      ('tắc nghẽn|tắc mạch|ứ đọng|huyết khối|máu|tuần hoàn|tĩnh mạch', ['người cao tuổi xoa bóp chân','bác sĩ khám chân bệnh nhân cao tuổi','senior leg massage'],['leg','calf','massage','doctor','patient']),
+      ('tim|trái tim', ['bác sĩ khám tim người cao tuổi','người cao tuổi kiểm tra sức khỏe','doctor senior heart examination'],['doctor','patient','chest','examination']),
+      ('thận|nội tạng|gan|dạ dày', ['bác sĩ tư vấn sức khỏe người cao tuổi','người cao tuổi khám sức khỏe','doctor consulting elderly patient'],['doctor','patient','consult','examination']),
+      ('bắp chân|cơ bắp|gân gót', ['người cao tuổi giãn cơ bắp chân','xoa bóp bắp chân người thật','senior calf stretch'],['calf','leg','stretch','massage']),
+      ('khoa học|nghiên cứu|đại học', ['bác sĩ tư vấn người cao tuổi','bác sĩ nghiên cứu y khoa','doctor medical consultation'],['doctor','research','consult']),
+      ('buổi sáng|bình minh', ['người cao tuổi bên cửa sổ buổi sáng','người cao tuổi tập thể dục sáng','senior morning exercise'],['morning','senior','exercise']),
+    ]
+    for pattern,queries,positive in replacements:
+        if any(re.search(r'(?<!\w)'+re.escape(w)+r'(?!\w)',t) for w in pattern.split('|')):
+            desc=dict(queries=queries,positive=positive,negative=[],review=False);break
+    if desc['review']:
+        desc=dict(queries=['người cao tuổi sinh hoạt tại nhà','người cao tuổi chăm sóc sức khỏe','senior healthy lifestyle at home'],positive=['senior','elderly','home'],negative=[],review=True)
+    translations={'leg':'chân','calf':'bắp chân','doctor':'bác sĩ','patient':'bệnh nhân','massage':'xoa bóp','stretch':'giãn cơ','exercise':'tập thể dục','heel':'gót chân','breath':'hít thở','sleep':'ngủ','wake':'thức dậy','morning':'buổi sáng','walking':'đi bộ','senior':'cao tuổi','elderly':'cao tuổi','back pain':'đau lưng','tired':'mệt mỏi'}
+    desc['positive']=list(dict.fromkeys(desc['positive']+[translations[w] for w in desc['positive'] if w in translations]))
+    desc['negative']=list(dict.fromkeys(desc['negative']+REAL_NEGATIVE))
+    desc['real_people_only']=True
+    return desc
+
+
+def split_batches(plan,limit=50):
+    """Cut at actual scene boundaries, preserving exact source offsets and final remainder."""
+    import copy
+    if not 1<=limit<=50:raise ValueError('Mỗi phần tối đa 50 cảnh.')
+    scenes=plan['scenes'];parts=[]
+    for offset in range(0,len(scenes),limit):
+        rows=copy.deepcopy(scenes[offset:offset+limit]);base=rows[0]['start']
+        for i,row in enumerate(rows,1):
+            row['id']=i;row['start']=round(row['start']-base,3)
+        duration=round(rows[-1]['start']+rows[-1]['duration'],3)
+        source=round(plan.get('source_start',0)+base,3)
+        for row in rows:row['source_start']=round(source+row['start'],3)
+        parts.append(dict(scenes=rows,duration=duration,source_start=source,number=len(parts)+1))
+    return parts
+
 
 def read_script(path):
     p=Path(path)
@@ -152,7 +193,11 @@ def make_plan(segments, start=0, end=None, opening=35, max_seconds=5):
     for a,b,g in groups:
         if b-a<.05:continue
         text=' '.join(x['text'] for x in g)
-        desc=describe(text)
+        context=text
+        if text=='Khoảng nghỉ':
+            nearby=next((x['text'] for x in words if x['start']>=a),None)
+            context=scenes[-1]['text'] if scenes else (nearby or 'người cao tuổi thư giãn')
+        desc=describe(context)
         scenes.append(dict(id=len(scenes)+1,start=round(a-start,3),source_start=round(a,3),duration=round(b-a,3),text=text,**desc))
     return dict(scenes=scenes,duration=round(end-start,3),source_start=start,approximate=approximate)
 

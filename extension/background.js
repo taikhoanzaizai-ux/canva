@@ -54,14 +54,44 @@ async function attachController(data){
   if(!ready?.ready)throw Error('Tab Canva chưa nhận bộ dựng. Tải lại tab rồi kết nối lại.');
   return tab;
 }
+async function openNextDesign(body,sender,token){
+  const href=new URL(body.create_url);
+  if(href.origin!=='https://www.canva.com'||href.pathname!=='/design'||!href.searchParams.has('create')||href.searchParams.get('type')!=='TADUvCyAV_U')throw Error('Chỉ tạo Video khổ ngang trên Canva.');
+  const check=async(stage,extra={})=>{
+    const r=await bridgeFetch('checkpoint',{id:body.id,client:body.client,url:sender.url,...(stage?{stage,...extra}:{})},token);
+    if(!r.continue_)throw Error('Đã tạm dừng trước khi mở phần tiếp theo.');
+  };
+  const key='next:'+canonical(sender.url);
+  const cached=(await chrome.storage.local.get([key]))[key];
+  let tab;
+  if(cached){try{tab=await chrome.tabs.get(cached);}catch{throw Error('Tab phần tiếp theo đã đóng. Mở lại tab đó trước khi tiếp tục; không tự tạo trùng.');}}
+  if(!tab){
+    if(body.phase?.stage==='create_intent')throw Error('Lần trước dừng lúc mở thiết kế. Kiểm tra tab mới trước khi thử lại.');
+    await check('create_intent');
+    tab=await chrome.tabs.create({url:href.href,active:true});
+    await chrome.storage.local.set({[key]:tab.id});
+    await check('create_open',{tab_id:tab.id});
+  }
+  for(let i=0;i<60;i++){
+    await check();tab=await chrome.tabs.get(tab.id);
+    if(editorURL(tab.url)&&canonical(tab.url)!==canonical(sender.url))return {new_target:tab.url};
+    await new Promise(r=>setTimeout(r,1000));
+  }
+  throw Error('Tab mới chưa tải xong. Giữ nguyên tab rồi bấm Tiếp tục.');
+}
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (!['bridge','probe','update_companion'].includes(message.type)) return;
+  if (!['bridge','probe','update_companion','open_next'].includes(message.type)) return;
   const own = sender.id === chrome.runtime.id;
   const popup=['probe','update_companion'].includes(message.type)&&sender.url===chrome.runtime.getURL('popup.html');
   const canva = sender.tab && editorURL(sender.url);
   if (!own || (!canva&&!popup) || (message.type==='update_companion'&&!popup)) { respond({error:'Chỉ nhận yêu cầu từ Canva hoặc cửa sổ kết nối SKST.'}); return; }
   (async () => {
     try {
+      if(message.type==='open_next'){
+        const {token,enabled}=await chrome.storage.local.get(['token','enabled']);
+        if(!enabled)throw Error('Chưa bật kết nối.');
+        respond(await openNextDesign(message.body,sender,token));return;
+      }
       const route=popup?'ping':message.route;
       if (!['next','checkpoint','result','voice','ping'].includes(route)) throw Error('Lệnh không hợp lệ');
       const {token,enabled} = await chrome.storage.local.get(['token','enabled']);
@@ -84,6 +114,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         if(refresh){respond(refresh);return;}
       }
       let data=await bridgeFetch(route,popup?{}:{...message.body,url:sender.url,extension_version:chrome.runtime.getManifest().version},token);
+      if(route==='result'&&data.handoff&&data.ok){
+        await attachController({target:data.target});
+      }
       if(popup){
         const tab=await attachController(data);
         for(let i=0;i<6;i++){

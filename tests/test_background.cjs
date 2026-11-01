@@ -1,16 +1,17 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 function harness(tabs,diskVersion,updateVersion){
  const manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8'));
- const calls={fetch:[],inject:[],reload:0};let listener,attached=false;
+ const local={token:'test-token',enabled:true};const calls={fetch:[],inject:[],reload:0,created:[]};let listener,attached=false;
  const chrome={
   runtime:{id:'own',getURL:p=>'chrome-extension://own/'+p,getManifest:()=>manifest,onMessage:{addListener:fn=>listener=fn},onInstalled:{addListener:()=>{}},reload:()=>calls.reload++},
-  storage:{local:{get:async()=>({token:'test-token',enabled:true})}},
-  tabs:{query:async()=>tabs,sendMessage:async(id,msg)=>({ready:true})},
+  storage:{local:{get:async()=>local,set:async value=>Object.assign(local,value)}},
+  tabs:{create:async spec=>{calls.created.push(spec);return {id:77,url:spec.url};},get:async()=>({id:77,url:'https://www.canva.com/design/new/token/edit'}),query:async()=>tabs,sendMessage:async(id,msg)=>({ready:true})},
   scripting:{executeScript:async spec=>{calls.inject.push(spec);attached=true;}}
  };
- const context={chrome,AbortSignal,setTimeout,Promise,console,fetch:async(url,opts)=>{
+ const context={chrome,URL,AbortSignal,setTimeout,Promise,console,fetch:async(url,opts)=>{
   if(url.startsWith('chrome-extension://'))return {ok:true,json:async()=>({...manifest,version:diskVersion||manifest.version})};
   calls.fetch.push({url,body:JSON.parse(opts.body)});
+  if(url.endsWith('/checkpoint'))return {ok:true,json:async()=>({continue_:true})};
   if(url.endsWith('/companion/update')&&updateVersion)return {ok:true,json:async()=>({manifest:{...manifest,version:updateVersion},mode:'paused',active_task:false})};
   return {ok:true,json:async()=>({ok:true,version:manifest.version,target:'https://www.canva.com/design/target/token/edit',mode:'paused',active_task:false,connection:{ready:attached}})};
  }};
@@ -48,6 +49,14 @@ function harness(tabs,diskVersion,updateVersion){
  assert(current.error);assert.equal(explicit.calls.reload,0);
  const external=await explicit.message({type:'update_companion'},{id:'wrong',url:'https://example.com'});
  assert(external.error);
+ const next=harness([]);
+ const sender={id:'own',tab:{id:1},url:'https://www.canva.com/design/target/token/edit'};
+ const body={id:'next_design',client:'A',create_url:'https://www.canva.com/design?create&type=TADUvCyAV_U'};
+ const newPart=await next.message({type:'open_next',body},sender);
+ assert.equal(newPart.new_target,'https://www.canva.com/design/new/token/edit');assert.equal(next.calls.created.length,1);
+ await next.message({type:'open_next',body},sender);assert.equal(next.calls.created.length,1,'Reuse existing next tab after retry');
+ const unsafe=await next.message({type:'open_next',body:{...body,create_url:'https://example.com/design?create&type=TADUvCyAV_U'}},sender);
+ assert(unsafe.error);assert.equal(next.calls.created.length,1);
  const manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8'));
  assert(manifest.permissions.includes('scripting'));assert(manifest.host_permissions.every(v=>v.startsWith('https://www.canva.com/')||v.startsWith('http://127.0.0.1:8766/')));
  console.log('Controller attachment, exact design selection, and permission scope checks passed.');

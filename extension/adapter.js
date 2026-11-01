@@ -49,6 +49,7 @@
     return items.length===1&&label(items[0])==='Thêm chuyển cảnh';
   }
   const menus=()=>[...document.querySelectorAll('[role="menu"],[role="dialog"]')].filter(e=>visible(e)&&!timelineTransitionMenu(e));
+  const sceneCount=()=>[...document.querySelectorAll('button,[role="button"]')].filter(e=>label(e)==='Thêm nội dung đa phương tiện/cảnh trống').length;
   const endButton=()=>[...document.querySelectorAll('button,[role="button"]')].filter(e=>label(e)==='Thêm nội dung đa phương tiện/cảnh trống').at(-1);
   const timeline=()=>[...document.querySelectorAll('[data-role="timeline-scene"]')].map(e=>{
     let parent=e.parentElement;
@@ -57,8 +58,18 @@
     const val=kind=>Number(sliders.find(s=>label(s).includes(kind))?.getAttribute('aria-valuenow')||0)/1e6;
     const image=e.querySelector('img');return {start:val('biên bắt đầu'),end:val('biên kết thúc'),image:image?.src||'',element:e};
   });
+  function timelineScroller(root=document){
+    let el=root.querySelector('[data-role="timeline-scene"]');
+    for(let i=0;el&&i<30;i++,el=el.parentElement){
+      if(el.scrollWidth>el.clientWidth+20&&/auto|scroll/.test(getComputedStyle(el).overflowX))return el;
+    }
+    return null;
+  }
   const tail=async()=>{
-    const end=await wait(endButton,'Không tìm thấy timeline video mới của Canva');end.scrollIntoView({block:'nearest',inline:'end'});await sleep(700);
+    const end=await wait(endButton,'Không tìm thấy timeline video mới của Canva');
+    const scroll=timelineScroller();
+    if(scroll)scroll.scrollLeft=scroll.scrollWidth;else end.scrollIntoView({block:'nearest',inline:'end'});
+    await sleep(900);
     const rows=timeline();return rows.reduce((best,row)=>row.end>best.end?row:best,{start:0,end:0,image:''});
   };
   const cards=()=>[...document.querySelectorAll('[role="button"][draggable="true"][aria-label]')].filter(visible).map(el=>{
@@ -66,10 +77,15 @@
     const src=group.querySelector('img')?.src||'';
     const id=src.match(/video-public\.canva\.com\/([^/]+)/)?.[1]||src.split('?')[0]||'title:'+norm(label(el));
     const m=group.textContent.match(/(\d+(?:[.,]\d+)?)\s*(?:giây|seconds?|s\b)/i);
-    return {el,id,title:label(el),duration:m?Number(m[1].replace(',','.')):0};
+    return {el,id,stock:/video-public\.canva\.com\//.test(src),title:label(el),duration:m?Number(m[1].replace(',','.')):0};
   });
+  function realPerson(card){
+    const t=norm(card.title);
+    if(/animation|animated|cartoon|illustrat|3d|render|cgi|graphic|neon|rainbow|question mark|skeleton|anatom|hoat hinh|minh hoa|mo phong|stick figure|background|loop/.test(t))return false;
+    return /\b(man|woman|men|women|person|people|senior|elderly|patient|doctor|therapist|adult|couple|male|female|hands|feet|foot|legs)\b|nguoi|bac si|benh nhan|ban chan|bap chan|doi chan|ban tay/.test(t);
+  }
   function eligibleCards(items,scene,used){
-    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&score(c,scene)>-50).sort((a,b)=>score(b,scene)-score(a,scene));
+    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&realPerson(c)&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
   }
   function score(card,scene){
     const text=norm(card.title);let n=0;
@@ -100,14 +116,20 @@
   const choose=async(scene,used)=>{
     for(const query of scene.queries){
       const input=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'));
-      fill(input,query);key(input,'Enter');
-      await wait(()=>!(input.getAttribute('aria-busy')==='true'),'Tìm video chưa xong');
+      fill(input,query);
+      // Canva replaces the combobox with a searchbox after typing. Reacquire
+      // the input rather than sending Enter to its detached predecessor.
+      await sleep(300);await guard();
+      const liveInput=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'));
+      key(liveInput,'Enter');
+      await wait(()=>document.body.innerText.includes('Tất cả kết quả cho')&&document.body.innerText.includes(query),'Canva chưa chuyển sang kết quả từ khóa mới');
+      await wait(()=>!(document.querySelector('input[aria-label="Tìm kiếm video"]')?.getAttribute('aria-busy')==='true'),'Tìm video chưa xong');
       // Search is read-only: retry slow results and scroll for unused stock
       // before abandoning a query. Never repeat insertion automatically.
       await sleep(2200);
       for(let page=0;page<4;page++){
         await guard();
-        const found=eligibleCards(cards(),scene,used);
+        const found=eligibleCards(cards().filter(c=>c.stock),scene,used);
         if(found.length)return found[0];
         const last=cards().at(-1);
         if(last)last.el.scrollIntoView({block:'end',inline:'nearest'});
@@ -121,7 +143,7 @@
     const field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không tìm thấy ô độ dài video');
     fill(field,String(duration));key(field,'Enter');
     await click(await wait(()=>find('Xong'),'Không tìm thấy nút Xong'));
-    await wait(()=>find(/^Xén video dài/),'Canva chưa áp dụng đoạn cắt');
+    await wait(()=>find(/^Xén video dài/),'Canva chưa áp dụng đoạn cắt');await sleep(700);
   };
   const mute=async()=>{
     let volume=find(/^Âm lượng/);
@@ -159,6 +181,8 @@
       await prepare(s);const selected=await choose(s,task.used||[]);asset=selected.id;title=selected.title;
       await checkpoint('insert_intent',{asset,title});await click(selected.el);
       await wait(()=>find(/^Xén video dài/),'Video chưa được đưa vào timeline');
+      await tail();
+      if(sceneCount()!==s.id)throw Error(`Canva có ${sceneCount()} cảnh, đang chèn cảnh ${s.id}. Chưa xác nhận chèn thành công; kiểm tra cảnh dở để tránh chèn trùng.`);
       await checkpoint('inserted',{asset,title});
     } else {
       const last=await tail();
@@ -188,6 +212,24 @@
     await wait(()=>audioOnTimeline(raw.name),'Voice chưa xuất hiện trên timeline');
     return {};
   }
+  async function auditTask(task){
+    await closeMenu();const last=await tail();
+    if(sceneCount()!==task.count)throw Error(`Canva có ${sceneCount()} cảnh, cần ${task.count} cảnh. Không chuyển phần khi số cảnh chưa khớp.`);
+    if(Math.abs(last.end-task.duration)>.12)throw Error(`Hình kết thúc ở ${last.end.toFixed(3)} giây nhưng voice phần này dài ${task.duration.toFixed(3)} giây. Cần sửa cảnh cuối trước khi chuyển phần.`);
+    const audio=[...document.querySelectorAll('button,[role="button"]')].find(e=>label(e).includes('SKST_voice_')&&label(e).includes('đoạn âm thanh'));
+    if(!audio)throw Error('Không xác nhận được voice trên timeline; không chuyển sang phần mới.');
+    const ends=[...audio.querySelectorAll('[role="slider"]')].filter(e=>label(e).includes('biên kết thúc')).map(e=>Number(e.getAttribute('aria-valuenow'))/1e6);
+    if(!ends.length||Math.abs(Math.max(...ends)-task.duration)>.12)throw Error('Voice trên Canva chưa đủ thời lượng phần này. Không xuất hoặc chuyển phần.');
+    return {verified_duration:last.end,verified_count:sceneCount()};
+  }
+  async function nextDesignTask(task,checkpoint){
+    await closeMenu();await click(await wait(()=>find('Tệp'),'Không thấy menu Tệp'));
+    await click(await wait(()=>find('Tạo thiết kế mới'),'Không thấy Tạo thiết kế mới'));
+    const link=await wait(()=>find('Video khổ ngang','a'),'Không thấy định dạng Video khổ ngang');
+    const href=link.href;
+    if(!/^https:\/\/www\.canva\.com\/design\?/.test(href)||!new URL(href).searchParams.has('create'))throw Error('Đường dẫn tạo video không hợp lệ.');
+    return {create_url:href};
+  }
   async function exportTask(task,checkpoint){
     if(task.phase?.stage==='export_intent')throw Error('Có lần xuất chưa xác nhận. Kiểm tra mục tải xuống Canva.');
     await closeMenu();await click(await wait(()=>find('Chia sẻ','button,[role="button"],[role="menuitem"]'),'Không thấy Chia sẻ'));
@@ -199,11 +241,13 @@
     await wait(()=>/Đang tải xuống|Nếu quá trình tải xuống/.test(document.body.innerText),'Canva chưa bắt đầu xuất video',30000);
     return {};
   }
-  globalThis.SKSTAdapter={norm,label,score,eligibleCards,timeline,cards,uploadInput,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,eligibleCards,timelineScroller,timeline,cards,uploadInput,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice)=>{
     guard=()=>check();await guard();
     const checkpoint=(stage,extra={})=>check(stage,extra);
     if(task.kind==='scene')return sceneTask(task,checkpoint);
     if(task.kind==='voice')return voiceTask(task,checkpoint,voice);
+    if(task.kind==='audit')return auditTask(task);
+    if(task.kind==='next_design')return nextDesignTask(task,checkpoint);
     if(task.kind==='export')return exportTask(task,checkpoint);
     throw Error('Loại thao tác không hợp lệ');
   }};

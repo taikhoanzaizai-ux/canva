@@ -2,8 +2,8 @@
 import base64, hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords
-MIN_EXTENSION_VERSION='0.2.6'
+from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
+MIN_EXTENSION_VERSION='0.3.0'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -36,6 +36,9 @@ class Engine:
             if self.state['mode']=='running':raise ValueError('Hãy tạm dừng trước khi đổi dự án.')
             if not valid_canva(target):raise ValueError('Dán đường dẫn chỉnh sửa Canva hợp lệ.')
             self.state=dict(mode='ready',message='Đã sẵn sàng. Mở thiết kế video ngang trống trong Canva.',scenes=plan['scenes'],done=[],phase={},used=[],target=target,voice=str(voice),voice_done=False,export_done=False)
+            self.state['parts']=plan.get('parts',[]);self.state['part_index']=0;self.state['history']=[];self.state['audit_done']=False
+            self.state['original_voice']=plan.get('original_voice',str(voice))
+            for scene in self.state['scenes']:scene.update(real_people_only=True)
             self.running=None;self.save()
     def pause(self):
         with self.lock:self.state['mode']='paused';self.log('Đã tạm dừng. Thao tác đang thực hiện sẽ dừng ở điểm kiểm tra tiếp theo.')
@@ -43,7 +46,7 @@ class Engine:
         with self.lock:
             if not self.state['scenes']:raise ValueError('Chưa có danh sách cảnh.')
             if len(self.state['scenes'])>50:raise ValueError('Bản thử hỗ trợ tối đa 50 cảnh mỗi dự án. Hãy chọn đoạn ngắn hơn.')
-            if self.state['phase'].get('stage') in ('insert_intent','upload_intent','export_intent'):
+            if self.state['phase'].get('stage') in ('insert_intent','upload_intent','export_intent','create_intent'):
                 raise ValueError('Lần trước dừng giữa thao tác. Kiểm tra Canva rồi dùng nút Xử lý cảnh bị dở; ứng dụng sẽ không tự chèn trùng.')
             self.running=None;self.last_activity=time.time();self.state['mode']='running';self.log('Đang chờ tiện ích kết nối đúng thiết kế Canva…')
     def connection_status(self,target=None):
@@ -94,6 +97,8 @@ class Engine:
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
                 if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,used=self.state['used'])
+                elif not self.state.get('audit_done'):task=dict(id='audit',kind='audit',count=len(self.state['scenes']),duration=round(self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'],3))
+                elif self.state.get('part_index',0)+1<len(self.state.get('parts',[])):task=dict(id='next_design',kind='next_design')
                 elif not self.state['export_done']:task=dict(id='export',kind='export')
                 else:return dict(task=None,mode='complete')
             task['phase']=self.state['phase'] if self.state['phase'].get('id')==task['id'] else {}
@@ -108,6 +113,7 @@ class Engine:
             if body.get('client') in self.peers:self.peers[body['client']]['seen']=self.last_activity
             if self.browser.get('client')==body.get('client'):self.browser['seen']=self.last_activity
             stage=body.get('stage')
+            if stage in ('create_intent','create_open') and str(body.get('id'))!='next_design':raise ValueError('Không có lệnh mở thiết kế tiếp theo.')
             if stage:
                 self.state['phase']={**body,'id':str(body['id'])}; self.save()
             return dict(continue_=True)
@@ -117,7 +123,21 @@ class Engine:
             if body.get('error'):
                 self.state['mode']='attention';self.running=None;self.log('Cần kiểm tra: '+str(body['error'])[:1200]);return dict(ok=True)
             key=str(body['id'])
-            if key=='voice':self.state['voice_done']=True;msg='Đã đặt voice trên timeline.'
+            if key=='audit':
+                scenes=self.state['scenes'];duration=round(scenes[-1]['start']+scenes[-1]['duration'],3)
+                if len(self.state['done'])!=len(scenes) or body.get('verified_count')!=len(scenes) or abs(float(body.get('verified_duration',-1))-duration)>.12:raise ValueError('Chưa xác nhận đủ cảnh và voice phần hiện tại.')
+                self.state['audit_done']=True;msg='Đã kiểm tra đủ cảnh và thời lượng voice.'
+            elif key=='next_design':
+                target=body.get('new_target','')
+                if not valid_canva(target) or canonical_url(target)==canonical_url(self.state['target']):raise ValueError('Thiết kế tiếp theo không hợp lệ.')
+                if not self.state.get('audit_done'):raise ValueError('Chưa kiểm tra xong phần hiện tại.')
+                index=self.state.get('part_index',0)+1
+                if index>=len(self.state.get('parts',[])):raise ValueError('Không còn voice tiếp theo.')
+                self.state.setdefault('history',[]).append(dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration']))
+                part=self.state['parts'][index]
+                self.state.update(part_index=index,target=target,voice=part['voice'],scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
+                self.browser={};msg=f'Chuyển phần {index+1}: voice gốc từ giây {part["source_start"]:.3f}.'
+            elif key=='voice':self.state['voice_done']=True;msg='Đã đặt voice trên timeline.'
             elif key=='export':self.state['export_done']=True;self.state['mode']='complete';msg='Đã gửi lệnh xuất MP4 trong Canva. Theo dõi tải xuống trong trình duyệt.'
             else:
                 i=int(key)
@@ -125,7 +145,7 @@ class Engine:
                 asset=body.get('asset')
                 if asset and asset not in self.state['used']:self.state['used'].append(asset)
                 msg=f'Đã dựng cảnh {i}/{len(self.state["scenes"])}: '+str(body.get('title',''))
-            self.state['phase']={};self.running=None;self.log(msg);return dict(ok=True)
+            self.state['phase']={};self.running=None;self.log(msg);return dict(ok=True,handoff=key=='next_design',target=self.state['target'])
 
 def serve(engine,port=8766):
     class Handler(BaseHTTPRequestHandler):

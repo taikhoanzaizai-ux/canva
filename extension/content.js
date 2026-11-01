@@ -5,7 +5,7 @@
     if(message.type==='skst_controller_ping'){respond({ready:true,version:chrome.runtime.getManifest().version});return;}
   });
   async function api(route,body={}){
-    const result=await chrome.runtime.sendMessage({type:'bridge',route,body:{...body,client,title:document.title}});
+    const result=await chrome.runtime.sendMessage({type:'bridge',route,body:{title:document.title,...body,client}});
     if(!result)throw Error('Tiện ích chưa phản hồi. Bấm Kết nối Canva để gắn lại bộ dựng.');
     if(result?.error)throw Error(result.error);
     if(result?.disabled)throw Error('Đã ngắt tiện ích');
@@ -19,7 +19,11 @@
         const state=await api('checkpoint',{id:task.id,...(stage?{stage,...extra}:{})});
         if(!state.continue_)throw Error('Đã tạm dừng theo yêu cầu.');
       };
-      const output=await SKSTAdapter.run(task,check,()=>api('voice',{id:task.id}));
+      let output=await SKSTAdapter.run(task,check,()=>api('voice',{id:task.id}));
+      if(task.kind==='next_design'){
+        output=await chrome.runtime.sendMessage({type:'open_next',body:{id:task.id,client,phase:task.phase,create_url:output.create_url}});
+        if(!output||output.error)throw Error(output?.error||'Chưa mở được thiết kế tiếp theo.');
+      }
       await api('result',{id:task.id,...output});
     }catch(e){
       if(task){try{await api('result',{id:task.id,error:e.message});}catch{}}
