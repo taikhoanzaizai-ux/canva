@@ -127,3 +127,24 @@ class KeywordRepairTests(unittest.TestCase):
         self.assertEqual(scenes[2]['queries'],old)
         self.assertEqual(scenes[3]['queries'],['từ khóa tự chọn'])
         self.assertIn('senior home exercise',scenes[1]['queries'])
+
+
+class GeneralKeywordTests(unittest.TestCase):
+    def test_substrings_in_unrelated_words_never_match_organs(self):
+        from canva_studio.core import describe
+        for text in ['thời gian dành cho bản thân','hợp tác chăm sóc sức khỏe','tinh thần thoải mái']:
+            result=describe(text)
+            self.assertNotIn('blood clot vein',result['queries'])
+            self.assertNotIn('mô phỏng nội tạng',result['queries'])
+            self.assertNotIn('human kidney',result['queries'])
+    def test_generic_migration_repairs_other_false_matches(self):
+        from canva_studio.core import legacy_description,repair_pending_keywords,describe
+        text='thời gian dành cho bản thân'
+        old=legacy_description(text)
+        state=dict(scenes=[dict(id=1,text=text,**old)],done=[],phase={})
+        self.assertEqual(repair_pending_keywords(state),1)
+        self.assertEqual(state['scenes'][0]['queries'],describe(text)['queries'])
+        self.assertEqual(repair_pending_keywords(state),0)
+    def test_specific_exercise_wins_over_generic(self):
+        from canva_studio.core import describe
+        self.assertIn('calf raises',describe('động tác nhón gót chân')['queries'])

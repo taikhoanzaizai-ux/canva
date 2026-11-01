@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.2.7'
+VERSION = '0.2.8'
 
 def norm(text):
     return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower().replace('đ','d')) if unicodedata.category(c) != 'Mn')
@@ -37,9 +37,10 @@ TOPICS = [
 ]
 
 def describe(text):
-    t = norm(text)
+    # Vietnamese accents distinguish thân/thận/thần and tác/tắc. Keep them.
+    t = unicodedata.normalize('NFC', str(text)).casefold()
     for pattern, queries, positive, negative in TOPICS:
-        if any(re.search(r'(?<!\w)'+re.escape(norm(p))+r'(?!\w)',t) for p in pattern.split('|')):
+        if any(re.search(r'(?<!\w)'+re.escape(unicodedata.normalize('NFC',p).casefold())+r'(?!\w)',t) for p in pattern.split('|')):
             return dict(queries=queries, positive=positive, negative=negative, review=False)
     words = re.sub(r'[^\w\s]', ' ', text).split()
     return dict(queries=[' '.join(words[:10]) or 'người cao tuổi dưỡng sinh'], positive=['senior','elderly'], negative=['baby','ballet'], review=True)
@@ -166,14 +167,25 @@ def valid_canva(url):
     return bool(re.fullmatch(r'https://www\.canva\.com/design/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/edit(?:\?[^\s]*)?',url.strip()))
 
 
+def legacy_description(text):
+    """Recognize generated plans from <=0.2.6, so user edits remain untouched."""
+    t=norm(text)
+    for pattern,queries,positive,negative in TOPICS:
+        if pattern.startswith('động tác|'):continue
+        if pattern.startswith('tắc nghẽn|'):pattern='tắc|ứ đọng|huyết khối'
+        if any(norm(p) in t for p in pattern.split('|')):
+            return dict(queries=queries,positive=positive,negative=negative,review=False)
+    words=re.sub(r'[^\w\s]', ' ', text).split()
+    return dict(queries=[' '.join(words[:10]) or 'người cao tuổi dưỡng sinh'],positive=['senior','elderly'],negative=['baby','ballet'],review=True)
+
+
 def repair_pending_keywords(state):
-    """Repair only our erroneous generated clot queries; preserve edits and completed clips."""
+    """Reclassify all old generated topics; never rewrite custom or completed scenes."""
     changed=0
-    legacy=['tắc nghẽn mạch máu','huyết khối tĩnh mạch','blood clot vein']
     active=str(state.get('phase',{}).get('id',''))
     for scene in state.get('scenes',[]):
         if scene['id'] in state.get('done',[]) or str(scene['id'])==active:continue
-        if scene.get('queries')==legacy:
-            updated=describe(scene.get('text',''))
-            if updated['queries']!=legacy:scene.update(updated);changed+=1
+        text=scene.get('text','');old=legacy_description(text);updated=describe(text)
+        if scene.get('queries')==old['queries'] and updated['queries']!=old['queries']:
+            scene.update(updated);changed+=1
     return changed

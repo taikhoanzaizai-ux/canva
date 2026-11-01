@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.2.8
+
+- Áp dụng sửa từ khóa cho mọi chủ đề/kịch bản: tránh khớp một phần từ như gian→gan, thân→thận và tác→tắc.
+- Nhận diện và nâng cấp toàn bộ từ khóa cũ do phần mềm tạo cho cảnh chưa làm, không giới hạn cảnh động tác; giữ từ khóa chỉnh tay và cảnh đã dựng/dở.
+- Kiểm thử nhiều chủ đề, kịch bản khác và tính ổn định khi mở lại nhiều lần.
+
 ## 0.2.7
 
 - Sửa nhận nhầm “động tác” thành “tắc”, dùng ranh giới từ và cụm tắc mạch rõ nghĩa; thêm cảnh tập tại nhà.
