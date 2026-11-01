@@ -107,3 +107,23 @@ class EngineTests(unittest.TestCase):
         finally:server.shutdown();server.server_close()
 
 if __name__=='__main__':unittest.main()
+
+
+class KeywordRepairTests(unittest.TestCase):
+    def test_exercise_is_not_clot(self):
+        from canva_studio.core import describe
+        for text in ['Ở cuối video là bộ 6 động tác đơn giản, tập ngay tại nhà,','không cần dụng cụ. Đặc biệt có một động tác chỉ mất 20 giây mỗi lần,']:
+            self.assertIn('senior home exercise',describe(text)['queries'])
+        self.assertIn('blood clot vein',describe('tắc nghẽn mạch máu')['queries'])
+        self.assertNotIn('blood clot vein',describe('hợp tác chăm sóc sức khỏe')['queries'])
+    def test_repair_preserves_done_custom_and_inflight(self):
+        from canva_studio.core import repair_pending_keywords
+        old=['tắc nghẽn mạch máu','huyết khối tĩnh mạch','blood clot vein']
+        scenes=[dict(id=i,text='động tác tập tại nhà',queries=list(old)) for i in range(1,5)]
+        scenes[3]['queries']=['từ khóa tự chọn']
+        state=dict(scenes=scenes,done=[1],phase={'id':'3','stage':'inserted'})
+        self.assertEqual(repair_pending_keywords(state),1)
+        self.assertEqual(scenes[0]['queries'],old)
+        self.assertEqual(scenes[2]['queries'],old)
+        self.assertEqual(scenes[3]['queries'],['từ khóa tự chọn'])
+        self.assertIn('senior home exercise',scenes[1]['queries'])

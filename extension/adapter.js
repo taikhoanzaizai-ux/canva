@@ -68,6 +68,9 @@
     const m=group.textContent.match(/(\d+(?:[.,]\d+)?)\s*(?:giây|seconds?|s\b)/i);
     return {el,id,title:label(el),duration:m?Number(m[1].replace(',','.')):0};
   });
+  function eligibleCards(items,scene,used){
+    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&score(c,scene)>-50).sort((a,b)=>score(b,scene)-score(a,scene));
+  }
   function score(card,scene){
     const text=norm(card.title);let n=0;
     for(const word of scene.positive||[])if(text.includes(norm(word)))n+=4;
@@ -99,9 +102,17 @@
       const input=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'));
       fill(input,query);key(input,'Enter');
       await wait(()=>!(input.getAttribute('aria-busy')==='true'),'Tìm video chưa xong');
-      await sleep(2200);await guard();
-      const candidates=cards().filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&score(c,scene)>-50).sort((a,b)=>score(b,scene)-score(a,scene));
-      if(candidates.length)return candidates[0];
+      // Search is read-only: retry slow results and scroll for unused stock
+      // before abandoning a query. Never repeat insertion automatically.
+      await sleep(2200);
+      for(let page=0;page<4;page++){
+        await guard();
+        const found=eligibleCards(cards(),scene,used);
+        if(found.length)return found[0];
+        const last=cards().at(-1);
+        if(last)last.el.scrollIntoView({block:'end',inline:'nearest'});
+        await sleep(1800);
+      }
     }
     throw Error('Không tìm được video đủ dài và chưa dùng cho: '+scene.text+'. Hãy sửa từ khóa cảnh rồi tiếp tục.');
   };
@@ -188,7 +199,7 @@
     await wait(()=>/Đang tải xuống|Nếu quá trình tải xuống/.test(document.body.innerText),'Canva chưa bắt đầu xuất video',30000);
     return {};
   }
-  globalThis.SKSTAdapter={norm,label,score,timeline,cards,uploadInput,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice)=>{
+  globalThis.SKSTAdapter={norm,label,score,eligibleCards,timeline,cards,uploadInput,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice)=>{
     guard=()=>check();await guard();
     const checkpoint=(stage,extra={})=>check(stage,extra);
     if(task.kind==='scene')return sceneTask(task,checkpoint);

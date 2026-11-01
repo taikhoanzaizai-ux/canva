@@ -28,3 +28,6 @@ assert(adapter.audioOnTimeline('test.mp3',{querySelectorAll:selector=>{
  return [{getAttribute:k=>k==='aria-label'?'test.mp3, đoạn âm thanh':null}];
 }}),'Audio timeline DIV role=button must be recognized');
 console.log('Adapter ranking and Canva upload-input regression checks passed. Live full timeline still requires browser validation.');
+
+const candidates=[{id:'used',duration:10,title:'senior exercise'},{id:'short',duration:2,title:'senior exercise'},{id:'fresh',duration:8,title:'senior exercise'},{id:'bad',duration:8,title:'ballet'}];
+assert.equal(adapter.eligibleCards(candidates,{duration:4,positive:['exercise'],negative:['ballet']},['used']).map(c=>c.id).join(','),'fresh','Expanded search still rejects used, short, and unsuitable clips');

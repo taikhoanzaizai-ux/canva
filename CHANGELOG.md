@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.2.7
+
+- Sửa nhận nhầm “động tác” thành “tắc”, dùng ranh giới từ và cụm tắc mạch rõ nghĩa; thêm cảnh tập tại nhà.
+- Khi mở lại, sửa từ khóa huyết khối bị gán sai ở cảnh chưa dựng; giữ cảnh đã xong, cảnh dở và từ khóa người dùng chỉnh.
+- Tìm thêm kết quả stock và chờ tải trước khi dừng do hết clip chưa dùng; không tự thử lại thao tác chèn.
+
 ## 0.2.6
 
 - Thêm nút Cập nhật tiện ích ngay trên popup SKST: nạp bản đi kèm ứng dụng đã cập nhật từ GitHub, giữ mã kết nối và không gỡ/cài lại.

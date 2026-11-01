@@ -2,7 +2,7 @@
 import base64, hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from .core import atomic_json, valid_canva, VERSION
+from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords
 MIN_EXTENSION_VERSION='0.2.6'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
@@ -22,6 +22,7 @@ class Engine:
         if self.path.exists():
             try:
                 self.state.update(json.loads(self.path.read_text(encoding='utf8')))
+                repair_pending_keywords(self.state)
                 self.state['mode']='paused'; self.state['message']='Đã khôi phục dự án. Kiểm tra đúng thiết kế Canva trước khi tiếp tục.'
             except (ValueError,OSError):pass
 

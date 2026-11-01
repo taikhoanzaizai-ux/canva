@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.2.6'
+VERSION = '0.2.7'
 
 def norm(text):
     return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower().replace('đ','d')) if unicodedata.category(c) != 'Mn')
@@ -17,7 +17,7 @@ TOPICS = [
  ('lờ đờ|mệt mỏi|mệt', ['người cao tuổi mệt mỏi','dụi mắt mệt mỏi'], ['tired','elderly','eyes'], []),
  ('ngủ|bảy tám|bảy, tám', ['người cao tuổi ngủ','ngủ ngon trên giường'], ['sleep','bed','elderly'], ['baby']),
  ('thuốc|thực phẩm chức năng', ['người cao tuổi uống thuốc','đọc nhãn thuốc'], ['medicine','pills','elderly'], []),
- ('tắc|ứ đọng|huyết khối', ['tắc nghẽn mạch máu','huyết khối tĩnh mạch','blood clot vein'], ['blood','clot','vein','artery'], []),
+ ('tắc nghẽn|tắc mạch|tắc động mạch|ứ đọng|huyết khối', ['tắc nghẽn mạch máu','huyết khối tĩnh mạch','blood clot vein'], ['blood','clot','vein','artery'], []),
  ('máu|tuần hoàn|tĩnh mạch', ['tuần hoàn máu','hồng cầu trong mạch máu','red blood cells'], ['blood','vein','circulation'], []),
  ('nội tạng|gan|dạ dày', ['nội tạng cơ thể người','mô phỏng nội tạng'], ['organ','anatomy','body'], []),
  ('tim|trái tim', ['trái tim cơ thể người','mô phỏng tim đập','human heart'], ['heart','cardio'], []),
@@ -29,6 +29,7 @@ TOPICS = [
  ('hít|thở|hít vào', ['hít thở sâu dưỡng sinh','người cao tuổi hít thở'], ['breath','senior','relax'], []),
  ('hạ gót|chạm đất', ['bàn chân chạm sàn','bàn chân đứng trên sàn'], ['feet','floor','barefoot'], ['ballet']),
  ('đứng thẳng|hai chân|hai tay', ['người cao tuổi tập dưỡng sinh','đứng tập thái cực quyền'], ['senior','tai chi','standing'], []),
+ ('động tác|tập tại nhà|tập ngay tại nhà|không cần dụng cụ', ['người cao tuổi tập thể dục tại nhà','người cao tuổi tập dưỡng sinh','senior home exercise'], ['senior','elderly','exercise','stretch'], ['baby','ballet']),
  ('nghiên cứu|khoa học|đại học', ['nhà khoa học nghiên cứu y học','phòng thí nghiệm y học'], ['scientist','research','laboratory'], []),
  ('buổi sáng|bình minh|mỗi sáng', ['bình minh buổi sáng','ánh nắng buổi sáng'], ['sunrise','morning'], []),
  ('đi bộ|nâng đỡ|ngày dài', ['người cao tuổi đi bộ','vợ chồng cao tuổi đi dạo'], ['walking','elderly','senior'], []),
@@ -38,7 +39,7 @@ TOPICS = [
 def describe(text):
     t = norm(text)
     for pattern, queries, positive, negative in TOPICS:
-        if any(norm(p) in t for p in pattern.split('|')):
+        if any(re.search(r'(?<!\w)'+re.escape(norm(p))+r'(?!\w)',t) for p in pattern.split('|')):
             return dict(queries=queries, positive=positive, negative=negative, review=False)
     words = re.sub(r'[^\w\s]', ' ', text).split()
     return dict(queries=[' '.join(words[:10]) or 'người cao tuổi dưỡng sinh'], positive=['senior','elderly'], negative=['baby','ballet'], review=True)
@@ -163,3 +164,16 @@ def atomic_json(path, value):
 
 def valid_canva(url):
     return bool(re.fullmatch(r'https://www\.canva\.com/design/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/edit(?:\?[^\s]*)?',url.strip()))
+
+
+def repair_pending_keywords(state):
+    """Repair only our erroneous generated clot queries; preserve edits and completed clips."""
+    changed=0
+    legacy=['tắc nghẽn mạch máu','huyết khối tĩnh mạch','blood clot vein']
+    active=str(state.get('phase',{}).get('id',''))
+    for scene in state.get('scenes',[]):
+        if scene['id'] in state.get('done',[]) or str(scene['id'])==active:continue
+        if scene.get('queries')==legacy:
+            updated=describe(scene.get('text',''))
+            if updated['queries']!=legacy:scene.update(updated);changed+=1
+    return changed
