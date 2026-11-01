@@ -1,0 +1,983 @@
+{
+  "scenes": [
+    {
+      "id": 1,
+      "start": 0,
+      "duration": 0.86,
+      "text": "Sáng thức dậy",
+      "preferred": "Woman wake-up morning",
+      "queries": [
+        "người cao tuổi thức dậy buổi sáng",
+        "thức dậy trên giường"
+      ],
+      "positive": [
+        "wake",
+        "morning",
+        "bed"
+      ],
+      "negative": [
+        "ballet",
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 2,
+      "start": 0.86,
+      "duration": 0.84,
+      "text": "Chân nặng trĩu",
+      "preferred": "Senior man suffering from calf and leg pain after exercise",
+      "queries": [
+        "người cao tuổi đau chân",
+        "chân nặng mỏi"
+      ],
+      "positive": [
+        "leg",
+        "calf",
+        "senior"
+      ],
+      "negative": [
+        "ballet",
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 3,
+      "start": 1.7,
+      "duration": 0.98,
+      "text": "Thắt lưng ê ẩm",
+      "preferred": "Senior Man Waking Up with Chronic Lower Back Pain in Bed, Elderly Health Issues and Sciatica Concept",
+      "queries": [
+        "người cao tuổi đau lưng",
+        "đau thắt lưng"
+      ],
+      "positive": [
+        "back pain",
+        "elderly",
+        "senior"
+      ],
+      "negative": [
+        "gym"
+      ],
+      "review": false
+    },
+    {
+      "id": 4,
+      "start": 2.68,
+      "duration": 1.84,
+      "text": "Đầu óc lờ đờ",
+      "preferred": "Elderly person rubbing eyes with glasses on showing tiredness and eye strain close up view signs of fatigue and eye strain",
+      "queries": [
+        "người cao tuổi mệt mỏi",
+        "dụi mắt mệt mỏi"
+      ],
+      "positive": [
+        "tired",
+        "elderly",
+        "eyes"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 5,
+      "start": 4.52,
+      "duration": 2.96,
+      "text": "Dù đêm qua quý vị đã ngủ đủ bảy, tám tiếng?",
+      "preferred": "tired elderly woman sleeping in bed - handheld steady shot",
+      "queries": [
+        "người cao tuổi ngủ",
+        "ngủ ngon trên giường"
+      ],
+      "positive": [
+        "sleep",
+        "bed",
+        "elderly"
+      ],
+      "negative": [
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 6,
+      "start": 7.48,
+      "duration": 2.6,
+      "text": "Nhiều người nghĩ mình thiếu thuốc bổ",
+      "preferred": "Elderly Man Reading Medicine Label Before Taking Pills",
+      "queries": [
+        "người cao tuổi ngủ",
+        "ngủ ngon trên giường"
+      ],
+      "positive": [
+        "sleep",
+        "bed",
+        "elderly"
+      ],
+      "negative": [
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 7,
+      "start": 10.08,
+      "duration": 3.9,
+      "text": "Hoặc tuổi đã cao. Nhưng ông bà ta từ xưa đã dạy",
+      "preferred": "Active lifestyle aged couple bench",
+      "queries": [
+        "nội tạng cơ thể người",
+        "mô phỏng nội tạng"
+      ],
+      "positive": [
+        "organ",
+        "anatomy",
+        "body"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 8,
+      "start": 13.98,
+      "duration": 2.66,
+      "text": "Thông thì không đau, đau thì không thông",
+      "preferred": "Vessel blockage Clogged Artery Atherosclerosis blood body bg",
+      "queries": [
+        "hít thở sâu dưỡng sinh",
+        "người cao tuổi hít thở"
+      ],
+      "positive": [
+        "breath",
+        "senior",
+        "relax"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 9,
+      "start": 16.64,
+      "duration": 2.3,
+      "text": "Rất nhiều khi cơ thể không thiếu gì cả",
+      "preferred": "Red blood cells rbc stream",
+      "queries": [
+        "Red blood cells rbc stream",
+        "người cao tuổi dưỡng sinh"
+      ],
+      "positive": [
+        "senior",
+        "elderly"
+      ],
+      "negative": [
+        "baby",
+        "ballet"
+      ],
+      "review": true
+    },
+    {
+      "id": 10,
+      "start": 18.94,
+      "duration": 3.6,
+      "text": "Kinh lạc bế tắc, khí huyết không đến nơi cần đến",
+      "preferred": "Thrombosis blood clot vessel fat medical bg",
+      "queries": [
+        "tắc nghẽn mạch máu",
+        "huyết khối tĩnh mạch",
+        "blood clot vein"
+      ],
+      "positive": [
+        "blood",
+        "clot",
+        "vein",
+        "artery"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 11,
+      "start": 22.54,
+      "duration": 2.88,
+      "text": "Nội tạng cứ thế âm thầm mệt mỏi",
+      "preferred": "Human body anatomy organs",
+      "queries": [
+        "người cao tuổi mệt mỏi",
+        "dụi mắt mệt mỏi"
+      ],
+      "positive": [
+        "tired",
+        "elderly",
+        "eyes"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 12,
+      "start": 25.42,
+      "duration": 4.36,
+      "text": "Gan, thận, tim, dạ dày",
+      "preferred": "Human body infographic showing internal organs with medical data panels",
+      "queries": [
+        "nội tạng cơ thể người",
+        "mô phỏng nội tạng"
+      ],
+      "positive": [
+        "organ",
+        "anatomy",
+        "body"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 13,
+      "start": 29.78,
+      "duration": 2.28,
+      "text": "Chỉ chờ được khơi thông",
+      "preferred": "Inside a human blood vessel with red blood cells flowing slowly through the vein",
+      "queries": [
+        "hít thở sâu dưỡng sinh",
+        "người cao tuổi hít thở"
+      ],
+      "positive": [
+        "breath",
+        "senior",
+        "relax"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 14,
+      "start": 32.06,
+      "duration": 2.58,
+      "text": "Hôm nay Sống Khỏe Sống Tốt chia sẻ",
+      "preferred": "Activity beauty bonding",
+      "queries": [
+        "Activity beauty bonding",
+        "người cao tuổi dưỡng sinh"
+      ],
+      "positive": [
+        "senior",
+        "elderly"
+      ],
+      "negative": [
+        "baby",
+        "ballet"
+      ],
+      "review": true
+    },
+    {
+      "id": 15,
+      "start": 34.64,
+      "duration": 2.76,
+      "text": "Mười bốn cử chỉ dưỡng sinh",
+      "preferred": "Elderly Couple Doing Hip Rotation Exercise at Home",
+      "queries": [
+        "Elderly Couple Doing Hip Rotation Exercise at Home",
+        "người cao tuổi dưỡng sinh"
+      ],
+      "positive": [
+        "senior",
+        "elderly"
+      ],
+      "negative": [
+        "baby",
+        "ballet"
+      ],
+      "review": true
+    },
+    {
+      "id": 16,
+      "start": 37.4,
+      "duration": 4.5,
+      "text": "Đúng nhịp sinh học sáng, trưa, tối",
+      "preferred": "Sunrise fog forest",
+      "queries": [
+        "Sunrise fog forest",
+        "người cao tuổi dưỡng sinh"
+      ],
+      "positive": [
+        "senior",
+        "elderly"
+      ],
+      "negative": [
+        "baby",
+        "ballet"
+      ],
+      "review": true
+    },
+    {
+      "id": 17,
+      "start": 41.9,
+      "duration": 2.82,
+      "text": "Buổi sáng đánh thức dương khí",
+      "preferred": "Elderly Couple Stretching Outdoors",
+      "queries": [
+        "bình minh buổi sáng",
+        "ánh nắng buổi sáng"
+      ],
+      "positive": [
+        "sunrise",
+        "morning"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 18,
+      "start": 44.72,
+      "duration": 3.68,
+      "text": "Buổi tối ấm thận, đưa vào giấc ngủ sâu",
+      "preferred": "Senior woman sleeping peacefully in her bed at home",
+      "queries": [
+        "người cao tuổi ngủ",
+        "ngủ ngon trên giường"
+      ],
+      "positive": [
+        "sleep",
+        "bed",
+        "elderly"
+      ],
+      "negative": [
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 19,
+      "start": 48.4,
+      "duration": 4.58,
+      "text": "Không tốn một đồng, mỗi động tác một hai phút",
+      "preferred": "Active lifestyle active seniors balance exercise",
+      "queries": [
+        "tắc nghẽn mạch máu",
+        "huyết khối tĩnh mạch",
+        "blood clot vein"
+      ],
+      "positive": [
+        "blood",
+        "clot",
+        "vein",
+        "artery"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 20,
+      "start": 52.98,
+      "duration": 4.86,
+      "text": "Động tác số mười ba: đôi bàn tay và đôi tai",
+      "preferred": "ear massage a young woman lies on the bed and the masseuse massages her ears relaxing in the spa salon massage of the skin and ears pleasant body relaxation treatment",
+      "queries": [
+        "tắc nghẽn mạch máu",
+        "huyết khối tĩnh mạch",
+        "blood clot vein"
+      ],
+      "positive": [
+        "blood",
+        "clot",
+        "vein",
+        "artery"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 21,
+      "start": 57.84,
+      "duration": 2.34,
+      "text": "Giúp nhiều người dễ ngủ hơn",
+      "preferred": "Man Sleeping Well",
+      "queries": [
+        "người cao tuổi ngủ",
+        "ngủ ngon trên giường"
+      ],
+      "positive": [
+        "sleep",
+        "bed",
+        "elderly"
+      ],
+      "negative": [
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 22,
+      "start": 60.18,
+      "duration": 4.0,
+      "text": "Thả lỏng vai, hít một hơi thật sâu",
+      "preferred": "Activity balanced life breathing exercise",
+      "queries": [
+        "hít thở sâu dưỡng sinh",
+        "người cao tuổi hít thở"
+      ],
+      "positive": [
+        "breath",
+        "senior",
+        "relax"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 23,
+      "start": 64.18,
+      "duration": 2.0,
+      "text": "Cùng làm theo động tác đầu tiên",
+      "preferred": "Elderly woman exercising with caregiver at home",
+      "queries": [
+        "tắc nghẽn mạch máu",
+        "huyết khối tĩnh mạch",
+        "blood clot vein"
+      ],
+      "positive": [
+        "blood",
+        "clot",
+        "vein",
+        "artery"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 24,
+      "start": 66.18,
+      "duration": 5.02,
+      "text": "Nhón gót chân, kích hoạt trái tim thứ hai và kinh Thận",
+      "preferred": "Autumn balance barefoot",
+      "queries": [
+        "trái tim cơ thể người",
+        "mô phỏng tim đập",
+        "human heart"
+      ],
+      "positive": [
+        "heart",
+        "cardio"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 25,
+      "start": 71.2,
+      "duration": 4.38,
+      "text": "Khi vừa tỉnh giấc, đừng vội bật dậy",
+      "preferred": "close-up of man waking up",
+      "queries": [
+        "người cao tuổi thức dậy buổi sáng",
+        "thức dậy trên giường"
+      ],
+      "positive": [
+        "wake",
+        "morning",
+        "bed"
+      ],
+      "negative": [
+        "ballet",
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 26,
+      "start": 75.58,
+      "duration": 3.72,
+      "text": "Trọng lượng cơ thể dồn lên đôi bàn chân",
+      "preferred": "Close Up of Feet Standing by Balcony",
+      "queries": [
+        "Close Up of Feet Standing by Balcony",
+        "người cao tuổi dưỡng sinh"
+      ],
+      "positive": [
+        "senior",
+        "elderly"
+      ],
+      "negative": [
+        "baby",
+        "ballet"
+      ],
+      "review": true
+    },
+    {
+      "id": 27,
+      "start": 79.3,
+      "duration": 1.9,
+      "text": "Sau một đêm nằm yên bất động",
+      "preferred": "4k barefoot bed",
+      "queries": [
+        "xoa bóp bắp chân",
+        "chăm sóc đôi chân"
+      ],
+      "positive": [
+        "calf",
+        "massage",
+        "leg"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 28,
+      "start": 81.2,
+      "duration": 4.3,
+      "text": "Máu tĩnh mạch chi dưới thường bị ứ đọng",
+      "preferred": "Varicose veins of the leg",
+      "queries": [
+        "tắc nghẽn mạch máu",
+        "huyết khối tĩnh mạch",
+        "blood clot vein"
+      ],
+      "positive": [
+        "blood",
+        "clot",
+        "vein",
+        "artery"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 29,
+      "start": 85.5,
+      "duration": 1.4,
+      "text": "Bước chân đầu ngày nặng nề",
+      "preferred": "business woman has calf cramp painful",
+      "queries": [
+        "người cao tuổi đau chân",
+        "chân nặng mỏi"
+      ],
+      "positive": [
+        "leg",
+        "calf",
+        "senior"
+      ],
+      "negative": [
+        "ballet",
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 30,
+      "start": 86.9,
+      "duration": 4.5,
+      "text": "Khối cơ bắp chân",
+      "preferred": "gastrocnemius - muscular anatomy in detail",
+      "queries": [
+        "cơ bắp chân",
+        "giải phẫu cơ bắp chân",
+        "gastrocnemius"
+      ],
+      "positive": [
+        "calf",
+        "gastrocnemius",
+        "muscle"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 31,
+      "start": 91.4,
+      "duration": 1.58,
+      "text": "Như trái tim thứ hai",
+      "preferred": "Heart medical treatment ecg",
+      "queries": [
+        "trái tim cơ thể người",
+        "mô phỏng tim đập",
+        "human heart"
+      ],
+      "positive": [
+        "heart",
+        "cardio"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 32,
+      "start": 92.98,
+      "duration": 3.7,
+      "text": "Các sợi cơ bắp chân co thắt",
+      "preferred": "Gastrocnemius muscle activation during leg elevation",
+      "queries": [
+        "cơ bắp chân",
+        "giải phẫu cơ bắp chân",
+        "gastrocnemius"
+      ],
+      "positive": [
+        "calf",
+        "gastrocnemius",
+        "muscle"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 33,
+      "start": 96.68,
+      "duration": 4.0,
+      "text": "Ép chặt hệ tĩnh mạch sâu, đẩy dòng máu",
+      "preferred": "Animation of red blood cells flows through the circulatory system and its vital role in human health and function",
+      "queries": [
+        "tuần hoàn máu",
+        "hồng cầu trong mạch máu",
+        "red blood cells"
+      ],
+      "positive": [
+        "blood",
+        "vein",
+        "circulation"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 34,
+      "start": 100.68,
+      "duration": 4.38,
+      "text": "Máu trở ngược về tim và thận",
+      "preferred": "Human heart with blood vessels",
+      "queries": [
+        "người cao tuổi ngủ",
+        "ngủ ngon trên giường"
+      ],
+      "positive": [
+        "sleep",
+        "bed",
+        "elderly"
+      ],
+      "negative": [
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 35,
+      "start": 105.06,
+      "duration": 3.04,
+      "text": "Nghiên cứu thực nghiệm tại Đại học Tokyo",
+      "preferred": "Scientist laboratory research",
+      "queries": [
+        "nhà khoa học nghiên cứu y học",
+        "phòng thí nghiệm y học"
+      ],
+      "positive": [
+        "scientist",
+        "research",
+        "laboratory"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 36,
+      "start": 108.1,
+      "duration": 4.68,
+      "text": "Ba mươi nhịp nhón gót mỗi sáng",
+      "preferred": "Gastrocnemius muscles stretch in human body while elevating leg",
+      "queries": [
+        "nhón gót chân",
+        "bài tập nâng gót chân",
+        "calf raises"
+      ],
+      "positive": [
+        "heel",
+        "tiptoe",
+        "barefoot",
+        "activewear"
+      ],
+      "negative": [
+        "ballet",
+        "ballerina",
+        "baby",
+        "child"
+      ],
+      "review": false
+    },
+    {
+      "id": 37,
+      "start": 112.78,
+      "duration": 2.28,
+      "text": "Tăng tốc độ tuần hoàn tĩnh mạch",
+      "preferred": "Heart pumping animation shows blood flow in the cardiovascular system with clear visuals for better understanding of circulation",
+      "queries": [
+        "tuần hoàn máu",
+        "hồng cầu trong mạch máu",
+        "red blood cells"
+      ],
+      "positive": [
+        "blood",
+        "vein",
+        "circulation"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 38,
+      "start": 115.06,
+      "duration": 4.28,
+      "text": "Huyệt Dũng Tuyền ở hõm lòng bàn chân",
+      "preferred": "Foot Massage",
+      "queries": [
+        "xoa bóp lòng bàn chân",
+        "bấm huyệt bàn chân"
+      ],
+      "positive": [
+        "foot",
+        "massage",
+        "feet"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 39,
+      "start": 119.34,
+      "duration": 3.62,
+      "text": "Thận tàng tinh, chủ cốt tủy",
+      "preferred": "Human Kidney. Medically accurate animation of the kidneys",
+      "queries": [
+        "thận cơ thể người",
+        "mô phỏng thận",
+        "human kidney"
+      ],
+      "positive": [
+        "kidney",
+        "renal"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 40,
+      "start": 122.96,
+      "duration": 4.28,
+      "text": "Kéo căng gân gót chân",
+      "preferred": "Achilles - muscular anatomy in detail",
+      "queries": [
+        "nội tạng cơ thể người",
+        "mô phỏng nội tạng"
+      ],
+      "positive": [
+        "organ",
+        "anatomy",
+        "body"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 41,
+      "start": 127.24,
+      "duration": 3.94,
+      "text": "Đánh thức nguồn chân hỏa khắp cơ thể",
+      "preferred": "HD: Group Of Seniors Exercising With Tai Chi",
+      "queries": [
+        "người cao tuổi ngủ",
+        "ngủ ngon trên giường"
+      ],
+      "positive": [
+        "sleep",
+        "bed",
+        "elderly"
+      ],
+      "negative": [
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 42,
+      "start": 131.18,
+      "duration": 3.66,
+      "text": "Đứng thẳng, hai chân rộng bằng vai, hai tay buông lỏng",
+      "preferred": "Seniors Doing Tai Chi",
+      "queries": [
+        "thận cơ thể người",
+        "mô phỏng thận",
+        "human kidney"
+      ],
+      "positive": [
+        "kidney",
+        "renal"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 43,
+      "start": 134.84,
+      "duration": 3.44,
+      "text": "Hít vào nhẹ nhàng",
+      "preferred": "Blue shirt breath control breathing exercise",
+      "queries": [
+        "hít thở sâu dưỡng sinh",
+        "người cao tuổi hít thở"
+      ],
+      "positive": [
+        "breath",
+        "senior",
+        "relax"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 44,
+      "start": 138.28,
+      "duration": 4.84,
+      "text": "Từ từ kiễng cao hai gót chân",
+      "preferred": "Active lifestyle activewear activity",
+      "queries": [
+        "nhón gót chân",
+        "bài tập nâng gót chân",
+        "calf raises"
+      ],
+      "positive": [
+        "heel",
+        "tiptoe",
+        "barefoot",
+        "activewear"
+      ],
+      "negative": [
+        "ballet",
+        "ballerina",
+        "baby",
+        "child"
+      ],
+      "review": false
+    },
+    {
+      "id": 45,
+      "start": 143.12,
+      "duration": 2.78,
+      "text": "Dồn trọng tâm vào đầu ngón chân, giữ hai giây",
+      "preferred": "African american balance bare feet",
+      "queries": [
+        "nhón gót chân",
+        "bài tập nâng gót chân",
+        "calf raises"
+      ],
+      "positive": [
+        "heel",
+        "tiptoe",
+        "barefoot",
+        "activewear"
+      ],
+      "negative": [
+        "ballet",
+        "ballerina",
+        "baby",
+        "child"
+      ],
+      "review": false
+    },
+    {
+      "id": 46,
+      "start": 145.9,
+      "duration": 3.88,
+      "text": "Thở ra, hạ gót chân chạm đất êm ái",
+      "preferred": "Feet of person wearing wool socks tiptoe walking next to the bed",
+      "queries": [
+        "hít thở sâu dưỡng sinh",
+        "người cao tuổi hít thở"
+      ],
+      "positive": [
+        "breath",
+        "senior",
+        "relax"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 47,
+      "start": 149.78,
+      "duration": 4.98,
+      "text": "Lặp lại hai mươi đến ba mươi lần",
+      "preferred": "Gastrocnemius muscle stretching in human body during leg elevation in muscular system",
+      "queries": [
+        "Gastrocnemius muscle stretching in human body during leg elevation",
+        "người cao tuổi dưỡng sinh"
+      ],
+      "positive": [
+        "senior",
+        "elderly"
+      ],
+      "negative": [
+        "baby",
+        "ballet"
+      ],
+      "review": true
+    },
+    {
+      "id": 48,
+      "start": 154.76,
+      "duration": 4.94,
+      "text": "Luồng ấm râm ran từ bắp chân lên đầu gối",
+      "preferred": "Ankle body care calf muscle",
+      "queries": [
+        "cơ bắp chân",
+        "giải phẫu cơ bắp chân",
+        "gastrocnemius"
+      ],
+      "positive": [
+        "calf",
+        "gastrocnemius",
+        "muscle"
+      ],
+      "negative": [],
+      "review": false
+    },
+    {
+      "id": 49,
+      "start": 159.7,
+      "duration": 3.5,
+      "text": "Đôi chân đã sẵn sàng",
+      "preferred": "Health man walking outside",
+      "queries": [
+        "người cao tuổi đau chân",
+        "chân nặng mỏi"
+      ],
+      "positive": [
+        "leg",
+        "calf",
+        "senior"
+      ],
+      "negative": [
+        "ballet",
+        "baby"
+      ],
+      "review": false
+    },
+    {
+      "id": 50,
+      "start": 163.2,
+      "duration": 3.45,
+      "text": "Nâng đỡ bạn suốt cả ngày dài",
+      "preferred": "Elderly Couple on Autumn Walk",
+      "queries": [
+        "người cao tuổi đi bộ",
+        "vợ chồng cao tuổi đi dạo"
+      ],
+      "positive": [
+        "walking",
+        "elderly",
+        "senior"
+      ],
+      "negative": [],
+      "review": false
+    }
+  ],
+  "duration": 166.65,
+  "approximate": false,
+  "note": "Mẫu thời gian từ bản dựng thủ công. Mô tả từng cảnh đã rút gọn; không phải phụ đề nguyên văn."
+}

@@ -1,0 +1,59 @@
+name: Test and publish Windows
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run tests
+        run: |
+          python -m unittest discover -s tests -v
+          node tests/test_adapter.cjs
+          node --check extension/background.js
+          node --check extension/content.js
+      - name: Check published version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $version = python -c "from canva_studio.core import VERSION; print(VERSION)"
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          gh release view "v$version" --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { "exists=true" >> $env:GITHUB_OUTPUT } else { "exists=false" >> $env:GITHUB_OUTPUT }
+          exit 0
+      - name: Install packager
+        if: steps.version.outputs.exists == 'false'
+        run: python -m pip install pyinstaller==6.16.0
+      - name: Download FFmpeg for full installer
+        if: steps.version.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile "$env:RUNNER_TEMP/ffmpeg.zip"
+          Expand-Archive "$env:RUNNER_TEMP/ffmpeg.zip" "$env:RUNNER_TEMP/ffmpeg"
+          $folder = Get-ChildItem "$env:RUNNER_TEMP/ffmpeg" -Directory | Select-Object -First 1
+          "SKST_FFMPEG_DIR=$($folder.FullName)" >> $env:GITHUB_ENV
+      - name: Build and smoke test EXE
+        if: steps.version.outputs.exists == 'false'
+        run: python scripts/build_release.py
+      - name: Publish verified release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create '${{ steps.version.outputs.tag }}' dist/SKST_Canva_Studio_Windows.zip dist/SKST_Canva_Studio_Update.zip dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'SKST Canva Studio ${{ steps.version.outputs.tag }}' --notes-file CHANGELOG.md --latest

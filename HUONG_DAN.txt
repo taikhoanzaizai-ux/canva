@@ -1,0 +1,55 @@
+SKST CANVA STUDIO — BẢN THỬ 0.2.0
+
+Ứng dụng độc lập, không phải sản phẩm của Canva. Chỉ dùng kho video Canva trong tài khoản của bạn. Không cần khóa AI, không lấy mật khẩu hay cookie.
+
+CÀI LẦN ĐẦU
+1. Giải nén toàn bộ gói vào một thư mục cố định. Mở SKST Canva Studio.exe.
+2. Mở Cốc Cốc, Chrome hoặc Edge. Vào trang quản lý tiện ích, bật Chế độ dành cho nhà phát triển, chọn Tải tiện ích đã giải nén và chọn thư mục TienIch_Canva trong gói.
+   Cốc Cốc: coccoc://extensions  •  Chrome: chrome://extensions  •  Edge: edge://extensions
+   Tiện ích chỉ khai báo quyền trên trang chỉnh sửa Canva và kết nối đến ứng dụng tại 127.0.0.1:8766.
+3. Mở Canva và tự đăng nhập. Tạo thiết kế Video ngang 1920 × 1080 trống. Tải lại tab Canva sau lần cài đầu.
+4. Trong ứng dụng, vào Kết nối & công cụ, sao chép mã ghép nối. Bấm tiện ích SKST trên trình duyệt, dán mã và bấm Kết nối Canva.
+   Mỗi lần mở ứng dụng sẽ có mã mới. Chỉ để một tab thiết kế chạy dựng.
+
+DỰNG VIDEO
+1. Chọn voice và kịch bản. Nếu máy chưa có Whisper, có thể nhập JSON Whisper hoặc SRT có mốc thời gian. SRT không có thời gian từng từ sẽ chỉ cắt gần đúng.
+   Thử nhanh bản vừa dựng: bấm “Mẫu Nhón gót chân” để nạp sẵn voice 2 phút 46 giây và 50 cảnh. Bỏ qua bước phân tích, mở thiết kế trống, dán link và bắt đầu.
+2. Chọn khoảng từ/đến giây. Bấm Phân tích & chia cảnh. Nhận diện voice chạy trên máy; thời gian phụ thuộc cấu hình máy và độ dài voice.
+3. Duyệt danh sách: nhấp đúp vào cảnh để sửa từ khóa tìm video. Từ khóa đầu ưu tiên tiếng Việt; từ khóa sau là phương án dự phòng.
+4. Dán link chỉnh sửa thiết kế Canva TRỐNG. Bấm Bắt đầu. Voice đã cắt sẽ được tải lên Canva. Tiện ích tìm stock, chọn video chưa dùng, cắt cảnh, tắt tiếng stock và kiểm tra mốc timeline.
+5. Giữ máy thức và mạng hoạt động. Có thể tạm dừng từ ứng dụng. Không sửa timeline trong lúc ứng dụng đang chạy.
+6. Khi hoàn tất cảnh, ứng dụng gửi lệnh xuất MP4. Theo dõi tiến trình tải xuống của Canva. Ứng dụng không xác nhận thay trình duyệt rằng file đã tải thành công.
+
+GIỚI HẠN BẢN THỬ
+• Tối đa 50 cảnh trong một thiết kế. Với bài dài, dựng từng đoạn riêng rồi ghép các MP4 bằng phần mềm dựng video. Ứng dụng chưa tự tạo hàng loạt thiết kế hoặc tự ghép các phần.
+• Nhận diện lời đọc và ghép kịch bản có thể sai. Hãy kiểm tra các câu đầu và từ chuyên môn. Kịch bản khớp yếu sẽ không được ép vào voice.
+• Chọn hình dựa trên tiêu đề video và quy tắc sức khỏe; chưa có mô hình xem hiểu hình ảnh. Độ khớp hình chưa tương đương người dựng trong mọi trường hợp. Có thể sửa từ khóa hoặc thay cảnh trực tiếp trong Canva.
+• Bộ điều khiển dành cho giao diện Canva tiếng Việt có timeline video mới. Giao diện khác hoặc Canva thay đổi có thể cần cập nhật tiện ích. Cốc Cốc chưa được kiểm thử đầy đủ.
+• Video yêu cầu Pro cần tài khoản có quyền sử dụng. Ứng dụng không vượt giới hạn tài khoản hoặc cơ chế xác minh.
+• Kết nối trình duyệt chưa được kiểm chứng từ đầu đến cuối trên mọi máy; đây là bản thử có cơ chế dừng khi không chắc chắn, không cam kết không lỗi.
+
+KHI BỊ DỪNG
+• Đọc thông báo phía dưới ứng dụng. Kiểm tra Canva đã thêm cảnh cuối hay chưa.
+• Nếu dừng giữa lúc chèn, chọn Xử lý cảnh bị dở. Chỉ xác nhận “Có” khi cảnh đã xuất hiện ở CUỐI timeline; ứng dụng sẽ tiếp tục cắt cảnh đó.
+• Nếu cảnh chưa chèn hoặc đã xóa phần chèn dở, chọn “Không” để làm lại cảnh. Không đặt lại khi chưa kiểm tra, tránh tạo bản sao.
+• Nếu video không phủ nền, trong Canva chọn video, bấm chuột phải → Đặt video làm nền. Sau đó tiếp tục.
+• Nếu đăng nhập hoặc xác minh xuất hiện, tự hoàn tất trong trình duyệt rồi tiếp tục. Ứng dụng không tự vượt xác minh.
+• Đóng ứng dụng sẽ tạm dừng và giữ tiến độ. Mở lại, ghép nối mã mới và mở đúng thiết kế trước khi tiếp tục.
+
+NHẬN DIỆN VOICE
+Máy hiện tại có thể dùng:
+Python: D:\Codex\QuanVoice-Studio\data\envs\whisper\Scripts\python.exe
+Mô hình: D:\Codex\QuanVoice-Studio\data\cache\whisper\base.pt
+FFmpeg và FFprobe đã có trong thư mục CongCu của gói tải về; ứng dụng tự tìm khi giữ nguyên cấu trúc thư mục.
+Các đường dẫn này chỉ tự nhận nếu tồn tại. Trên máy khác, chọn môi trường Python có gói openai-whisper và mô hình .pt, hoặc dùng SRT/JSON. Gói ứng dụng không kèm mô hình Whisper dung lượng lớn.
+
+DỮ LIỆU
+Tiến độ và cấu hình lưu tại %LOCALAPPDATA%\SKST Canva Studio.
+Voice chỉ được tải đến Canva khi bạn bấm Bắt đầu cho thiết kế đã chọn. Không có máy chủ của bên phát triển, không thu thập thống kê. Nhật ký Whisper nằm trong whisper.log.
+Quyền tiện ích giới hạn ở Canva và cầu nối nội bộ. Có thể gỡ tiện ích trong trang quản lý trình duyệt; xóa thư mục ứng dụng để gỡ bản portable.
+
+CẬP NHẬT TỪ GITHUB
+Kho chính: https://github.com/taikhoanzaizai-ux/canva
+Bấm Kiểm tra cập nhật ở góc trên phải ứng dụng. Khi có bản mới đã phát hành, đọc thay đổi, tải rồi chọn cài. Ứng dụng kiểm tra tệp, lưu tiến độ, sao lưu bản cũ và mở lại bản mới. Nếu bản mới không mở được, ứng dụng phục hồi bản trước.
+Sau khi cập nhật tiện ích, vào trang quản lý tiện ích bấm Tải lại cho SKST, rồi tải lại tab Canva. Các bản 0.1.x cần thay EXE bằng 0.2.0 một lần để có nút cập nhật.
+Tệp cập nhật không xóa voice mẫu và công cụ có sẵn. GitHub không chứa voice, video và dự án riêng của bạn.
