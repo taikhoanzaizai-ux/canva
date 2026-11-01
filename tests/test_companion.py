@@ -1,6 +1,6 @@
 import json,tempfile,unittest
 from pathlib import Path
-from canva_studio.companion import companion_status
+from canva_studio.companion import companion_status, update_manifest
 
 class CompanionTests(unittest.TestCase):
     def test_detect_old_registered_folder_without_modifying_browser(self):
@@ -21,5 +21,18 @@ class CompanionTests(unittest.TestCase):
             profile=root/'local/Google/Chrome/User Data/Default';profile.mkdir(parents=True)
             (profile/'Preferences').write_text(json.dumps({'extensions':{'settings':{'own':{'path':str(ext)}}}}))
             self.assertFalse(companion_status(ext.parent,root/'local')['mismatches'])
+
+class UpdateTests(unittest.TestCase):
+    def test_bundle_matches_app_and_missing_files_rejected(self):
+        from canva_studio.core import VERSION
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);folder=root/'TienIch_Canva';folder.mkdir()
+            manifest={'name':'SKST Canva Studio','manifest_version':3,'version':VERSION}
+            (folder/'manifest.json').write_text(json.dumps(manifest))
+            with self.assertRaises(ValueError):update_manifest(root,'own',root/'local')
+            for name in ['adapter.js','content.js','background.js','popup.html','popup.js']:(folder/name).write_text('test')
+            self.assertEqual(update_manifest(root,'own',root/'local')['version'],VERSION)
+            manifest['version']='0.0.1';(folder/'manifest.json').write_text(json.dumps(manifest))
+            with self.assertRaises(ValueError):update_manifest(root,'own',root/'local')
 
 if __name__=='__main__':unittest.main()

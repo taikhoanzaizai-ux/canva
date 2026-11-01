@@ -55,16 +55,29 @@ async function attachController(data){
   return tab;
 }
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (!['bridge','probe'].includes(message.type)) return;
+  if (!['bridge','probe','update_companion'].includes(message.type)) return;
   const own = sender.id === chrome.runtime.id;
-  const popup=message.type==='probe'&&sender.url===chrome.runtime.getURL('popup.html');
+  const popup=['probe','update_companion'].includes(message.type)&&sender.url===chrome.runtime.getURL('popup.html');
   const canva = sender.tab && editorURL(sender.url);
-  if (!own || (!canva&&!popup)) { respond({error:'Chỉ nhận yêu cầu từ Canva hoặc cửa sổ kết nối SKST.'}); return; }
+  if (!own || (!canva&&!popup) || (message.type==='update_companion'&&!popup)) { respond({error:'Chỉ nhận yêu cầu từ Canva hoặc cửa sổ kết nối SKST.'}); return; }
   (async () => {
     try {
       const route=popup?'ping':message.route;
       if (!['next','checkpoint','result','voice','ping'].includes(route)) throw Error('Lệnh không hợp lệ');
       const {token,enabled} = await chrome.storage.local.get(['token','enabled']);
+      if(message.type==='update_companion'){
+        const data=await bridgeFetch('companion/update',{extension_id:chrome.runtime.id},token);
+        const current=chrome.runtime.getManifest();
+        const decision=reloadDecision(current,data.manifest,data);
+        if(decision==='busy')throw Error('Hãy tạm dừng dựng trước khi cập nhật.');
+        if(decision==='permission_change')throw Error('Bản mới cần quyền khác. Trình duyệt phải xác nhận quyền trước khi nạp.');
+        if(decision!=='reload'){
+          if(current.version!==data.manifest.version)throw Error('Không thể hạ phiên bản tiện ích. Hãy cập nhật ứng dụng.');
+          respond({current:true,version:current.version});return;
+        }
+        respond({reloading:true,version:data.manifest.version});
+        setTimeout(()=>chrome.runtime.reload(),400);return;
+      }
       if (!enabled) {respond({disabled:true});return;}
       if(popup||route==='next'){
         const refresh=await refreshLocalBundle(token,popup);

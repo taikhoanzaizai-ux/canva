@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.2.6
+
+- Thêm nút Cập nhật tiện ích ngay trên popup SKST: nạp bản đi kèm ứng dụng đã cập nhật từ GitHub, giữ mã kết nối và không gỡ/cài lại.
+- Đọc phiên bản gói từ ứng dụng thay vì phụ thuộc bản manifest có thể bị trình duyệt lưu đệm; chặn cập nhật khi đang dựng, đổi quyền hoặc hạ phiên bản.
+- Bản popup cũ cần bấm Tải lại ở trang quản lý tiện ích một lần để hiện nút mới. Tiện ích phải trỏ tới TienIch_Canva cạnh ứng dụng.
+
 ## 0.2.5
 
 - Sửa lỗi dừng sau hai cảnh: nút Thêm chuyển cảnh nằm cố định giữa các cảnh không còn bị nhận nhầm là bảng nổi phải đóng.

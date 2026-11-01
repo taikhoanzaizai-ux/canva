@@ -3,7 +3,7 @@ import base64, hashlib, json, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .core import atomic_json, valid_canva, VERSION
-MIN_EXTENSION_VERSION='0.2.5'
+MIN_EXTENSION_VERSION='0.2.6'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -52,7 +52,7 @@ class Engine:
             matching=[p for p in fresh if not url or canonical_url(p.get('url'))==url]
             ready=next((p for p in sorted(matching,key=lambda p:p['seen'],reverse=True) if compatible_extension(p.get('extension_version'))),None)
             if ready:return dict(ready=True,code='ready',message='Đã kết nối tab Canva • '+ready.get('title',''),peer=ready)
-            if matching:return dict(ready=False,code='outdated',message='Tiện ích đang cũ. Cài SKST '+MIN_EXTENSION_VERSION+' từ TienIch_Canva cạnh EXE rồi kết nối lại.')
+            if matching:return dict(ready=False,code='outdated',message='Tiện ích đang cũ. Bấm Cập nhật tiện ích để nạp SKST '+MIN_EXTENSION_VERSION+' rồi kết nối lại.')
             if fresh:return dict(ready=False,code='wrong_design',message='Tiện ích đang ở thiết kế khác. Mở đúng link trong ứng dụng rồi bấm Kết nối Canva trên tiện ích.')
             return dict(ready=False,code='disconnected',message='Chưa có tín hiệu từ tab Canva. Mở tiện ích SKST trên tab Canva, dán mã của phiên này và bấm Kết nối Canva.')
     def watchdog(self,now=None):
@@ -151,6 +151,12 @@ def serve(engine,port=8766):
                     payload=path.read_bytes();suffix=path.suffix.lower()
                     mime={'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'}.get(suffix,'audio/mpeg')
                     v=dict(name='SKST_voice_'+hashlib.sha256(payload).hexdigest()[:16]+suffix,mime=mime,data=base64.b64encode(payload).decode())
+                elif self.path=='/companion/update':
+                    from .companion import update_manifest
+                    from .storage import application_dir
+                    with engine.lock:
+                        if engine.state['mode']=='running' or engine.running:raise ValueError('Hãy chờ tác vụ kết thúc hoặc tạm dừng trước khi cập nhật tiện ích.')
+                        v=dict(manifest=update_manifest(application_dir(),body.get('extension_id')),mode=engine.state['mode'],active_task=False)
                 elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],active_task=bool(engine.running),message=engine.state['message'],target=engine.state['target'],connection=engine.connection_status())
                 else:return self.send(404,dict(error='Không tìm thấy'))
                 self.send(200,v)

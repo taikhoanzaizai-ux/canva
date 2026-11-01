@@ -30,3 +30,19 @@ def companion_status(install,local_appdata=None):
     registrations=registered_extensions(local_appdata)
     mismatches=[r for r in registrations if r['path'] and Path(r['path']).resolve()!=folder.resolve()]
     return dict(folder=str(folder),version=version,registrations=registrations,mismatches=mismatches)
+
+
+def update_manifest(install, extension_id, local_appdata=None):
+    """Expose only the already verified local bundle; never download executable JS."""
+    from .core import VERSION
+    folder,version=bundled_extension(install)
+    if version!=VERSION:raise ValueError('Gói tiện ích chưa khớp ứng dụng. Bấm Kiểm tra cập nhật trong ứng dụng trước.')
+    registrations=[r for r in registered_extensions(local_appdata) if r['id']==extension_id]
+    if any(not r['path'] or Path(r['path']).resolve()!=folder.resolve() for r in registrations):
+        raise ValueError('Trình duyệt đang dùng thư mục tiện ích khác. Dùng TienIch_Canva cạnh ứng dụng làm thư mục cố định một lần.')
+    manifest=json.loads((folder/'manifest.json').read_text(encoding='utf-8-sig'))
+    if 'SKST' not in manifest.get('name','') or manifest.get('manifest_version')!=3:raise ValueError('Gói tiện ích không hợp lệ.')
+    for name in ['adapter.js','content.js','background.js','popup.html','popup.js','manifest.json']:
+        path=folder/name
+        if path.is_symlink() or not path.is_file() or path.resolve().parent!=folder.resolve():raise ValueError('Thiếu tệp tiện ích hợp lệ.')
+    return manifest

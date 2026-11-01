@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-function harness(tabs,diskVersion){
+function harness(tabs,diskVersion,updateVersion){
  const manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8'));
  const calls={fetch:[],inject:[],reload:0};let listener,attached=false;
  const chrome={
@@ -11,6 +11,7 @@ function harness(tabs,diskVersion){
  const context={chrome,AbortSignal,setTimeout,Promise,console,fetch:async(url,opts)=>{
   if(url.startsWith('chrome-extension://'))return {ok:true,json:async()=>({...manifest,version:diskVersion||manifest.version})};
   calls.fetch.push({url,body:JSON.parse(opts.body)});
+  if(url.endsWith('/companion/update')&&updateVersion)return {ok:true,json:async()=>({manifest:{...manifest,version:updateVersion},mode:'paused',active_task:false})};
   return {ok:true,json:async()=>({ok:true,version:manifest.version,target:'https://www.canva.com/design/target/token/edit',mode:'paused',active_task:false,connection:{ready:attached}})};
  }};
  vm.createContext(context);vm.runInContext(fs.readFileSync('extension/background.js','utf8'),context);
@@ -36,6 +37,17 @@ function harness(tabs,diskVersion){
  assert.equal(h.decision(h.manifest,newer,{mode:'running',active_task:true}),'busy');
  assert.equal(h.decision(h.manifest,{...newer,permissions:[...newer.permissions,'history']},{mode:'paused'}),'permission_change','Never auto-accept additional permissions');
  assert.equal(h.decision(h.manifest,{...h.manifest,version:'0.2.3'},{mode:'paused'}),'none','Never downgrade');
+ const success=harness([],null,nextVersion);
+ const upgraded=await success.message({type:'update_companion'},{id:'own',url:'chrome-extension://own/popup.html'});
+ assert.equal(upgraded.reloading,true);await new Promise(r=>setTimeout(r,450));assert.equal(success.calls.reload,1);
+ const contentDenied=await success.message({type:'update_companion'},{id:'own',tab:{id:2},url:'https://www.canva.com/design/target/token/edit'});
+ assert(contentDenied.error,'Only popup can request reload');
+ const explicit=harness([]);
+ const current=await explicit.message({type:'update_companion'},{id:'own',url:'chrome-extension://own/popup.html'});
+ // Fixture supplies no local manifest: a failed update must never reload.
+ assert(current.error);assert.equal(explicit.calls.reload,0);
+ const external=await explicit.message({type:'update_companion'},{id:'wrong',url:'https://example.com'});
+ assert(external.error);
  const manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8'));
  assert(manifest.permissions.includes('scripting'));assert(manifest.host_permissions.every(v=>v.startsWith('https://www.canva.com/')||v.startsWith('http://127.0.0.1:8766/')));
  console.log('Controller attachment, exact design selection, and permission scope checks passed.');
