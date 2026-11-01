@@ -73,3 +73,10 @@ Phân tích & chia cảnh tạo các phần tối đa 50 cảnh, cắt WAV đún
 Mở Video khổ ngang trống và Bắt đầu. Khi đủ cảnh, tiện ích kiểm tra cuối hình, cuối voice và số cảnh trên Canva, rồi tự mở tab Video khổ ngang và tải voice phần tiếp theo. Giữ các tab đó mở; lịch sử đường dẫn/mốc voice nằm trong Data/project.json.
 Không tái sử dụng clip giữa các phần. Chỉ chọn kết quả có mô tả người thật và liên quan; hoạt hình/3D/đồ họa bị loại. Lọc dựa trên mô tả stock, không phải nhận dạng hình ảnh bằng AI; clip không rõ nội dung sẽ không được chọn.
 Dự án cũ đã có cảnh sai được giữ nguyên. Chọn voice gốc, Phân tích lại và dùng thiết kế trống để dựng bản mới, tránh chèn vào bản cũ.
+
+TỪ BẢN 0.3.1: MỘT NÚT MỞ CHROME VÀ TỰ DỰNG
+Cài và ghép nối tiện ích trong hồ sơ Chrome dùng dựng một lần. Mã được lưu cục bộ tại Data/pairing.json; không chia sẻ tệp này.
+Chọn voice gốc và kịch bản, để trống Link Canva rồi bấm Bắt đầu. Phần mềm tự phân tích nếu cần, mở Chrome, tạo Video khổ ngang và tự bắt đầu khi tiện ích xác nhận thiết kế trống.
+Nếu đang có tiến độ: bấm Tiếp tục sẽ mở đúng thiết kế đã lưu. Không tạo thiết kế khác để thay thế tiến độ.
+Chrome phải đăng nhập Canva sẵn; không tự nhập mật khẩu hay xử lý CAPTCHA. Nếu chưa nhận tab sau 120 giây, kiểm tra đăng nhập/tiện ích/ghép nối. Giữ tab đã tạo để tránh tạo trùng.
+Không cần cài thêm quyền cho bản này; chỉ hoạt động trên Canva và kết nối nội bộ đã có.

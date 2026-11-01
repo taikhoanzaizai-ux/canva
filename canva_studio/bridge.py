@@ -1,9 +1,10 @@
 """Authenticated loopback bridge. Stores no Canva cookies or passwords."""
 import base64, hashlib, json, secrets, threading, time
+from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.3.0'
+MIN_EXTENSION_VERSION='0.3.1'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -14,7 +15,13 @@ def compatible_extension(value):
 class Engine:
     def __init__(self, folder):
         self.folder=Path(folder);self.folder.mkdir(parents=True,exist_ok=True)
-        self.lock=threading.RLock(); self.token=secrets.token_urlsafe(24)
+        self.lock=threading.RLock()
+        token_path=self.folder/'pairing.json'
+        try:
+            self.token=json.loads(token_path.read_text(encoding='utf8'))['token']
+            if not isinstance(self.token,str) or len(self.token)<30:raise ValueError('Invalid pairing token')
+        except (OSError,ValueError,KeyError,TypeError):
+            self.token=secrets.token_urlsafe(24);atomic_json(token_path,dict(token=self.token))
         self.state=dict(mode='idle',message='Chọn voice để bắt đầu.',scenes=[],done=[],phase={},used=[],target='',voice='',voice_done=False,export_done=False)
         self.browser={}; self.peers={};self.running=None;self.last_activity=0;self.last_diagnostic=0
         self.events=[]
@@ -31,15 +38,38 @@ class Engine:
         with self.lock:
             self.events.append(time.strftime('%H:%M:%S')+'  '+text);self.events=self.events[-250:]
             self.state['message']=text;self.save()
-    def configure(self, plan, target, voice):
+    def configure(self, plan, target, voice,allow_empty=False):
         with self.lock:
             if self.state['mode']=='running':raise ValueError('Hãy tạm dừng trước khi đổi dự án.')
-            if not valid_canva(target):raise ValueError('Dán đường dẫn chỉnh sửa Canva hợp lệ.')
+            if not valid_canva(target) and not (allow_empty and target==''):raise ValueError('Dán đường dẫn chỉnh sửa Canva hợp lệ.')
             self.state=dict(mode='ready',message='Đã sẵn sàng. Mở thiết kế video ngang trống trong Canva.',scenes=plan['scenes'],done=[],phase={},used=[],target=target,voice=str(voice),voice_done=False,export_done=False)
             self.state['parts']=plan.get('parts',[]);self.state['part_index']=0;self.state['history']=[];self.state['audit_done']=False
             self.state['original_voice']=plan.get('original_voice',str(voice))
             for scene in self.state['scenes']:scene.update(real_people_only=True)
             self.running=None;self.save()
+    def bootstrap(self,plan,voice):
+        from .browser import CREATE_VIDEO
+        with self.lock:
+            if self.state['mode']=='opening':raise ValueError('Chrome đang tạo thiết kế; không bấm lặp để tránh tạo trùng.')
+            if not plan.get('scenes') or len(plan['scenes'])>50:raise ValueError('Cần phân tích và chia phần tối đa 50 cảnh trước.')
+            self.configure(plan,'',voice,allow_empty=True)
+            nonce=secrets.token_urlsafe(18)
+            self.state.update(mode='opening',bootstrap_nonce=nonce,bootstrap_deadline=time.time()+120,auto_start=True)
+            self.log('Đang mở Chrome và tạo Video khổ ngang. Chờ tiện ích nhận thiết kế mới…')
+            return CREATE_VIDEO+'#skst_start='+nonce
+
+    def wait_for_created_tab(self):
+        with self.lock:
+            if not self.state.get('bootstrap_nonce') or self.state.get('target'):raise ValueError('Không có tab đang chờ.')
+            self.state.update(mode='opening',bootstrap_deadline=time.time()+120)
+            self.log('Đang chờ lại tab Canva đã tạo. Giữ tab đó mở và kết nối tiện ích; không tạo thêm tab trùng.')
+
+    def resume_in_chrome(self):
+        with self.lock:
+            self.start()
+            self.state.update(mode='opening_resume',bootstrap_deadline=time.time()+120,auto_start=True)
+            self.log('Đang mở lại đúng thiết kế trong Chrome để tiếp tục tiến độ…')
+
     def pause(self):
         with self.lock:self.state['mode']='paused';self.log('Đã tạm dừng. Thao tác đang thực hiện sẽ dừng ở điểm kiểm tra tiếp theo.')
     def start(self):
@@ -62,6 +92,9 @@ class Engine:
     def watchdog(self,now=None):
         with self.lock:
             now=time.time() if now is None else now
+            if self.state['mode'] in ('opening','opening_resume') and now>self.state.get('bootstrap_deadline',0):
+                self.state['mode']='attention'
+                self.log('Chưa nhận được tab mới. Kiểm tra Chrome đã đăng nhập Canva, tiện ích đã bật và ghép nối. Giữ tab mới để thử lại bằng link; không tự tạo thêm tab.')
             if self.state['mode']=='running' and now-self.last_activity>25:
                 self.state['mode']='attention'
                 self.log('Mất tín hiệu từ tiện ích Canva. Bấm Kết nối Canva trên tiện ích rồi Bắt đầu/Tiếp tục; tiến độ đã được giữ.')
@@ -82,11 +115,20 @@ class Engine:
                 if now-self.last_diagnostic>5:
                     atomic_json(self.folder/'connection.json',dict(seen=now,url=body.get('url'),extension_version=body.get('extension_version'),mode=self.state['mode']))
                     self.last_diagnostic=now
+            if self.state['mode']=='opening':
+                marker=parse_qs(urlsplit(body.get('url','')).fragment).get('skst_start',[''])[0]
+                if marker!=self.state.get('bootstrap_nonce') or not marker:return dict(task=None,mode='waiting_new_design')
+                if not compatible_extension(body.get('extension_version')):return dict(task=None,mode='extension_outdated')
+                if not body.get('blank_video') or not valid_canva(canonical_url(body.get('url'))):return dict(task=None,mode='waiting_empty_video')
+                self.state.update(target=canonical_url(body['url']),mode='running',bootstrap_nonce='')
+                self.last_activity=now;self.log('Đã nhận Video khổ ngang mới. Bắt đầu tải voice và dựng cảnh.')
             if canonical_url(body.get('url'))!=canonical_url(self.state['target']):return dict(task=None,mode='wrong_design')
             if not compatible_extension(body.get('extension_version')):
                 message='Cần cài tiện ích SKST '+MIN_EXTENSION_VERSION+' từ thư mục TienIch_Canva cạnh ứng dụng, rồi kết nối lại trên tab Canva.'
                 if self.state['mode']=='running' and self.state['message']!=message:self.log(message)
                 return dict(task=None,mode='extension_outdated')
+            if self.state['mode']=='opening_resume':
+                self.state['mode']='running';self.last_activity=now;self.log('Đã nối lại Chrome. Tiếp tục tiến độ đã lưu.')
             if self.state['mode']!='running':return dict(task=None,mode=self.state['mode'])
             old=self.browser
             if old and old.get('client')!=body.get('client') and time.time()-old.get('seen',0)<15:

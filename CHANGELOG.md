@@ -1,5 +1,12 @@
 # Các bản cập nhật
 
+## 0.3.1
+
+- Bắt đầu tự động: nếu chưa phân tích thì phân tích voice, mở Chrome đúng hồ sơ có SKST, tạo Video khổ ngang, tự nhận link và dựng; không cần tạo thiết kế/dán link thủ công.
+- Nhận đúng tab mới bằng dấu khởi tạo công khai, khác mã ghép nối; chỉ nhận thiết kế trống, không tác động tab Canva cũ.
+- Giữ mã ghép nối trong Data/pairing.json để tiện ích tự nối lại những lần sau. Không truyền mã trong URL Canva, không sửa cấu hình trình duyệt.
+- Tiếp tục mở đúng thiết kế đã lưu, giữ tiến độ; chặn bấm lặp khi Chrome đang mở và báo rõ nếu tiện ích/đăng nhập chưa sẵn sàng sau 120 giây.
+
 ## 0.3.0
 
 - Mặc định chỉ video người thật: chặn hoạt hình, 3D, khung neon, ký hiệu và mô phỏng; yêu cầu cả dấu hiệu người thật lẫn từ khóa liên quan. Chủ đề nội tạng dùng bác sĩ/người bệnh thay cho đồ họa.

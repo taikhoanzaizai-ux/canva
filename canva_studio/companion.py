@@ -22,7 +22,7 @@ def registered_extensions(local_appdata=None):
                     if 'SKST' not in title.upper() and 'skst_canva' not in str(path).lower():continue
                     key=(browser,profile.name,ident)
                     if key in seen:continue
-                    seen.add(key);results.append(dict(browser=browser,profile=profile.name,id=ident,path=path,version=manifest.get('version')))
+                    seen.add(key);results.append(dict(browser=browser,profile=profile.name,id=ident,path=path,version=manifest.get('version'),enabled=entry.get('state',1)==1))
     return results
 
 def companion_status(install,local_appdata=None):

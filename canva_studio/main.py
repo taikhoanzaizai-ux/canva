@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
+from canva_studio.browser import open_chrome,chrome_path
 from canva_studio.batches import probe_duration, prepare_parts
 from canva_studio import updater
 from canva_studio.storage import data_dir, migrate_legacy
@@ -28,7 +29,7 @@ class App:
             try:imported=migrate_legacy(DATA,legacy)
             except (OSError,ValueError) as e:messagebox.showwarning('Dữ liệu cũ',str(e)+'\nDữ liệu gốc vẫn được giữ. Bạn có thể chuyển lại sau.')
         self.engine=Engine(DATA); self.server=serve(self.engine,int(os.environ.get('SKST_PORT','8766')));self.tasks=queue.Queue();self.worker_busy=False;self.process=None
-        self.segments=None;self.plan=None;self.settings={};self.prepared_voice='';self.update_busy=False
+        self.segments=None;self.plan=None;self.settings={};self.prepared_voice='';self.update_busy=False;self.analyze_then_run=False
         try:self.settings=json.loads((DATA/'settings.json').read_text(encoding='utf8'))
         except (OSError,ValueError):pass
         style=ttk.Style();style.theme_use('clam');style.configure('.',font=('Segoe UI',10));style.configure('TFrame',background='#f3f5fa');style.configure('TLabel',background='#f3f5fa',foreground='#18243b');style.configure('TButton',padding=(12,7));style.configure('Accent.TButton',background='#196c68',foreground='white');style.configure('Treeview',rowheight=31)
@@ -59,13 +60,13 @@ class App:
         self.tree.bind('<Double-1>',self.edit_scene)
         row=ttk.Frame(build);row.pack(fill='x',pady=9)
         ttk.Button(row,text='Sửa từ khóa cảnh',command=self.edit_scene).pack(side='left');ttk.Button(row,text='Lưu danh sách cảnh',command=self.export_plan).pack(side='left',padx=6);ttk.Button(row,text='Nạp danh sách cảnh',command=self.import_plan).pack(side='left');ttk.Button(row,text='Mẫu Nhón gót chân',command=self.load_demo).pack(side='right')
-        row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text='Link thiết kế Canva').pack(side='left');self.target=tk.StringVar(value=self.engine.state['target']);ttk.Entry(row,textvariable=self.target).pack(side='left',fill='x',expand=True,padx=8);ttk.Button(row,text='Mở Canva',command=self.open_canva).pack(side='right')
+        row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text='Link Canva (trống = tự tạo)').pack(side='left');self.target=tk.StringVar(value=self.engine.state['target']);ttk.Entry(row,textvariable=self.target).pack(side='left',fill='x',expand=True,padx=8);ttk.Button(row,text='Mở Canva',command=self.open_canva).pack(side='right')
         row=ttk.Frame(build);row.pack(fill='x',pady=7)
-        ttk.Button(row,text='2. Bắt đầu / Tiếp tục',style='Accent.TButton',command=self.run).pack(side='left');ttk.Button(row,text='Tạm dừng',command=self.engine.pause).pack(side='left',padx=8);ttk.Button(row,text='Xử lý cảnh bị dở',command=self.recover).pack(side='left');ttk.Button(row,text='Dự án mới',command=self.new_project).pack(side='right');ttk.Button(row,text='Các phần đã dựng',command=self.show_parts).pack(side='right',padx=6)
+        ttk.Button(row,text='2. Bắt đầu / Tiếp tục tự động',style='Accent.TButton',command=self.run).pack(side='left');ttk.Button(row,text='Tạm dừng',command=self.engine.pause).pack(side='left',padx=8);ttk.Button(row,text='Xử lý cảnh bị dở',command=self.recover).pack(side='left');ttk.Button(row,text='Dự án mới',command=self.new_project).pack(side='right');ttk.Button(row,text='Các phần đã dựng',command=self.show_parts).pack(side='right',padx=6)
         self.progress=ttk.Progressbar(build,maximum=100);self.progress.pack(fill='x',pady=6)
         self.status=tk.StringVar();ttk.Label(outer,textvariable=self.status,wraplength=1060).pack(fill='x',pady=(10,0))
         self.connection=tk.StringVar(value='Chưa có kết nối trình duyệt');ttk.Label(settings,textvariable=self.connection,font=('Segoe UI',12,'bold')).pack(anchor='w',pady=8)
-        ttk.Label(settings,text='Mã ghép nối dùng cho phiên này. Dán vào tiện ích SKST trên tab Canva.').pack(anchor='w')
+        ttk.Label(settings,text='Ghép nối tiện ích một lần. Mã được giữ trên máy để tự kết nối những lần sau.').pack(anchor='w')
         self.token_var=tk.StringVar(value=self.engine.token)
         token=ttk.Frame(settings);token.pack(fill='x',pady=8)
         self.token_entry=ttk.Entry(token,width=48,state='readonly',textvariable=self.token_var);self.token_entry.pack(side='left')
@@ -146,11 +147,11 @@ class App:
         messagebox.showinfo('Tiện ích đi kèm và tự cập nhật',text)
     def choose_voice(self):
         p=filedialog.askopenfilename(filetypes=[('Voice','*.mp3 *.wav *.m4a *.aac *.flac'),('Tất cả','*.*')]);
-        if p:self.voice.set(p);self.end.set('');self.prepared_voice=''
+        if p:self.voice.set(p);self.end.set('');self.prepared_voice='';self.plan=None;self.tree.delete(*self.tree.get_children())
     def choose_script(self):
         p=filedialog.askopenfilename(filetypes=[('Kịch bản','*.docx *.txt')]);
         if not p:return
-        try:self.script_path.set(p);self.script.delete('1.0','end');self.script.insert('1.0',read_script(p))
+        try:self.plan=None;self.script_path.set(p);self.script.delete('1.0','end');self.script.insert('1.0',read_script(p))
         except Exception as e:messagebox.showerror('Không đọc được kịch bản',str(e))
     def choose_transcript(self):
         p=filedialog.askopenfilename(filetypes=[('Mốc lời đọc','*.json *.srt *.vtt')]);
@@ -236,32 +237,47 @@ class App:
             self.notice.set('Mẫu 50 cảnh theo bản dựng vừa làm. Mở một thiết kế Canva video ngang TRỐNG rồi dán link bên dưới.')
         except Exception as e:messagebox.showerror('Không mở được mẫu',str(e))
     def open_canva(self):
-        u=self.target.get().strip()
-        if valid_canva(u):webbrowser.open(u)
-        else:webbrowser.open('https://www.canva.com/')
+        try:
+            u=self.target.get().strip()
+            if valid_canva(u):open_chrome(u)
+            else:self.run()
+        except Exception as e:messagebox.showerror('Chưa mở được Chrome',str(e))
     def extension_folder(self):
         path=Path(sys.executable).parent/'TienIch_Canva' if getattr(sys,'frozen',False) else BASE/'extension'
         if path.exists():os.startfile(str(path))
         else:messagebox.showinfo('Tiện ích','Giải nén toàn bộ gói, giữ thư mục TienIch_Canva bên cạnh ứng dụng.')
     def run(self):
         try:
-            if not self.plan:raise ValueError('Phân tích voice hoặc nạp danh sách cảnh trước.')
+            if self.worker_busy:return
+            if self.engine.state['mode'] in ('opening','opening_resume'):
+                self.notice.set('Chrome đang mở thiết kế. Không bấm lặp; tiện ích sẽ tự bắt đầu khi trang sẵn sàng.');return
+            if not self.plan:
+                self.analyze();self.analyze_then_run=self.worker_busy;return
             if not Path(self.voice.get()).is_file():raise ValueError('Chọn voice trước.')
-            u=self.target.get().strip()
-            if not valid_canva(u):raise ValueError('Dán link chỉnh sửa thiết kế Canva.')
-            st=self.engine.state
-            if st['scenes']!=self.plan['scenes'] or st['target']!=u:
-                if not messagebox.askyesno('Thiết kế để dựng','Bạn đã mở một thiết kế Video 16:9 trống cho bản dựng này? Ứng dụng sẽ tải voice lên Canva và thêm cảnh vào thiết kế đó.'):return
+            u=self.target.get().strip();st=self.engine.state
+            if u and not valid_canva(u):raise ValueError('Link thiết kế chưa đúng. Để trống để phần mềm tự tạo Video khổ ngang.')
+            if not u or st['scenes']!=self.plan['scenes'] or st['target']!=u:
                 chosen=self.prepared_voice or self.voice.get()
                 actual=probe_duration(self.ffmpeg.get(),chosen)
                 expected=self.plan['scenes'][-1]['start']+self.plan['scenes'][-1]['duration']
-                if abs(actual-expected)>.12:raise ValueError(f'Voice dài {actual:.3f} giây, hình cần {expected:.3f} giây. Chọn voice gốc và Phân tích & chia cảnh để chia lại chính xác.')
+                if abs(actual-expected)>.12:raise ValueError(f'Voice dài {actual:.3f} giây, hình cần {expected:.3f} giây. Chọn voice gốc và phân tích lại.')
+                if not u:
+                    if st.get('bootstrap_nonce') and st['scenes']==self.plan['scenes']:
+                        self.engine.wait_for_created_tab();return
+                    chrome_path()
+                    address=self.engine.bootstrap(self.plan,chosen)
+                    try:open_chrome(address)
+                    except Exception:
+                        self.engine.pause();raise
+                    return
                 self.engine.configure(self.plan,u,chosen)
-            elif not st['voice']:
-                st['voice']=self.voice.get()
             connection=self.engine.connection_status(u)
-            if not connection['ready']:raise ValueError(connection['message'])
-            self.engine.start()
+            if connection['ready']:self.engine.start()
+            else:
+                chrome_path();self.engine.resume_in_chrome()
+                try:open_chrome(u)
+                except Exception:
+                    self.engine.pause();raise
         except Exception as e:messagebox.showerror('Chưa thể bắt đầu',str(e))
     def recover(self):
         self.engine.pause()
@@ -285,7 +301,7 @@ class App:
             kind,value=self.tasks.get()
             if kind.startswith('update_'):self.update_event(kind,value);continue
             self.worker_busy=False;self.plan_button.configure(state='normal')
-            if kind=='error':self.notice.set('Phân tích chưa thành công.');messagebox.showerror('Chưa phân tích được',value)
+            if kind=='error':self.analyze_then_run=False;self.notice.set('Phân tích chưa thành công.');messagebox.showerror('Chưa phân tích được',value)
             else:
                 if self.engine.state.get('scenes'):
                     archive=DATA/'Projects'/'Previous';archive.mkdir(parents=True,exist_ok=True)
@@ -297,10 +313,14 @@ class App:
                 if self.script.get('1.0','end').strip() and not self.plan.get('script_aligned'):note+=' Chưa khớp chắc chắn kịch bản: đang dùng lời nhận diện từ voice.'
                 if self.plan.get('parts'):note+=f' Tổng {len(self.plan["parts"])} phần, tối đa 50 cảnh/phần; voice đã kiểm tra đủ thời lượng.'
                 self.notice.set(note)
+                if self.analyze_then_run:
+                    self.analyze_then_run=False;self.root.after(0,self.run)
         self.engine.watchdog()
         st=self.engine.state
         if st.get('part_index',0)!=self.display_part:
             self.display_part=st.get('part_index',0);self.plan=dict(scenes=st['scenes'],parts=st.get('parts',[]));self.prepared_voice=st['voice'];self.target.set(st['target']);self.populate()
+        if st.get('auto_start') and st.get('target') and st['mode'] in ('running','opening_resume'):
+            self.target.set(st['target'])
         n=len(st['scenes']);done=len(st['done']);self.progress['value']=100*done/max(1,n)
         self.status.set(f'Phần {st.get("part_index",0)+1}/{max(1,len(st.get("parts",[])))} • {done}/{n} cảnh  •  '+st['message'])
         self.connection.set(self.engine.connection_status()['message'])

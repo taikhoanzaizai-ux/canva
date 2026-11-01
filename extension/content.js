@@ -14,7 +14,8 @@
   async function cycle(){
     if(busy)return;busy=true;let task;
     try{
-      const result=await api('next');task=result.task;if(!task)return;
+      const blank_video=!!document.querySelector('button[aria-label="Thêm nội dung đa phương tiện/cảnh trống"]')&&!document.querySelector('[data-role="timeline-scene"] img')&&![...document.querySelectorAll('button,[role="button"]')].some(e=>(e.getAttribute('aria-label')||'').includes('đoạn âm thanh'));
+      const result=await api('next',{blank_video});task=result.task;if(!task)return;
       const check=async(stage,extra={})=>{
         const state=await api('checkpoint',{id:task.id,...(stage?{stage,...extra}:{})});
         if(!state.continue_)throw Error('Đã tạm dừng theo yêu cầu.');
