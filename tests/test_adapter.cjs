@@ -55,21 +55,21 @@ const photo={id:'photo:123',title:'Doctor explaining diagnosis to senior patient
 assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subjects:['doctor'],actions:['explain']},[]).length,1,'Still photos do not need a source-video duration');
 assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subjects:['doctor'],actions:['explain']},['photo:123']).length,0,'Do not reuse stock photos');
 
-// The observed photo popover only commits on blur, not synthetic Enter.
+// Canva keyboard handlers require legacy keyCode in addition to key/code.
 (async()=>{
  let committed=5,focused=false,blurred=false,plusScrolled=false;
  class Input{
   constructor(){this.current='5';this.offsetWidth=10;}
   set value(v){this.current=v;} get value(){return this.current;}
   getAttribute(k){return k==='placeholder'?'--':null;}
-  focus(){focused=true;} blur(){blurred=true;committed=Number(this.value);}
-  dispatchEvent(){} getClientRects(){return [1];}
+  focus(){focused=true;} blur(){blurred=true;}
+  dispatchEvent(event){if(event.type==='keydown'&&event.key==='Enter'&&event.keyCode===13)committed=Number(this.value);} getClientRects(){return [1];}
  }
  const field=new Input();
  const button={offsetWidth:10,getAttribute:k=>k==='aria-label'?committed+' giây, sửa thời gian':null,getClientRects:()=>[1]};
  const plus={...button,getAttribute:k=>k==='aria-label'?'Thêm nội dung đa phương tiện/cảnh trống':null,scrollIntoView:()=>plusScrolled=true};
  const doc={activeElement:field,body:field,querySelectorAll:s=>s==='input'?[field]:s==='[data-role="timeline-scene"]'?[]:[button,plus]};
- const env={globalThis:{},document:doc,HTMLInputElement:Input,HTMLTextAreaElement:class{},Event:class{},KeyboardEvent:class{},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>{f();},Promise,console};
+ const env={globalThis:{},document:doc,HTMLInputElement:Input,HTMLTextAreaElement:class{},Event:class{},KeyboardEvent:class{constructor(type,options){this.type=type;Object.assign(this,options);}},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>{f();},Promise,console};
  vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
  await env.globalThis.SKSTAdapter.timePhoto(4.24);
  assert(focused&&blurred);assert.equal(committed,4.24,'Commit pending duration even when popover was already open');

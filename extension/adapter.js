@@ -25,7 +25,7 @@
     Object.getOwnPropertyDescriptor(proto,'value').set.call(el,value);
     el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));
   };
-  const key=(el,k)=>{el.dispatchEvent(new KeyboardEvent('keydown',{key:k,code:k,bubbles:true}));el.dispatchEvent(new KeyboardEvent('keyup',{key:k,code:k,bubbles:true}));};
+  const key=(el,k)=>{const number={Enter:13,Escape:27,Tab:9}[k]||0;const options={key:k,code:k,keyCode:number,which:number,bubbles:true,cancelable:true};el.dispatchEvent(new KeyboardEvent('keydown',options));el.dispatchEvent(new KeyboardEvent('keyup',options));};
   function uploadInput(root=document,kind='audio'){
     // Canva currently uses a hidden accept="*/*" input, not audio/video-only.
     const eligible=[...root.querySelectorAll('input[type="file"]')].filter(e=>!e.disabled);
@@ -254,7 +254,7 @@
         selected=await choosePhoto(s,task.used||[]);
         if(!selected){
           const generatedTask={...task,scene:{...s,title_text:s.text}};
-          return titleTask(generatedTask,checkpoint,fallbackAsset);
+          return await titleTask(generatedTask,checkpoint,fallbackAsset);
         }
       }
       asset=selected.id;title=selected.title;task.media_kind=selected.media_kind||'video';
@@ -280,6 +280,21 @@
     const last=await tail();
     if(Math.abs(last.start-s.start)>.12||Math.abs(last.end-(s.start+s.duration))>.12)throw Error('Độ dài/vị trí cảnh chưa khớp lời đọc. Kiểm tra cảnh cuối timeline, không thêm lại video.');
     return {asset,title};
+  }
+  async function rollbackScene(task,checkpoint){
+    const s=task.scene;await closeMenu();
+    let last=await tail();
+    if(sceneCount()===s.id-1&&Math.abs(last.end-s.start)<=.12){await checkpoint('rollback_done');return;}
+    if(sceneCount()!==s.id||Math.abs(last.start-s.start)>.12||!last.element)throw Error('Không xác định được riêng cảnh cuối để thay thẻ lỗi.');
+    await click(last.element);
+    const pageMenu=()=>last.element.querySelector('button[aria-label="Tùy chọn về trang"],[role="button"][aria-label="Tùy chọn về trang"]');
+    await click(await wait(pageMenu,'Không thấy menu của cảnh cuối cần thay'));
+    const remove=await wait(()=>find(/^Xóa(?:\s|$)/,'[role="menuitem"]'),'Không thấy Xóa trong menu cảnh cuối');
+    await checkpoint('rollback_intent',{reason:task.failure});await click(remove);
+    await wait(()=>sceneCount()===s.id-1||(s.id===1&&sceneCount()===1&&!timeline().at(-1)?.image),'Canva chưa gỡ cảnh lỗi khỏi timeline');
+    last=await tail();
+    if(s.id>1&&Math.abs(last.end-s.start)>.12)throw Error('Sau khi gỡ cảnh lỗi, cuối hình chưa khớp mốc voice.');
+    await checkpoint('rollback_done');
   }
   async function titleTask(task,checkpoint,assetData){
     const s=task.scene;const phase=task.phase?.stage;
@@ -361,15 +376,27 @@
     await wait(()=>/Đang tải xuống|Nếu quá trình tải xuống/.test(document.body.innerText),'Canva chưa bắt đầu xuất video',30000);
     return {};
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,searchReady,timelineScroller,timeline,tail,timePhoto,cards,photoCards,uploadInput,uploadedVideoTab,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,searchReady,timelineScroller,timeline,tail,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
-    const checkpoint=(stage,extra={})=>check(stage,extra);
-    if(task.kind==='scene'&&task.scene.error_card)return titleTask({...task,scene:{...task.scene,title_text:'LỖI CẢNH '+task.id}},checkpoint,fallbackAsset);
-    if(task.kind==='scene')return task.scene.kind==='title'?titleTask(task,checkpoint,titleAsset):sceneTask(task,checkpoint,fallbackAsset);
+    const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
+    try{
+    if(task.kind==='scene'&&['rollback_intent','rollback_done'].includes(task.phase?.stage)){
+      const reason=task.phase.reason||'Tiếp tục thay cảnh lỗi bằng thẻ chữ';
+      await rollbackScene(task,checkpoint);throw Error(reason);
+    }
+    if(task.kind==='scene'&&task.scene.error_card)return await titleTask({...task,scene:{...task.scene,title_text:'LỖI CẢNH '+task.id}},checkpoint,fallbackAsset);
+    if(task.kind==='scene')return task.scene.kind==='title'?await titleTask(task,checkpoint,titleAsset):await sceneTask(task,checkpoint,fallbackAsset);
     if(task.kind==='voice')return voiceTask(task,checkpoint,voice);
     if(task.kind==='audit')return auditTask(task);
     if(task.kind==='next_design')return nextDesignTask(task,checkpoint);
     if(task.kind==='export')return exportTask(task,checkpoint);
     throw Error('Loại thao tác không hợp lệ');
+    }catch(error){
+      if(task.kind==='scene'&&!task.scene.error_card&&['insert_intent','inserted','trimmed','muted'].includes(task.phase?.stage)&&!/đã tạm dừng|Phiên thao tác|đã ngắt/i.test(error.message)){
+        task.failure=error.message;
+        try{await rollbackScene(task,checkpoint);}catch(recovery){throw Error(error.message+' • Không thay được cảnh lỗi: '+recovery.message);}
+      }
+      throw error;
+    }
   }};
 })();

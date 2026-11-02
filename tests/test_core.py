@@ -65,6 +65,16 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.e.state['done'],[]);self.assertTrue(self.e.state['voice_done'])
         self.assertIn('error_card',self.e.next_task(self.client)['task']['scene'])
 
+    def test_verified_rollback_turns_inserted_scene_into_error_card(self):
+        self.e.state['voice_done']=True;self.e.next_task(self.client)
+        self.e.check(dict(id='1',client='A',stage='inserted'))
+        self.e.check(dict(id='1',client='A',stage='rollback_intent',reason='Canva không áp dụng thời lượng'))
+        self.e.check(dict(id='1',client='A',stage='rollback_done'))
+        result=self.e.result(dict(id='1',client='A',error='Canva không áp dụng thời lượng'))
+        self.assertTrue(result['continuing']);self.assertEqual(self.e.state['mode'],'running')
+        self.assertEqual(self.e.state['done'],[]);self.assertTrue(self.e.state['voice_done'])
+        self.assertIn('error_card',self.e.next_task(self.client)['task']['scene'])
+
     def test_error_card_failure_is_bounded_and_pause_is_respected(self):
         self.e.state['voice_done']=True;self.e.next_task(self.client)
         self.e.result(dict(id='1',client='A',error='Không thấy ô tìm kiếm'))

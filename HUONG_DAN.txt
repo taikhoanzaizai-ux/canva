@@ -100,3 +100,8 @@ Cập nhật ứng dụng, rồi bấm Cập nhật tiện ích khi đang tạm 
 TỪ BẢN 0.6.0: THẺ BÁO LỖI VÀ TIẾP TỤC
 Lỗi tìm kiếm/giao diện tại cảnh chưa chèn sẽ tự chuyển thành clip nền đen ghi số cảnh, mốc voice và lỗi, rồi dựng cảnh sau. Clip báo lỗi giữ nguyên thời lượng. Danh sách lỗi: Kết nối & công cụ → Xem danh sách lỗi dựng; tệp Data/Errors.json lưu cạnh ứng dụng.
 Nếu đã chèn dở mà chưa xác nhận, mất voice/kết nối, lệch timeline hoặc không thể chèn cả thẻ lỗi, phần mềm báo rõ và giữ tiến độ để xử lý. Không đánh dấu bỏ qua một khoảng voice chưa có hình. Lệnh Tạm dừng luôn được tôn trọng.
+
+
+TỪ BẢN 0.7.0: THAY CẢNH ĐÃ CHÈN BỊ LỖI
+Nếu cảnh cuối đã chèn nhưng cắt/đặt thời lượng thất bại, ứng dụng đối chiếu số cảnh và mốc bắt đầu, gỡ đúng cảnh cuối, xác nhận cuối hình trở lại mốc cũ rồi tự tạo thẻ lỗi và dựng tiếp. Voice không được gỡ. Tiến độ gỡ cảnh được ghi trước/sau thao tác để kiểm tra lại khi kết nối gián đoạn.
+Chỉ dừng khi không xác định được riêng cảnh cuối hoặc không thao tác được cả việc gỡ/thẻ lỗi; lý do được ghi cụ thể. Không đánh dấu một khoảng voice trống là đã dựng xong.

@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.7.0
+
+- Bổ sung mã phím Enter/Escape cho sự kiện bàn phím để Canva nhận xác nhận thời lượng thay vì chỉ đổi giá trị ô nhập.
+- Khi cảnh cuối đã chèn bị lỗi: kiểm tra số cảnh và mốc bắt đầu, gỡ riêng cảnh đó bằng menu cảnh, xác nhận mốc timeline cũ rồi tự chèn thẻ báo lỗi đúng thời lượng và tiếp tục. Lưu checkpoint trước/sau gỡ để không xóa lặp.
+- Nếu không xác nhận được cảnh cuối hoặc thao tác gỡ thất bại, vẫn báo rõ lỗi phục hồi; không tuyên bố đã dựng qua một khoảng voice chưa có hình.
+
 ## 0.6.2
 
 - Xác nhận thời lượng ảnh bằng rời ô nhập, chờ Canva thực sự cập nhật; tiếp tục được khi popover thời lượng đang mở. Bù sai số làm tròn vào cuối cảnh để không cộng dồn lệch voice.
