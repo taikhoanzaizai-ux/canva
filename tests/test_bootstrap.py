@@ -6,6 +6,25 @@ from canva_studio.bridge import Engine,MIN_EXTENSION_VERSION
 from canva_studio.browser import CREATE_VIDEO,open_chrome,chrome_path
 
 class BootstrapTests(unittest.TestCase):
+    def test_old_controller_can_reload_without_opening_deadlock(self):
+        with tempfile.TemporaryDirectory() as d:
+            e=Engine(d);address=e.bootstrap(self.plan(),'v')
+            client=dict(client='A',url='https://www.canva.com/design/new/token/edit#'+urlsplit(address).fragment,extension_version='0.4.1',blank_video=True)
+            self.assertEqual(e.next_task(client)['mode'],'extension_outdated')
+            self.assertEqual(e.state['mode'],'attention');self.assertIsNone(e.running)
+            wrong={**client,'url':'https://www.canva.com/design/other/token/edit', 'extension_version':MIN_EXTENSION_VERSION}
+            self.assertIsNone(e.next_task(wrong)['task']);self.assertEqual(e.state['mode'],'attention')
+            self.assertEqual(e.next_task({**client,'extension_version':MIN_EXTENSION_VERSION})['task']['kind'],'voice')
+            self.assertNotIn('extension_resume_mode',e.state)
+
+    def test_pause_cancels_automatic_extension_resume(self):
+        with tempfile.TemporaryDirectory() as d:
+            e=Engine(d);address=e.bootstrap(self.plan(),'v')
+            client=dict(client='A',url='https://www.canva.com/design/new/token/edit#'+urlsplit(address).fragment,extension_version='0.4.1',blank_video=True)
+            e.next_task(client);e.pause()
+            self.assertIsNone(e.next_task({**client,'extension_version':MIN_EXTENSION_VERSION})['task'])
+            self.assertEqual(e.state['mode'],'paused')
+
     def plan(self):return dict(scenes=[dict(id=1,start=0,duration=4,text='người cao tuổi',queries=['người cao tuổi'])])
     def test_pairing_persists_only_in_local_data(self):
         with tempfile.TemporaryDirectory() as d:

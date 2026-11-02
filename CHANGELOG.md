@@ -1,5 +1,9 @@
 # Các bản cập nhật
 
+## 0.5.1
+
+- Sửa vòng chờ khi tab Canva chạy tiện ích cũ nhưng ứng dụng đang mở thiết kế: chuyển sang trạng thái nghỉ an toàn cho tiện ích tự nạp bản đã cập nhật, rồi nối lại đúng tab/marker và tiến độ. Tạm dừng thủ công vẫn được tôn trọng.
+
 ## 0.5.0
 
 - Khi thiếu video phù hợp, tìm ảnh stock Canva với cùng điều kiện chủ thể/hành động và chống trùng; cắt ảnh theo thời lượng cảnh, giữ tiến độ đã dựng.

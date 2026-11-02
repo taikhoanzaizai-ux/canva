@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.5.0'
+MIN_EXTENSION_VERSION='0.5.1'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -85,7 +85,7 @@ class Engine:
             return dict(ok=True,target=self.state['target'],mode=self.state['mode'],**self.editor_status())
 
     def pause(self):
-        with self.lock:self.state['mode']='paused';self.log('Đã tạm dừng. Thao tác đang thực hiện sẽ dừng ở điểm kiểm tra tiếp theo.')
+        with self.lock:self.state.pop('extension_resume_mode',None);self.state['mode']='paused';self.log('Đã tạm dừng. Thao tác đang thực hiện sẽ dừng ở điểm kiểm tra tiếp theo.')
     def start(self):
         with self.lock:
             if not self.state['scenes']:raise ValueError('Chưa có danh sách cảnh.')
@@ -129,6 +129,18 @@ class Engine:
                 if now-self.last_diagnostic>5:
                     atomic_json(self.folder/'connection.json',dict(seen=now,url=body.get('url'),extension_version=body.get('extension_version'),mode=self.state['mode']))
                     self.last_diagnostic=now
+            marker=parse_qs(urlsplit(body.get('url','')).fragment).get('skst_start',[''])[0]
+            pending=self.state.get('extension_resume_mode')
+            opening=self.state['mode'] in ('opening','opening_resume')
+            exact=(bool(marker) and marker==self.state.get('bootstrap_nonce')) if (self.state['mode']=='opening' or pending=='opening') else bool(self.state['target']) and canonical_url(body.get('url'))==canonical_url(self.state['target'])
+            if opening and exact and not compatible_extension(body.get('extension_version')):
+                self.state['extension_resume_mode']=self.state['mode']
+                self.state['mode']='attention'
+                self.log('Canva đang chạy tiện ích '+str(body.get('extension_version','không rõ'))+'; đang chờ nạp bản '+MIN_EXTENSION_VERSION+' từ thư mục ứng dụng. Giữ nguyên tab; không tạo lại thiết kế.')
+                return dict(task=None,mode='extension_outdated',message=self.state['message'])
+            if pending and self.state['mode']=='attention' and exact and compatible_extension(body.get('extension_version')):
+                self.state['mode']=self.state.pop('extension_resume_mode')
+                self.state['bootstrap_deadline']=now+120
             if self.state['mode']=='opening':
                 marker=parse_qs(urlsplit(body.get('url','')).fragment).get('skst_start',[''])[0]
                 if marker!=self.state.get('bootstrap_nonce') or not marker:return dict(task=None,mode='waiting_new_design')
