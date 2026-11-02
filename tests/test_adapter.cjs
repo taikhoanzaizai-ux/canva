@@ -76,3 +76,5 @@ assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subje
  await env.globalThis.SKSTAdapter.tail();
  assert(plusScrolled,'Seek the picture-track endpoint, not the end of a longer voice');
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'},{accept:'image/png'}]},'image').accept,'image/png','PNG error cards must use an image-compatible upload input');

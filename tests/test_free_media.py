@@ -12,7 +12,8 @@ class FreeMediaTests(unittest.TestCase):
             captions=[]
             def render(plan,ffmpeg,folder):
                 captions.append(plan['scenes'][0]['title_text'])
-                path=Path(folder)/'test.mp4';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'video');plan['scenes'][0]['title_path']=str(path)
+                self.assertTrue(plan['scenes'][0]['still_image'])
+                path=Path(folder)/'test.png';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'png');plan['scenes'][0]['title_path']=str(path)
             with patch('canva_studio.fallback.prepare_external') as search,patch('canva_studio.fallback.render_titles',side_effect=render):
                 job=begin_fallback(engine,scene)
                 for _ in range(100):
@@ -21,6 +22,21 @@ class FreeMediaTests(unittest.TestCase):
                 self.assertTrue(job.get('done'));search.assert_not_called()
                 self.assertIn('LỖI CẢNH 8',captions[0]);self.assertIn('Không thấy ô tìm kiếm video',captions[0]);self.assertIn('Lời đọc gốc',captions[0])
                 self.assertEqual(scene['fallback_source']['kind'],'error_card')
+                self.assertEqual(Path(scene['fallback_path']).suffix,'.png')
+
+    def test_legacy_error_mp4_is_not_reused_for_new_png_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            engine=Engine(d);old=Path(d)/'old.mp4';old.write_bytes(b'old')
+            scene=dict(id=29,start=115.34,duration=4.2,text='Lời đọc',fallback_path=str(old),error_card=dict(message='Video tải lên bị lỗi',start=115.34))
+            def render(plan,ffmpeg,folder):
+                path=Path(folder)/'new.png';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'png');plan['scenes'][0]['title_path']=str(path)
+            with patch('canva_studio.fallback.render_titles',side_effect=render):
+                job=begin_fallback(engine,scene)
+                for _ in range(100):
+                    if not job.get('pending'):break
+                    time.sleep(.01)
+                self.assertTrue(job.get('done'));self.assertTrue(old.exists())
+                self.assertEqual(Path(scene['fallback_path']).suffix,'.png')
 
     def test_native_pages_only_and_no_sponsored_domains(self):
         self.assertTrue(valid_page('https://www.pexels.com/video/doctor-consulting-patient-123/','pexels','video'))

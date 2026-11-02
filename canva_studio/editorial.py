@@ -157,11 +157,13 @@ def render_titles(plan,ffmpeg,folder,font=None):
     for scene in plan['scenes']:
         if scene.get('kind')!='title':continue
         title=scene['title_text'];key=hashlib.sha256((title+str(scene['duration'])).encode()).hexdigest()[:16]
-        textfile=folder/f'title-{key}.txt';video=folder/f'SKST_title_{key}.mp4'
+        textfile=folder/f'title-{key}.txt';video=folder/(f'SKST_error_{key}.png' if scene.get('still_image') else f'SKST_title_{key}.mp4')
         textfile.write_text('\n'.join(line for paragraph in title.splitlines() for line in textwrap.wrap(paragraph,width=52 if scene.get('error_card') else 38)),encoding='utf8')
         size=48 if scene.get('error_card') else 72
         filters=f"drawtext=fontfile='{escaped_font}':textfile='{textfile.name}':fontsize={size}:fontcolor=white:line_spacing=18:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=0.2"
-        subprocess.run([str(ffmpeg),'-v','error','-y','-f','lavfi','-i','color=c=black:s=1920x1080:r=30','-vf',filters,'-t',str(scene['duration']),'-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p',str(video.resolve())],cwd=folder,check=True,capture_output=True,creationflags=0x08000000 if os.name=='nt' else 0)
+        output=['-frames:v','1'] if scene.get('still_image') else ['-t',str(scene['duration']),'-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p']
+        if scene.get('still_image'):filters=filters.split(',fade=')[0]
+        subprocess.run([str(ffmpeg),'-v','error','-y','-f','lavfi','-i','color=c=black:s=1920x1080:r=30','-vf',filters,*output,str(video.resolve())],cwd=folder,check=True,capture_output=True,creationflags=0x08000000 if os.name=='nt' else 0)
         scene['title_path']=str(video.resolve())
     return plan
 

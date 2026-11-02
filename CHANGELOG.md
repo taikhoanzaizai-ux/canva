@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.7.1
+
+- Thẻ báo lỗi chuyển sang ảnh PNG nền đen/chữ trắng, chèn qua mục Hình ảnh tải lên; không phụ thuộc mục Video tải lên đang lỗi. Dự án cũ có thẻ lỗi MP4 tự tạo lại PNG khi tiếp tục.
+- Tải clip tiêu đề trước khi chờ mục Video xuất hiện, tránh vòng chờ thư viện chưa có video.
+- Giữ thời lượng thẻ lỗi theo voice và chỉ xác nhận xong khi thẻ đã chèn đúng timeline.
+
 ## 0.7.0
 
 - Bổ sung mã phím Enter/Escape cho sự kiện bàn phím để Canva nhận xác nhận thời lượng thay vì chỉ đổi giá trị ô nhập.

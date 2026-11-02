@@ -105,3 +105,7 @@ Nếu đã chèn dở mà chưa xác nhận, mất voice/kết nối, lệch tim
 TỪ BẢN 0.7.0: THAY CẢNH ĐÃ CHÈN BỊ LỖI
 Nếu cảnh cuối đã chèn nhưng cắt/đặt thời lượng thất bại, ứng dụng đối chiếu số cảnh và mốc bắt đầu, gỡ đúng cảnh cuối, xác nhận cuối hình trở lại mốc cũ rồi tự tạo thẻ lỗi và dựng tiếp. Voice không được gỡ. Tiến độ gỡ cảnh được ghi trước/sau thao tác để kiểm tra lại khi kết nối gián đoạn.
 Chỉ dừng khi không xác định được riêng cảnh cuối hoặc không thao tác được cả việc gỡ/thẻ lỗi; lý do được ghi cụ thể. Không đánh dấu một khoảng voice trống là đã dựng xong.
+
+
+TỪ BẢN 0.7.1
+Thẻ báo lỗi dùng ảnh PNG thay vì clip MP4. Vì vậy lỗi mở Video trong Tải lên không chặn chính bước thêm thẻ lỗi nữa. Dự án cũ đang dừng ở tải thẻ lỗi MP4 sẽ tạo PNG mới khi Tiếp tục, giữ nguyên các cảnh đã xong.

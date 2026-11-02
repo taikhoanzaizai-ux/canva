@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.7.0'
+MIN_EXTENSION_VERSION='0.7.1'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -266,8 +266,8 @@ def serve(engine,port=8766):
                     if status.get('pending'):v=dict(pending=True)
                     else:
                         path=Path(scene['fallback_path']).resolve()
-                        if not path.is_relative_to((engine.folder/'Projects').resolve()) or path.suffix!='.mp4' or path.stat().st_size>30*1024*1024:raise ValueError('Tệp tư liệu không hợp lệ.')
-                        v=dict(name=path.name,mime='video/mp4',data=base64.b64encode(path.read_bytes()).decode(),asset_id=scene['fallback_source']['id'])
+                        if not path.is_relative_to((engine.folder/'Projects').resolve()) or path.suffix not in ('.mp4','.png') or path.stat().st_size>30*1024*1024:raise ValueError('Tệp tư liệu không hợp lệ.')
+                        v=dict(name=path.name,mime='image/png' if path.suffix=='.png' else 'video/mp4',data=base64.b64encode(path.read_bytes()).decode(),asset_id=scene['fallback_source']['id'])
                 elif self.path=='/title':
                     engine.check(body)
                     scene=next((s for s in engine.state['scenes'] if str(s['id'])==str(body.get('id'))),None)
