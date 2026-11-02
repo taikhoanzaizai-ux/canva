@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.6.1'
+MIN_EXTENSION_VERSION='0.6.2'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 

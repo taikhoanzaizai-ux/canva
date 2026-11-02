@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.6.2
+
+- Xác nhận thời lượng ảnh bằng rời ô nhập, chờ Canva thực sự cập nhật; tiếp tục được khi popover thời lượng đang mở. Bù sai số làm tròn vào cuối cảnh để không cộng dồn lệch voice.
+- Đọc cuối track hình bằng nút thêm cảnh, không cuộn tới cuối voice dài làm toàn bộ hình rơi khỏi vùng timeline đang hiển thị.
+
 ## 0.6.1
 
 - Cho phép chuyển sang thẻ lỗi khi kẹt ở tải clip tiêu đề, trước khi có ý định chèn timeline; giữ 27 cảnh trước và voice trong trường hợp cảnh 28 tải tiêu đề thất bại. Tệp upload dư không được tính thành cảnh đã dựng.

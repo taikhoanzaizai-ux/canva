@@ -73,8 +73,9 @@
   }
   const tail=async()=>{
     const end=await wait(endButton,'Không tìm thấy timeline video mới của Canva');
-    const scroll=timelineScroller();
-    if(scroll)scroll.scrollLeft=scroll.scrollWidth;else end.scrollIntoView({block:'nearest',inline:'end'});
+    // The voice extends past the unfinished picture track. Scrolling to the
+    // container's full width hides every scene; target the picture-track plus.
+    end.scrollIntoView({block:'nearest',inline:'end'});
     await sleep(900);
     const rows=timeline();return rows.reduce((best,row)=>row.end>best.end?row:best,{start:0,end:0,image:''});
   };
@@ -193,9 +194,19 @@
     return null;
   };
   const timePhoto=async(duration)=>{
-    await click(await wait(()=>find(/giây, sửa thời gian$/),'Không thấy thời lượng ảnh'));
-    const field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không thấy ô đặt thời gian ảnh');
-    fill(field,String(duration));key(field,'Enter');key(field,'Escape');await sleep(700);
+    // React commits this popover on blur. A synthetic Enter/Escape alone can
+    // leave the edited number visible while the scene remains at five seconds.
+    let field=durationInput();
+    if(!visible(field))await click(await wait(()=>find(/giây, sửa thời gian$/),'Không thấy thời lượng ảnh'));
+    field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không thấy ô đặt thời gian ảnh');
+    field.focus();fill(field,String(Math.round(duration*1000)/1000));key(field,'Enter');
+    field.blur();await sleep(500);
+    key(document.activeElement||document.body,'Escape');
+    await wait(()=>{
+      const button=find(/giây, sửa thời gian$/);
+      const value=label(button||{getAttribute:()=>null,textContent:''}).match(/([\d]+(?:[.,]\d+)?)\s*giây/);
+      return value&&Math.abs(Number(value[1].replace(',','.'))-duration)<=.12;
+    },'Canva chưa áp dụng thời lượng ảnh sau khi xác nhận',6000);
   };
   const trim=async(duration)=>{
     const button=await wait(()=>find(/^Xén video dài/),'Không tìm thấy công cụ cắt video');await click(button);
@@ -259,7 +270,11 @@
       await wait(()=>task.media_kind==='image'?find(/giây, sửa thời gian$/):find(/^Xén video dài/),'Hãy chọn cảnh cuối timeline để tiếp tục');
     }
     await ensureBackground();
-    if(task.media_kind==='image')await timePhoto(s.duration);else await trim(s.duration);
+    if(task.media_kind==='image'){
+      const current=await tail();
+      if(Math.abs(current.start-s.start)>.12)throw Error('Điểm bắt đầu ảnh chưa khớp voice; không thay đổi cảnh khác.');
+      await timePhoto(s.start+s.duration-current.start);
+    }else await trim(s.duration);
     await checkpoint('trimmed',{asset,title,media_kind:task.media_kind});
     if(task.media_kind!=='image')await mute();await checkpoint('muted',{asset,title,media_kind:task.media_kind});
     const last=await tail();
@@ -346,7 +361,7 @@
     await wait(()=>/Đang tải xuống|Nếu quá trình tải xuống/.test(document.body.innerText),'Canva chưa bắt đầu xuất video',30000);
     return {};
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,searchReady,timelineScroller,timeline,cards,photoCards,uploadInput,uploadedVideoTab,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,searchReady,timelineScroller,timeline,tail,timePhoto,cards,photoCards,uploadInput,uploadedVideoTab,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=(stage,extra={})=>check(stage,extra);
     if(task.kind==='scene'&&task.scene.error_card)return titleTask({...task,scene:{...task.scene,title_text:'LỖI CẢNH '+task.id}},checkpoint,fallbackAsset);
