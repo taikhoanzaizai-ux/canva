@@ -90,3 +90,8 @@ Nạp kịch bản DOCX/TXT có tiêu đề 1. / 2. / 3. hoặc a) / b). Phần 
 Nếu không có kịch bản, chỉ nhận các tiêu đề số nói rõ như Một. / Hai. trong kết quả nhận diện. Tiêu đề không khớp chắc chắn sẽ không tự đặt vào mốc đoán.
 Các từ khóa không còn chỉ dựa vào người cao tuổi/sinh hoạt tại nhà; phải khớp chủ thể cụ thể. Cảnh thiếu ngữ cảnh sẽ báo cần sửa từ khóa, không tự lấp bằng hình chung chung. Chỉnh từ khóa trong danh sách cảnh để tiếp tục.
 Để thêm tiêu đề vào toàn bài: chọn voice gốc, nạp kịch bản, Phân tích & chia cảnh và dựng trên Video khổ ngang trống. Dự án đang dở vẫn giữ tiến độ nếu chỉ muốn tiếp tục và sửa lỗi tìm kiếm.
+
+TỪ BẢN 0.5.0: ẢNH VÀ TƯ LIỆU DỰ PHÒNG
+Ưu tiên video Canva, sau đó ảnh Canva phù hợp. Nếu vẫn thiếu, thử video rồi ảnh từ trang công khai Pexels/Pixabay, không yêu cầu khóa API. Chỉ nhận tư liệu trên trang gốc và CDN chính thức; không lấy quảng cáo dẫn sang website khác. Nguồn và liên kết giấy phép lưu tại Data/Sources.json.
+Nếu website chặn truy cập tự động (401/403/429), phần mềm bỏ qua, không vượt chặn. Nếu không có tư liệu đạt yêu cầu, tự thiết kế thẻ nền đen/chữ trắng dùng đúng câu voice. Đây là thẻ chữ, không phải ảnh AI. Thẻ giữ nguyên thời lượng cảnh và tiến độ voice.
+Cập nhật ứng dụng, rồi bấm Cập nhật tiện ích khi đang tạm dừng; sau đó Tiếp tục. Không cần phân tích lại dự án đang dở. Việc lọc dựa trên mô tả tư liệu, vẫn cần xem lại hình trước khi xuất video.

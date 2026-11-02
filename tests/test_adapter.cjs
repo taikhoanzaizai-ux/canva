@@ -50,3 +50,7 @@ assert.equal(adapter.eligibleCards([{id:'x',title:'Senior man smiling at home',d
 
 assert(!adapter.subjectMatch('Senior woman enjoying her day','da'),'Short Vietnamese noun must not match part of another word');
 assert(adapter.subjectMatch('Woman massaging legs','leg'),'Plural subject is accepted');
+
+const photo={id:'photo:123',title:'Doctor explaining diagnosis to senior patient',duration:Infinity,media_kind:'image'};
+assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subjects:['doctor'],actions:['explain']},[]).length,1,'Still photos do not need a source-video duration');
+assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subjects:['doctor'],actions:['explain']},['photo:123']).length,0,'Do not reuse stock photos');

@@ -1,5 +1,12 @@
 # Các bản cập nhật
 
+## 0.5.0
+
+- Khi thiếu video phù hợp, tìm ảnh stock Canva với cùng điều kiện chủ thể/hành động và chống trùng; cắt ảnh theo thời lượng cảnh, giữ tiến độ đã dựng.
+- Thử trang công khai Pexels/Pixabay không cần khóa API; chỉ nhận trang tư liệu gốc và máy chủ media chính thức, bỏ quảng cáo ngoài nguồn, lưu nguồn/giấy phép tại Data/Sources.json.
+- Nguồn trả 401/403/429 được bỏ qua, không vượt chặn. Nếu không có tư liệu phù hợp, tạo thẻ nền đen ghi đúng lời đọc thay vì dừng bài hoặc chọn hình sai.
+- Chuẩn bị tư liệu ở nền, duy trì kết nối và kiểm tra tạm dừng để không gây treo trong lúc tải/chuyển đổi.
+
 ## 0.4.1
 
 - Sửa dừng ngay sau tải voice vì câu chào “Quý vị thân mến” bị đánh dấu thiếu ngữ cảnh. Lời dẫn dùng cảnh người giới thiệu; các đoạn cắt theo dấu phẩy được xét cùng câu đầy đủ.

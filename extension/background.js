@@ -126,7 +126,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         respond(await openNextDesign(message.body,sender,token));return;
       }
       const route=popup?'ping':message.route;
-      if (!['next','checkpoint','result','voice','title','ping'].includes(route)) throw Error('Lệnh không hợp lệ');
+      if (!['next','checkpoint','result','voice','title','fallback','ping'].includes(route)) throw Error('Lệnh không hợp lệ');
       const {token,enabled} = await chrome.storage.local.get(['token','enabled']);
       if(message.type==='update_companion'){
         const data=await bridgeFetch('companion/update',{extension_id:chrome.runtime.id},token);

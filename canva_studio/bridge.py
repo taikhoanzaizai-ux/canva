@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.4.0'
+MIN_EXTENSION_VERSION='0.5.0'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -200,7 +200,12 @@ class Engine:
             else:
                 i=int(key)
                 if i not in self.state['done']:self.state['done'].append(i)
-                asset=body.get('asset')
+                completed=next((s for s in self.state['scenes'] if s['id']==i),{})
+                asset=body.get('asset') or completed.get('fallback_source',{}).get('id')
+                if completed.get('fallback_source'):
+                    sources=self.state.setdefault('sources',[])
+                    if completed['fallback_source'] not in sources:sources.append(completed['fallback_source'])
+                    atomic_json(self.folder/'Sources.json',sources)
                 if asset and asset not in self.state['used']:self.state['used'].append(asset)
                 msg=f'Đã dựng cảnh {i}/{len(self.state["scenes"])}: '+str(body.get('title',''))
             self.state['phase']={};self.running=None;self.log(msg);return dict(ok=True,handoff=key=='next_design',target=self.state['target'])
@@ -222,6 +227,18 @@ def serve(engine,port=8766):
                 if self.path=='/next':v=engine.next_task(body)
                 elif self.path=='/checkpoint':v=engine.check(body)
                 elif self.path=='/result':v=engine.result(body)
+                elif self.path=='/fallback':
+                    from .fallback import begin_fallback
+                    engine.check(body)
+                    scene=next((s for s in engine.state['scenes'] if str(s['id'])==str(body.get('id'))),None)
+                    if engine.state['mode']!='running' or not scene:raise ValueError('Không có lệnh chuẩn bị tư liệu.')
+                    with engine.lock:status=begin_fallback(engine,scene)
+                    if status.get('error'):raise ValueError(status['error'])
+                    if status.get('pending'):v=dict(pending=True)
+                    else:
+                        path=Path(scene['fallback_path']).resolve()
+                        if not path.is_relative_to((engine.folder/'Projects').resolve()) or path.suffix!='.mp4' or path.stat().st_size>30*1024*1024:raise ValueError('Tệp tư liệu không hợp lệ.')
+                        v=dict(name=path.name,mime='video/mp4',data=base64.b64encode(path.read_bytes()).decode(),asset_id=scene['fallback_source']['id'])
                 elif self.path=='/title':
                     engine.check(body)
                     scene=next((s for s in engine.state['scenes'] if str(s['id'])==str(body.get('id'))),None)
