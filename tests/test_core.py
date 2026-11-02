@@ -57,6 +57,14 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(self.e.state['done'],[])
         self.assertNotIn('error_card',self.e.state['scenes'][0])
 
+    def test_title_upload_failure_can_be_replaced_before_timeline_insertion(self):
+        self.e.state['voice_done']=True;self.e.state['scenes'][0]['kind']='title'
+        self.e.next_task(self.client);self.e.check(dict(id='1',client='A',stage='title_uploading',asset='uploaded-title.mp4'))
+        result=self.e.result(dict(id='1',client='A',error='Không thấy thẻ Tải lên để chèn cảnh'))
+        self.assertTrue(result['continuing']);self.assertEqual(self.e.state['phase'],{})
+        self.assertEqual(self.e.state['done'],[]);self.assertTrue(self.e.state['voice_done'])
+        self.assertIn('error_card',self.e.next_task(self.client)['task']['scene'])
+
     def test_error_card_failure_is_bounded_and_pause_is_respected(self):
         self.e.state['voice_done']=True;self.e.next_task(self.client)
         self.e.result(dict(id='1',client='A',error='Không thấy ô tìm kiếm'))

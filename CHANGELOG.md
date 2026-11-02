@@ -1,5 +1,9 @@
 # Các bản cập nhật
 
+## 0.6.1
+
+- Cho phép chuyển sang thẻ lỗi khi kẹt ở tải clip tiêu đề, trước khi có ý định chèn timeline; giữ 27 cảnh trước và voice trong trường hợp cảnh 28 tải tiêu đề thất bại. Tệp upload dư không được tính thành cảnh đã dựng.
+
 ## 0.6.0
 
 - Lỗi ở cảnh chưa chèn mặc định tạo clip nền đen ghi số cảnh, mốc voice và lỗi cụ thể, giữ đúng thời lượng rồi tiếp tục; không đánh dấu xong khi thẻ chưa được xác nhận trên timeline.

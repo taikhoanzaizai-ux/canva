@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.6.0'
+MIN_EXTENSION_VERSION='0.6.1'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -197,7 +197,7 @@ class Engine:
                 atomic_json(self.folder/'Errors.json',self.state['errors'])
                 # A missing/search/UI failure before insertion can be replaced safely.
                 # Never mark a gap complete, or retry a click with an uncertain outcome.
-                safe=scene and not scene.get('error_card') and not stage in ('insert_intent','inserted','trimmed','muted','title_uploading','rollback_intent') and self.state['mode']=='running'
+                safe=scene and not scene.get('error_card') and not stage in ('insert_intent','inserted','trimmed','muted','rollback_intent') and self.state['mode']=='running'
                 cancelled=any(t in detail.lower() for t in ('đã tạm dừng','phiên thao tác','mã kết nối','đã ngắt'))
                 if safe and not cancelled:
                     scene['error_card']=record;scene.pop('fallback_path',None);scene.pop('fallback_source',None)
