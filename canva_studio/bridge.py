@@ -3,8 +3,9 @@ import base64, hashlib, json, secrets, threading, time
 from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from .editorial import refine_queries
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.3.2'
+MIN_EXTENSION_VERSION='0.4.0'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -30,6 +31,7 @@ class Engine:
             try:
                 self.state.update(json.loads(self.path.read_text(encoding='utf8')))
                 repair_pending_keywords(self.state)
+                refine_queries(self.state.get('scenes',[]),max([*self.state.get('done',[]),int(self.state.get('phase',{}).get('id',0)) if str(self.state.get('phase',{}).get('id','')).isdigit() else 0]))
                 self.state['mode']='paused'; self.state['message']='Đã khôi phục dự án. Kiểm tra đúng thiết kế Canva trước khi tiếp tục.'
             except (ValueError,OSError):pass
 
@@ -188,6 +190,7 @@ class Engine:
                 if index>=len(self.state.get('parts',[])):raise ValueError('Không còn voice tiếp theo.')
                 self.state.setdefault('history',[]).append(dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration']))
                 part=self.state['parts'][index]
+                refine_queries(part['scenes'])
                 self.state.update(part_index=index,target=target,voice=part['voice'],scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
                 self.browser={};msg=f'Chuyển phần {index+1}: voice gốc từ giây {part["source_start"]:.3f}.'
             elif key=='voice':self.state['voice_done']=True;msg='Đã đặt voice trên timeline.'
@@ -217,6 +220,13 @@ def serve(engine,port=8766):
                 if self.path=='/next':v=engine.next_task(body)
                 elif self.path=='/checkpoint':v=engine.check(body)
                 elif self.path=='/result':v=engine.result(body)
+                elif self.path=='/title':
+                    engine.check(body)
+                    scene=next((s for s in engine.state['scenes'] if str(s['id'])==str(body.get('id'))),None)
+                    if engine.state['mode']!='running' or not scene or scene.get('kind')!='title':raise ValueError('Không có lệnh tải tiêu đề.')
+                    path=Path(scene['title_path']).resolve();root=(engine.folder/'Projects').resolve()
+                    if not path.is_relative_to(root) or path.suffix.lower()!='.mp4' or path.stat().st_size>12*1024*1024:raise ValueError('Tệp tiêu đề không hợp lệ.')
+                    payload=path.read_bytes();v=dict(name=path.name,mime='video/mp4',data=base64.b64encode(payload).decode())
                 elif self.path=='/voice':
                     engine.check(body)
                     if not engine.running or engine.running['id']!='voice' or engine.state['mode']!='running':raise ValueError('Không có lệnh tải voice.')

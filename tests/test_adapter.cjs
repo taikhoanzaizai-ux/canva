@@ -39,3 +39,14 @@ assert.equal(adapter.eligibleCards([{id:'unrelated',title:'Senior man cooking',d
 const scrollContainer={scrollWidth:9000,clientWidth:1500,overflowX:'auto',parentElement:null};
 const sceneNode={scrollWidth:100,clientWidth:100,overflowX:'hidden',parentElement:scrollContainer};
 assert.equal(adapter.timelineScroller({querySelector:()=>sceneNode}),scrollContainer,'Locate true scroll container instead of last virtualized scene');
+
+const queryField={value:'người cao tuổi nấu ăn',getAttribute:()=>null};
+assert(adapter.searchReady(queryField,'người cao tuổi nấu ăn',[{id:'new'}],'old',500),'No literal heading caption is needed when the result grid changes');
+assert(!adapter.searchReady(queryField,'đau đầu gối',[{id:'new'}],'old',5000),'Reject results when input is for another query');
+assert(!adapter.searchReady(queryField,queryField.value,[{id:'old'}],'old',200),'Wait for unchanged stale cards');
+assert(adapter.searchReady(queryField,queryField.value,[{id:'old'}],'old',3500),'Same query can legitimately return the same results');
+assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'}]},'video').accept,'video/mp4');
+assert.equal(adapter.eligibleCards([{id:'x',title:'Senior man smiling at home',duration:8}],{duration:3,positive:['senior'],subjects:['papaya']},[]).length,0,'Reject generic elderly footage for an explicit food subject');
+
+assert(!adapter.subjectMatch('Senior woman enjoying her day','da'),'Short Vietnamese noun must not match part of another word');
+assert(adapter.subjectMatch('Woman massaging legs','leg'),'Plural subject is accepted');

@@ -84,3 +84,9 @@ Không cần cài thêm quyền cho bản này; chỉ hoạt động trên Canva
 TỪ BẢN 0.3.2
 Nút Kết nối Canva không còn đòi tự mở tab chỉnh sửa. Nếu phần mềm đang chờ thiết kế mới, nút tự tạo Video khổ ngang, chờ trang tải và gắn bộ dựng. Nếu có link dự án, tự mở lại đúng link đó. Bấm lại sẽ dùng tab đã mở.
 Nếu chưa chọn voice/chưa bấm Bắt đầu, tiện ích chỉ xác nhận ghép nối thành công; tiếp tục từ phần mềm, không cần tạo tab thủ công.
+
+TỪ BẢN 0.4.0: TIÊU ĐỀ MỤC VÀ TỪ KHÓA CỤ THỂ
+Nạp kịch bản DOCX/TXT có tiêu đề 1. / 2. / 3. hoặc a) / b). Phần mềm đối chiếu chữ với voice và đặt clip nền đen/chữ trắng hiện dần ngay lúc đọc tiêu đề, khoảng 3 giây. Không cộng thêm thời gian vào voice. Chữ nằm trong clip MP4; không phải hộp chữ sửa trực tiếp trên Canva.
+Nếu không có kịch bản, chỉ nhận các tiêu đề số nói rõ như Một. / Hai. trong kết quả nhận diện. Tiêu đề không khớp chắc chắn sẽ không tự đặt vào mốc đoán.
+Các từ khóa không còn chỉ dựa vào người cao tuổi/sinh hoạt tại nhà; phải khớp chủ thể cụ thể. Cảnh thiếu ngữ cảnh sẽ báo cần sửa từ khóa, không tự lấp bằng hình chung chung. Chỉnh từ khóa trong danh sách cảnh để tiếp tục.
+Để thêm tiêu đề vào toàn bài: chọn voice gốc, nạp kịch bản, Phân tích & chia cảnh và dựng trên Video khổ ngang trống. Dự án đang dở vẫn giữ tiến độ nếu chỉ muốn tiếp tục và sửa lỗi tìm kiếm.

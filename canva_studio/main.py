@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
+from canva_studio.editorial import add_title_cards,render_titles
 from canva_studio.browser import open_chrome,chrome_path
 from canva_studio.batches import probe_duration, prepare_parts, cached_transcript
 from canva_studio import updater
@@ -195,8 +196,10 @@ class App:
                 seg=load_transcript(out);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,0,c['b']-c['a'],c['o'])
                 plan['source_start']=c['a']
                 for scene in plan['scenes']:scene['source_start']=round(scene['source_start']+c['a'],3)
+            plan=add_title_cards(plan,seg,c['script'],timing_offset=0 if c['transcript'] else c['a'])
+            render_titles(plan,c['ffmpeg'],job)
             parts=prepare_parts(plan,c['voice'],c['ffmpeg'],job)
-            plan={**parts[0], 'parts':parts,'original_voice':c['voice'],'script_aligned':aligned,'approximate':plan.get('approximate',False)}
+            plan={**parts[0], 'parts':parts,'original_voice':c['voice'],'script_aligned':aligned,'approximate':plan.get('approximate',False),'title_count':plan.get('title_count',0)}
             self.tasks.put(('plan',(plan,parts[0]['voice'])))
         except Exception as e:self.tasks.put(('error',str(e)))
     def populate(self):
@@ -209,7 +212,7 @@ class App:
         s=next(s for s in self.plan['scenes'] if str(s['id'])==self.tree.selection()[0])
         if s['id'] in self.engine.state['done']:return messagebox.showinfo('Cảnh đã dựng','Sửa cảnh này trực tiếp trong Canva để giữ timeline.')
         value=simpledialog.askstring('Từ khóa cảnh',s['text']+'\nMỗi từ khóa một dòng:',initialvalue='\n'.join(s['queries']))
-        if value and value.strip():s['queries']=[q.strip() for q in value.splitlines() if q.strip()];s['review']=False;self.populate();self.engine.state['scenes']=self.plan['scenes'];self.engine.save()
+        if value and value.strip():s['queries']=[q.strip() for q in value.splitlines() if q.strip()];s['review']=False;s['requires_review']=False;s.pop('subjects',None);self.populate();self.engine.state['scenes']=self.plan['scenes'];self.engine.save()
     def export_plan(self):
         if not self.plan:return
         p=filedialog.asksaveasfilename(defaultextension='.json',filetypes=[('Danh sách cảnh','*.json')]);
@@ -289,7 +292,7 @@ class App:
         if stage=='insert_intent':
             v=messagebox.askyesnocancel('Kiểm tra Canva','Cảnh đang dở đã xuất hiện ở cuối timeline chưa?\nCó: tiếp tục cắt cảnh đó.\nKhông: chỉ chọn sau khi đã xóa phần chèn dở trong Canva.\nHủy: giữ nguyên để kiểm tra thêm.')
             if v is not None:self.engine.recover('inserted' if v else 'not_inserted')
-        elif stage in ('upload_intent','export_intent'):
+        elif stage in ('upload_intent','export_intent','title_uploading'):
             if messagebox.askyesno('Kiểm tra Canva','Chỉ đặt lại sau khi đã xóa voice tải dở khỏi thiết kế, hoặc đã hủy lần xuất đang dở. Đặt lại thao tác này?'):self.engine.recover('not_inserted')
         else:messagebox.showinfo('Tiếp tục','Đã giữ tiến độ. Kiểm tra lại Canva rồi bấm Tiếp tục.')
     def show_parts(self):
@@ -312,7 +315,7 @@ class App:
                     atomic_json(archive/(uuid.uuid4().hex+'.json'),self.engine.state)
                 self.plan,clip=value;self.prepared_voice=clip;self.populate();self.target.set('')
                 self.engine.state.update(scenes=[],done=[],used=[],phase={},target='',voice='',voice_done=False,export_done=False,mode='ready');self.engine.save()
-                n=len(self.plan['scenes']);note=f'Đã chia {n} cảnh. Nhấp đúp để sửa từ khóa.'
+                n=len(self.plan['scenes']);note=f'Đã chia {n} cảnh phần đầu; {self.plan.get("title_count",0)} tiêu đề nền đen. Nhấp đúp để sửa từ khóa.'
                 if self.plan.get('approximate'):note+=' Mốc từ được ước lượng từ phụ đề; nên duyệt phần mở đầu.'
                 if self.script.get('1.0','end').strip() and not self.plan.get('script_aligned'):note+=' Chưa khớp chắc chắn kịch bản: đang dùng lời nhận diện từ voice.'
                 if self.plan.get('parts'):note+=f' Tổng {len(self.plan["parts"])} phần, tối đa 50 cảnh/phần; voice đã kiểm tra đủ thời lượng.'

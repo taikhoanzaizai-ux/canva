@@ -1,5 +1,13 @@
 # Các bản cập nhật
 
+## 0.4.0
+
+- Nhận tiêu đề mục đánh số từ kịch bản, đối chiếu mốc voice; tạo clip nền đen, chữ trắng hiện dần khoảng 3 giây. Cảnh tiêu đề thay đúng khoảng hình đã có, không kéo dài/lệch voice, vẫn tính trong giới hạn 50 cảnh.
+- Tạo và tải clip tiêu đề lên Canva bằng luồng Tải lên riêng; không chọn stock cho tiêu đề. Chữ được ghép trong clip MP4, không phải hộp chữ chỉnh sửa trên Canva.
+- Từ khóa ưu tiên chủ thể/hành động/triệu chứng trong câu và ngữ cảnh mục/câu liền kề; thêm điều kiện khớp chủ thể để loại cảnh người cao tuổi chung chung. Câu chưa đủ ngữ cảnh được đánh dấu cần kiểm tra.
+- Sửa dừng khi Canva rút gọn/thay đổi tiêu đề kết quả tìm kiếm: kiểm tra ô nhập, trạng thái tải và lưới kết quả; chỉ tự thử lại thao tác tìm kiếm, không chèn lại cảnh chưa xác nhận.
+- Khi mở dự án cũ, chỉ cải thiện từ khóa cảnh chưa làm; không chèn lại/sửa cảnh đã dựng. Muốn thêm đầy đủ cảnh chuyển mục, nạp kịch bản và phân tích lại trên thiết kế mới.
+
 ## 0.3.3
 
 - Bỏ qua dấu nghỉ rỗng có thời lượng bằng 0 do Whisper tạo, không hủy cả bài; không đổi mốc lời đọc xung quanh. Vẫn chặn đoạn có lời nhưng thời lượng bằng 0, mốc âm/không hữu hạn và chồng lấn thực sự.

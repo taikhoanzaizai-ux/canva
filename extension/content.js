@@ -20,7 +20,7 @@
         const state=await api('checkpoint',{id:task.id,...(stage?{stage,...extra}:{})});
         if(!state.continue_)throw Error('Đã tạm dừng theo yêu cầu.');
       };
-      let output=await SKSTAdapter.run(task,check,()=>api('voice',{id:task.id}));
+      let output=await SKSTAdapter.run(task,check,()=>api('voice',{id:task.id}),()=>api('title',{id:task.id}));
       if(task.kind==='next_design'){
         output=await chrome.runtime.sendMessage({type:'open_next',body:{id:task.id,client,phase:task.phase,create_url:output.create_url}});
         if(!output||output.error)throw Error(output?.error||'Chưa mở được thiết kế tiếp theo.');
