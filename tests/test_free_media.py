@@ -6,6 +6,22 @@ from canva_studio.fallback import begin_fallback
 from canva_studio.bridge import Engine
 
 class FreeMediaTests(unittest.TestCase):
+    def test_error_card_uses_error_text_and_never_searches_stock(self):
+        with tempfile.TemporaryDirectory() as d:
+            engine=Engine(d);scene=dict(id=8,start=12.14,duration=2.76,text='Lời đọc gốc',error_card=dict(start=12.14,message='Không thấy ô tìm kiếm video'))
+            captions=[]
+            def render(plan,ffmpeg,folder):
+                captions.append(plan['scenes'][0]['title_text'])
+                path=Path(folder)/'test.mp4';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'video');plan['scenes'][0]['title_path']=str(path)
+            with patch('canva_studio.fallback.prepare_external') as search,patch('canva_studio.fallback.render_titles',side_effect=render):
+                job=begin_fallback(engine,scene)
+                for _ in range(100):
+                    if not job.get('pending'):break
+                    time.sleep(.01)
+                self.assertTrue(job.get('done'));search.assert_not_called()
+                self.assertIn('LỖI CẢNH 8',captions[0]);self.assertIn('Không thấy ô tìm kiếm video',captions[0]);self.assertIn('Lời đọc gốc',captions[0])
+                self.assertEqual(scene['fallback_source']['kind'],'error_card')
+
     def test_native_pages_only_and_no_sponsored_domains(self):
         self.assertTrue(valid_page('https://www.pexels.com/video/doctor-consulting-patient-123/','pexels','video'))
         self.assertTrue(valid_page('https://pixabay.com/videos/doctor-patient-123/','pixabay','video'))

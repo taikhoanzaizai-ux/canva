@@ -1,5 +1,12 @@
 # Các bản cập nhật
 
+## 0.6.0
+
+- Lỗi ở cảnh chưa chèn mặc định tạo clip nền đen ghi số cảnh, mốc voice và lỗi cụ thể, giữ đúng thời lượng rồi tiếp tục; không đánh dấu xong khi thẻ chưa được xác nhận trên timeline.
+- Ghi lỗi theo phần/cảnh/bước tại Data/Errors.json và thêm nút Xem danh sách lỗi dựng trong Kết nối & công cụ.
+- Thay thông báo chờ Canva chung chung bằng tên ô/nút đang chờ và thời gian chờ; hiển thị lỗi kết nối ngay trên Canva.
+- Tôn trọng Tạm dừng. Nếu cảnh đã chèn dở, voice/mốc timeline chưa xác nhận, hoặc chính thẻ lỗi không chèn được, báo rõ và giữ tiến độ thay vì chèn trùng hoặc bỏ mất khoảng voice.
+
 ## 0.5.1
 
 - Sửa vòng chờ khi tab Canva chạy tiện ích cũ nhưng ứng dụng đang mở thiết kế: chuyển sang trạng thái nghỉ an toàn cho tiện ích tự nạp bản đã cập nhật, rồi nối lại đúng tab/marker và tiến độ. Tạm dừng thủ công vẫn được tôn trọng.

@@ -95,3 +95,8 @@ TỪ BẢN 0.5.0: ẢNH VÀ TƯ LIỆU DỰ PHÒNG
 Ưu tiên video Canva, sau đó ảnh Canva phù hợp. Nếu vẫn thiếu, thử video rồi ảnh từ trang công khai Pexels/Pixabay, không yêu cầu khóa API. Chỉ nhận tư liệu trên trang gốc và CDN chính thức; không lấy quảng cáo dẫn sang website khác. Nguồn và liên kết giấy phép lưu tại Data/Sources.json.
 Nếu website chặn truy cập tự động (401/403/429), phần mềm bỏ qua, không vượt chặn. Nếu không có tư liệu đạt yêu cầu, tự thiết kế thẻ nền đen/chữ trắng dùng đúng câu voice. Đây là thẻ chữ, không phải ảnh AI. Thẻ giữ nguyên thời lượng cảnh và tiến độ voice.
 Cập nhật ứng dụng, rồi bấm Cập nhật tiện ích khi đang tạm dừng; sau đó Tiếp tục. Không cần phân tích lại dự án đang dở. Việc lọc dựa trên mô tả tư liệu, vẫn cần xem lại hình trước khi xuất video.
+
+
+TỪ BẢN 0.6.0: THẺ BÁO LỖI VÀ TIẾP TỤC
+Lỗi tìm kiếm/giao diện tại cảnh chưa chèn sẽ tự chuyển thành clip nền đen ghi số cảnh, mốc voice và lỗi, rồi dựng cảnh sau. Clip báo lỗi giữ nguyên thời lượng. Danh sách lỗi: Kết nối & công cụ → Xem danh sách lỗi dựng; tệp Data/Errors.json lưu cạnh ứng dụng.
+Nếu đã chèn dở mà chưa xác nhận, mất voice/kết nối, lệch timeline hoặc không thể chèn cả thẻ lỗi, phần mềm báo rõ và giữ tiến độ để xử lý. Không đánh dấu bỏ qua một khoảng voice chưa có hình. Lệnh Tạm dừng luôn được tôn trọng.

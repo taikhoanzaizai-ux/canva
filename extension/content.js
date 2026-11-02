@@ -42,7 +42,11 @@
       }
       await api('result',{id:task.id,...output});
     }catch(e){
-      if(task){try{await api('result',{id:task.id,error:e.message});}catch{}}
+      if(task){
+        try{const result=await api('result',{id:task.id,error:e.message});
+          showStatus({mode:'attention',message:result.continuing?'Cảnh '+task.id+': '+e.message+' Đang chèn thẻ lỗi rồi tiếp tục.':e.message});
+        }catch(connectionError){showStatus({mode:'attention',message:'Mất kết nối khi báo lỗi cảnh '+task.id+': '+connectionError.message+'. Đang thử nối lại; tiến độ được giữ.'});}
+      }else showStatus({mode:'attention',message:'Chưa nhận được lệnh dựng: '+e.message+'. Đang thử kết nối lại.'});
       // Connection loss never causes an implicit duplicate click. Server retains phase.
     }finally{busy=false;}
   }

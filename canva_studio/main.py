@@ -78,6 +78,7 @@ class App:
         ttk.Label(settings,text='Cập nhật GitHub bao gồm tiện ích trong TienIch_Canva. Cài thư mục này một lần; các bản sau tiện ích tự nạp lại khi không dựng.',wraplength=950).pack(anchor='w',pady=5)
         ttk.Label(settings,text='Thư mục dữ liệu portable: '+str(DATA),wraplength=950).pack(anchor='w',pady=5)
         ttk.Button(settings,text='Mở thư mục dữ liệu',command=lambda:os.startfile(str(DATA))).pack(anchor='w',pady=3)
+        ttk.Button(settings,text='Xem danh sách lỗi dựng',command=self.show_errors).pack(anchor='w',pady=3)
         ttk.Label(settings,text='Nhận diện voice trên máy bằng Whisper',font=('Segoe UI',13,'bold')).pack(anchor='w',pady=(20,8))
         self.python=tk.StringVar(value=self.settings.get('python',self.detect_python()));self.model=tk.StringVar(value=self.settings.get('model',self.detect_model()));self.ffmpeg=tk.StringVar(value=self.settings.get('ffmpeg',self.detect_ffmpeg()))
         for label,var in [('Python có Whisper',self.python),('Mô hình Whisper (.pt)',self.model),('FFmpeg (.exe)',self.ffmpeg)]:
@@ -301,6 +302,16 @@ class App:
         elif stage in ('upload_intent','export_intent','title_uploading'):
             if messagebox.askyesno('Kiểm tra Canva','Chỉ đặt lại sau khi đã xóa voice tải dở khỏi thiết kế, hoặc đã hủy lần xuất đang dở. Đặt lại thao tác này?'):self.engine.recover('not_inserted')
         else:messagebox.showinfo('Tiếp tục','Đã giữ tiến độ. Kiểm tra lại Canva rồi bấm Tiếp tục.')
+    def show_errors(self):
+        rows=self.engine.state.get('errors',[])
+        if not rows:messagebox.showinfo('Lỗi dựng','Chưa ghi nhận lỗi trong dự án này.');return
+        window=tk.Toplevel(self.root);window.title('Các vị trí cần sửa sau khi dựng');window.geometry('850x460')
+        field=tk.Text(window,wrap='word',font=('Segoe UI',11),padx=12,pady=12);field.pack(fill='both',expand=True)
+        for row in rows:
+            stamp=f"{row['start']:.2f} giây" if row.get('start') is not None else 'Tác vụ chung'
+            field.insert('end',f"Phần {row['part']} • Cảnh/tác vụ {row['id']} • {stamp}\nBước: {row['stage']}\n{row['message']}\n\n")
+        field.configure(state='disabled')
+
     def show_parts(self):
         st=self.engine.state;history=st.get('history',[])
         rows=[f"Phần {i+1} • voice gốc {p['source_start']:.3f} → {p['source_start']+p['duration']:.3f} giây\n{p['target']}" for i,p in enumerate(history)]

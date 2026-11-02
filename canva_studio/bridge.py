@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.5.1'
+MIN_EXTENSION_VERSION='0.6.0'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -189,7 +189,24 @@ class Engine:
         with self.lock:
             if not self.running or self.running['id']!=str(body.get('id')) or self.running['client']!=body.get('client'):raise ValueError('Kết quả không thuộc phiên đang chạy.')
             if body.get('error'):
-                self.state['mode']='attention';self.running=None;self.log('Cần kiểm tra: '+str(body['error'])[:1200]);return dict(ok=True)
+                key=str(body['id']);scene=next((s for s in self.state['scenes'] if str(s['id'])==key),None)
+                phase=self.state.get('phase',{});stage=phase.get('stage','chưa chèn cảnh')
+                detail=str(body['error'])[:600]
+                record=dict(id=key,part=self.state.get('part_index',0)+1,start=scene.get('source_start',scene['start']) if scene else None,duration=scene.get('duration') if scene else None,stage=stage,message=detail,target=self.state['target'])
+                self.state.setdefault('errors',[]).append(record)
+                atomic_json(self.folder/'Errors.json',self.state['errors'])
+                # A missing/search/UI failure before insertion can be replaced safely.
+                # Never mark a gap complete, or retry a click with an uncertain outcome.
+                safe=scene and not scene.get('error_card') and not stage in ('insert_intent','inserted','trimmed','muted','title_uploading','rollback_intent') and self.state['mode']=='running'
+                cancelled=any(t in detail.lower() for t in ('đã tạm dừng','phiên thao tác','mã kết nối','đã ngắt'))
+                if safe and not cancelled:
+                    scene['error_card']=record;scene.pop('fallback_path',None);scene.pop('fallback_source',None)
+                    self.state['phase']={};self.running=None
+                    self.log(f'Cảnh {key} lỗi: {detail}. Đang tạo thẻ báo lỗi đúng thời lượng rồi tiếp tục.')
+                    return dict(ok=True,continuing=True)
+                self.state['mode']='paused' if cancelled else 'attention';self.running=None
+                self.log(f'Cảnh/tác vụ {key} • bước {stage}: {detail}. Chưa thể chèn thẻ lỗi vì chưa xác nhận được trạng thái timeline.' if not cancelled else detail)
+                return dict(ok=True)
             key=str(body['id'])
             if key=='audit':
                 scenes=self.state['scenes'];duration=round(scenes[-1]['start']+scenes[-1]['duration'],3)

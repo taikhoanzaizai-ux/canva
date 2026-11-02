@@ -17,7 +17,7 @@
   const wait=async(fn,message='Canva chưa sẵn sàng',ms=16000)=>{
     const deadline=Date.now()+ms;
     while(Date.now()<deadline){await guard();const v=fn();if(v)return v;await sleep(250);}
-    throw Error(message+'. Ứng dụng đã dừng để giữ nguyên tiến độ.');
+    throw Error('Hết thời gian chờ: '+message+' ('+Math.round(ms/1000)+' giây).');
   };
   const click=async(e)=>{await guard();if(!e)throw Error('Không tìm thấy nút thao tác');e.scrollIntoView({block:'nearest',inline:'nearest'});e.click();await sleep(250);};
   const fill=(el,value)=>{
@@ -150,10 +150,10 @@
     if(scene.requires_review)throw Error('Cảnh chưa đủ ngữ cảnh để chọn hình chính xác: '+scene.text+'. Hãy sửa từ khóa cụ thể trong danh sách cảnh.');
     for(const query of scene.queries){
       for(let attempt=0;attempt<2;attempt++){
-        const input=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'));
+        const input=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'),'Không thấy ô tìm kiếm video khi đổi từ khóa');
         const previous=cards().map(c=>c.id).join('|');
         fill(input,query);await sleep(350);await guard();
-        const liveInput=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'));
+        const liveInput=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'),'Không thấy ô tìm kiếm video khi đổi từ khóa');
         key(liveInput,'Enter');const started=Date.now();let settled=false;
         for(let poll=0;poll<60;poll++){
           await guard();await sleep(250);
@@ -182,7 +182,7 @@
     const inputFn=()=>[...document.querySelectorAll('input')].find(e=>visible(e)&&/^Tìm kiếm.*Ảnh/.test(e.getAttribute('aria-label')||''));
     for(const query of scene.queries){
       const input=await wait(inputFn,'Không thấy ô tìm kiếm ảnh');fill(input,query);await sleep(350);
-      key(await wait(inputFn),'Enter');await sleep(2200);
+      key(await wait(inputFn,'Không thấy ô tìm kiếm ảnh sau khi nhập'),'Enter');await sleep(2200);
       for(let page=0;page<4;page++){
         await guard();const candidates=eligibleCards(photoCards(),scene,used);
         if(candidates.length)return candidates[0];
@@ -288,8 +288,8 @@
       }
       await wait(uploaded,'Chưa tải xong video tiêu đề',90000);
       await prepareUpload(s);
-      await click(await wait(()=>find('Tải lên','[role="tab"]')));
-      await click(await wait(()=>uploadedVideoTab()));
+      await click(await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy thẻ Tải lên để chèn cảnh'));
+      await click(await wait(()=>uploadedVideoTab(),'Không thấy thẻ Video trong Tải lên'));
       const card=await wait(()=>find(new RegExp(titleName)),'Không thấy video tiêu đề vừa tải');
       await checkpoint('insert_intent',{asset:raw.name,title:s.title_text});await click(card);
       await wait(()=>find(/^Xén video dài/),'Chưa chèn được video tiêu đề');
@@ -349,6 +349,7 @@
   globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,searchReady,timelineScroller,timeline,cards,photoCards,uploadInput,uploadedVideoTab,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=(stage,extra={})=>check(stage,extra);
+    if(task.kind==='scene'&&task.scene.error_card)return titleTask({...task,scene:{...task.scene,title_text:'LỖI CẢNH '+task.id}},checkpoint,fallbackAsset);
     if(task.kind==='scene')return task.scene.kind==='title'?titleTask(task,checkpoint,titleAsset):sceneTask(task,checkpoint,fallbackAsset);
     if(task.kind==='voice')return voiceTask(task,checkpoint,voice);
     if(task.kind==='audit')return auditTask(task);

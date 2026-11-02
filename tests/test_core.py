@@ -39,6 +39,30 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_scene_error_schedules_visible_card_without_skipping_voice_time(self):
+        self.e.state['voice_done']=True;self.e.next_task(self.client)
+        response=self.e.result(dict(id='1',client='A',error='Hết thời gian chờ: ô tìm kiếm video (16 giây).'))
+        self.assertTrue(response['continuing']);self.assertEqual(self.e.state['mode'],'running')
+        self.assertEqual(self.e.state['done'],[])
+        task=self.e.next_task(self.client)['task']
+        self.assertIn('error_card',task['scene']);self.assertEqual(task['scene']['duration'],4)
+        self.assertTrue((Path(self.tmp.name)/'Errors.json').is_file())
+        self.e.result(dict(id='1',client='A',title='LỖI CẢNH 1'))
+        self.assertEqual(self.e.state['done'],[1])
+
+    def test_uncertain_insertion_is_never_silently_skipped(self):
+        self.e.state['voice_done']=True;self.e.next_task(self.client)
+        self.e.check(dict(id='1',client='A',stage='insert_intent'))
+        self.e.result(dict(id='1',client='A',error='Chưa chèn được cảnh'))
+        self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(self.e.state['done'],[])
+        self.assertNotIn('error_card',self.e.state['scenes'][0])
+
+    def test_error_card_failure_is_bounded_and_pause_is_respected(self):
+        self.e.state['voice_done']=True;self.e.next_task(self.client)
+        self.e.result(dict(id='1',client='A',error='Không thấy ô tìm kiếm'))
+        self.e.next_task(self.client);self.e.result(dict(id='1',client='A',error='Không thấy Tải lên'))
+        self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(len(self.e.state['errors']),2)
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.e=Engine(self.tmp.name)
         self.e.configure(dict(scenes=[dict(id=1,start=0,duration=4,text='test',queries=['test'])]),'https://www.canva.com/design/abc/def/edit','voice.mp3')
