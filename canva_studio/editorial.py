@@ -1,9 +1,15 @@
 """Script headings, time-preserving title cards, and concrete visual search intent."""
-import copy,difflib,re,unicodedata
+import copy,difflib,re,unicodedata,zipfile
+from xml.etree.ElementTree import ParseError
 from .core import describe,norm
 
 # Ordered rules: specific food/preparation and symptoms beat broad organ terms.
 RULES=[
+ ('nước chanh|nước tranh|vỏ tranh|vỏ chanh|vỏ quýt|vỏ quyết|chanh|quýt',['tay vắt chanh pha nước','tay gọt vỏ quýt cam','hands squeezing lemon peeling citrus'],['lemon','lime','citrus','orange','chanh','quýt'],['hands','squeeze','peel','drink','tay','vắt','gọt','uống']),
+ ('rau xanh|thực phẩm màu xanh|thực phẩm màu săng|màu xanh vị chua',['người sơ chế rau xanh trong bếp','tay rửa rau xanh làm salad','hands washing green vegetables salad'],['vegetable','greens','salad','rau'],['wash','prepare','eat','rửa','sơ chế','ăn']),
+ ('thảo dược|trà thảo mộc',['người pha trà thảo mộc','tay pha trà thảo dược','person preparing herbal tea'],['herbal','tea','herb','trà','thảo dược'],['brew','prepar','drink','pha','uống']),
+ ('quý vị thân mến|quý vị và các bạn|kính thưa|chào mừng|thưa quý vị',['bác sĩ nói chuyện trước máy quay','người dẫn chương trình sức khỏe','doctor presenter speaking camera'],['doctor','presenter','host','bác sĩ'],['talk','speak','giới thiệu','nói']),
+ ('ô nhiễm|khói bụi|khói bội|không khí bẩn',['người đeo khẩu trang đi ngoài đường ô nhiễm','người đeo khẩu trang giữa xe cộ','person wearing mask city pollution traffic'],['mask','pollution','khẩu trang','ô nhiễm'],['wear','city','traffic','đeo','đường']),
  ('kính chào|xin chào|chương trình|sống khỏe|sống tốt',['người dẫn chương trình sức khỏe','bác sĩ giới thiệu sức khỏe trước máy quay','doctor presenter speaking camera'],['presenter','host','doctor','bác sĩ'],['talk','speak','giới thiệu','nói']),
  ('cánh bướm|cánh bướng|bương bướng|ngồi xếp chân|baddha|konasana|bắt đa',['người tập yoga tư thế cánh bướm','người ngồi giãn cơ hông','butterfly pose baddha konasana'],['butterfly','baddha','bound angle','cánh bướm','seated','sitting'],['yoga','stretch','giãn','ngồi']),
  ('hối hả|hối hạ|bận rộn|áp lực|thách thức',['người trung niên bận rộn làm việc','người làm việc căng thẳng tại bàn','middle aged person busy working desk'],['work','desk','office','làm việc','bàn'],['busy','work','stress','bận','căng thẳng','làm việc']),
@@ -14,7 +20,7 @@ RULES=[
  ('rửa|sơ chế|cắt miếng|gọt vỏ',['tay rửa rau củ sơ chế','tay gọt cắt rau củ trong bếp','hands washing chopping vegetables'],['vegetable','food','rau','củ'],['wash','cut','peel','chop','rửa','gọt','cắt']),
  ('nồi hầm|hầm|đun|nấu|món ăn',['người nấu ăn tại nhà','tay khuấy nồi canh trên bếp','hands cooking soup pot'],['cooking','soup','pot','nấu','canh','nồi'],['hands','stir','prepare','tay','khuấy']),
  ('ngủ|mất ngủ|giấc ngủ',['người cao tuổi ngủ trên giường','người cao tuổi mất ngủ ban đêm','senior sleeping insomnia in bed'],['sleep','bed','ngủ','giường'],['senior','elderly','cao tuổi']),
- ('gan|thận|lòng mạch',['bác sĩ tư vấn kết quả khám cho người cao tuổi','người cao tuổi khám sức khỏe','doctor explaining health results to elderly patient'],['doctor','patient','bác sĩ','bệnh nhân'],['explain','consult','examination','tư vấn','khám']),
+ ('gan|thận|lòng mạch|thải độc|thanh lọc|nhiễm độc|nhiễm động|cơ quan|tạng',['bác sĩ tư vấn kết quả khám cho người cao tuổi','người cao tuổi khám sức khỏe','doctor explaining health results to elderly patient'],['doctor','patient','bác sĩ','bệnh nhân'],['explain','consult','examination','tư vấn','khám']),
  ('làn da|lão hóa|da mặt',['phụ nữ lớn tuổi chăm sóc da mặt','người phụ nữ soi gương chăm sóc da','mature woman skincare face mirror'],['skin','face','da','mặt'],['care','mirror','cream','chăm sóc','gương']),
 ]
 
@@ -24,13 +30,26 @@ def rule_for(text):
         if any(re.search(r'(?<!\w)'+re.escape(w)+r'(?!\w)',t) for w in pattern.split('|')):return queries,subjects,actions
     return None
 
+def sentence_context(scenes,index):
+    """Comma cuts are editing boundaries, not separate semantic sentences."""
+    left=index
+    while left>0 and index-left<8:
+        if re.search(r'[.!?…]\s*$',scenes[left-1].get('text','')):break
+        left-=1
+    right=index
+    while right+1<len(scenes) and right-index<8:
+        if re.search(r'[.!?…]\s*$',scenes[right].get('text','')):break
+        right+=1
+    return ' '.join(s.get('text','') for s in scenes[left:right+1])
+
 def refine_queries(scenes,preserve_before=0):
     for i,scene in enumerate(scenes):
         if scene['id']<=preserve_before or scene.get('kind')=='title':continue
         # Respect manually edited query lists; generated fallback is explicitly review=True.
-        if not scene.get('review') and scene.get('queries')!=describe(scene.get('text',''))['queries']:continue
+        generated=scene.get('queries')==describe(scene.get('text',''))['queries'] or any(scene.get('queries')==r[1] for r in RULES)
+        if scene.get('manual_queries') or (not scene.get('review') and not generated):continue
         direct=rule_for(scene.get('text',''))
-        context=scene.get('section_title','')+' '+(' '.join(s.get('text','') for s in scenes[max(0,i-1):i+2]))
+        context=scene.get('section_title','')+' '+sentence_context(scenes,i)
         rule=direct or rule_for(context)
         if not rule:
             for nearby in reversed(scenes[max(0,i-6):i]):
@@ -43,7 +62,7 @@ def refine_queries(scenes,preserve_before=0):
             base=describe(scene.get('text',''))
             # Do not accept an elderly/home match alone as proof of relevance.
             subjects=[w for w in base['positive'] if norm(w) not in {'senior','elderly','home','cao tuoi'}]
-            if subjects:scene.update(subjects=subjects,query_basis='chủ đề cụ thể')
+            if subjects:scene.update(subjects=subjects,query_basis='chủ đề cụ thể',requires_review=False)
             else:scene.update(review=True,requires_review=True,query_basis='cần kiểm tra từ khóa')
     return scenes
 
@@ -144,3 +163,36 @@ def render_titles(plan,ffmpeg,folder,font=None):
         subprocess.run([str(ffmpeg),'-v','error','-y','-f','lavfi','-i','color=c=black:s=1920x1080:r=30','-vf',filters,'-t',str(scene['duration']),'-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p',str(video.resolve())],cwd=folder,check=True,capture_output=True,creationflags=0x08000000 if os.name=='nt' else 0)
         scene['title_path']=str(video.resolve())
     return plan
+
+
+def neighboring_script(voice):
+    from pathlib import Path
+    candidates=list(Path(voice).parent.glob('*.docx'))
+    return candidates[0] if len(candidates)==1 else None
+
+
+def repair_scene_texts(state):
+    """Restore pending captions from the sole neighboring script, never retime scenes."""
+    from pathlib import Path
+    from .core import read_script,load_transcript,align_script
+    source=state.get('original_voice')
+    if not source:return 0
+    script=neighboring_script(source)
+    transcript=Path(state.get('voice','')).parent/'transcript.json'
+    if not script or not transcript.is_file():return 0
+    try:
+        segments,aligned=align_script(load_transcript(transcript),read_script(script))
+    except (OSError,ValueError,KeyError,TypeError,zipfile.BadZipFile,ParseError):return 0
+    if not aligned:return 0
+    parts=state.get('parts',[]);offset=parts[0].get('source_start',0) if parts else 0
+    pending=str(state.get('phase',{}).get('id',''));changed=0
+    words=[w for seg in segments for w in seg.get('words',[])]
+    for scene in state.get('scenes',[]):
+        if scene['id'] in state.get('done',[]) or str(scene['id'])==pending or scene.get('kind')=='title' or scene.get('manual_queries'):continue
+        generated=scene.get('review') or scene.get('query_basis') or scene.get('queries')==describe(scene.get('text',''))['queries']
+        if not generated:continue
+        a=scene.get('source_start',scene['start']);b=a+scene['duration']
+        text=' '.join(w['word'] for w in words if a-.03<=float(w['start'])+offset<b-.001).strip()
+        if text and text!=scene.get('text'):
+            scene.update(text=text,**describe(text));scene.pop('subjects',None);scene.pop('actions',None);scene['requires_review']=False;changed+=1
+    return changed

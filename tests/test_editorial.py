@@ -43,3 +43,40 @@ class EditorialTests(unittest.TestCase):
         rows=[dict(id=1,text='bài tập ngồi xếp chân cánh bướng',**describe('bài tập ngồi xếp chân cánh bướng')),dict(id=2,text='đồng tác này được mệnh danh là liều thuốc bổ tự nhiên',**describe('đồng tác này được mệnh danh là liều thuốc bổ tự nhiên'))]
         refine_queries(rows)
         self.assertIn('butterfly',rows[1]['subjects']);self.assertFalse(rows[1].get('requires_review'))
+
+    def test_greeting_and_comma_fragments_do_not_block_first_scene(self):
+        texts=['Quý vị thân mến,','mỗi ngày trôi qua,','cơ thể chúng ta phải tiếp xúc với nhiều tác nhân.','Từ không khí ô nhiễm,','khói bụi,','cho đến căng thẳng thần kinh.']
+        rows=[dict(id=i+1,text=t,**describe(t)) for i,t in enumerate(texts)]
+        refine_queries(rows)
+        self.assertTrue(all(not r.get('requires_review') for r in rows))
+        self.assertIn('doctor',rows[0]['subjects']);self.assertIn('mask',rows[3]['subjects'])
+    def test_manual_keyword_flag_survives_future_reclassification(self):
+        row=dict(id=1,text='Quý vị thân mến',queries=['doctor presenter speaking camera'],positive=['doctor'],manual_queries=True,review=True)
+        before=copy.deepcopy(row);refine_queries([row]);self.assertEqual(row,before)
+    def test_old_block_flag_clears_when_topic_becomes_concrete(self):
+        row=dict(id=1,text='nhón gót chân',requires_review=True,**describe('nhón gót chân'))
+        refine_queries([row]);self.assertFalse(row.get('requires_review'))
+
+    def test_pending_text_repair_keeps_done_voice_and_timestamps(self):
+        import tempfile,json
+        from pathlib import Path
+        from unittest.mock import patch
+        from canva_studio.editorial import repair_scene_texts
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);voice=root/'part.wav';voice.write_bytes(b'')
+            (root/'transcript.json').write_text('{}')
+            rows=[dict(id=1,start=0,source_start=0,duration=1,text='old done',queries=['x']),dict(id=2,start=1,source_start=1,duration=1,text='nước tranh',**describe('nước tranh'))]
+            state=dict(scenes=rows,done=[1],phase={},original_voice=str(root/'source.mp3'),voice=str(voice),voice_done=True)
+            segments=[dict(words=[dict(word='nước',start=1,end=1.5),dict(word='chanh',start=1.5,end=2)])]
+            with patch('canva_studio.editorial.neighboring_script',return_value=root/'script.docx'),patch('canva_studio.core.read_script',return_value='script'),patch('canva_studio.core.load_transcript',return_value=[]),patch('canva_studio.core.align_script',return_value=(segments,True)):
+                self.assertEqual(repair_scene_texts(state),1)
+            self.assertEqual(rows[0]['text'],'old done');self.assertEqual(rows[1]['text'],'nước chanh')
+            self.assertEqual(rows[1]['start'],1);self.assertEqual(rows[1]['duration'],1);self.assertTrue(state['voice_done'])
+    def test_script_auto_selection_is_unambiguous(self):
+        import tempfile
+        from pathlib import Path
+        from canva_studio.editorial import neighboring_script
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);voice=root/'source.mp3';self.assertIsNone(neighboring_script(voice))
+            (root/'one.docx').touch();self.assertEqual(neighboring_script(voice),root/'one.docx')
+            (root/'two.docx').touch();self.assertIsNone(neighboring_script(voice))

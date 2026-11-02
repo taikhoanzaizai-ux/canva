@@ -1,5 +1,13 @@
 # Các bản cập nhật
 
+## 0.4.1
+
+- Sửa dừng ngay sau tải voice vì câu chào “Quý vị thân mến” bị đánh dấu thiếu ngữ cảnh. Lời dẫn dùng cảnh người giới thiệu; các đoạn cắt theo dấu phẩy được xét cùng câu đầy đủ.
+- Khi thư mục voice có đúng một DOCX, tự đối chiếu kịch bản để sửa chữ nhận diện sai ở cảnh chưa dựng; giữ nguyên mốc thời gian, cảnh xong và voice đã tải. Nếu có nhiều kịch bản, không tự đoán.
+- Xóa cờ chặn cũ khi đã tìm được chủ đề cụ thể; cập nhật lại từ khóa do phần mềm sinh, giữ từ khóa người dùng tự chỉnh.
+- Hiện lý do tạm dừng ngay trên Canva để phân biệt lỗi/chờ với treo; thông báo tự ẩn khi tiếp tục.
+- Giữ voice và tiến độ đã lưu, không cần phân tích hay tải voice lại cho bản sửa này.
+
 ## 0.4.0
 
 - Nhận tiêu đề mục đánh số từ kịch bản, đối chiếu mốc voice; tạo clip nền đen, chữ trắng hiện dần khoảng 3 giây. Cảnh tiêu đề thay đúng khoảng hình đã có, không kéo dài/lệch voice, vẫn tính trong giới hạn 50 cảnh.

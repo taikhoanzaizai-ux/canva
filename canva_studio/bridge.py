@@ -3,7 +3,7 @@ import base64, hashlib, json, secrets, threading, time
 from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from .editorial import refine_queries
+from .editorial import refine_queries,repair_scene_texts
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
 MIN_EXTENSION_VERSION='0.4.0'
 
@@ -30,6 +30,7 @@ class Engine:
         if self.path.exists():
             try:
                 self.state.update(json.loads(self.path.read_text(encoding='utf8')))
+                repair_scene_texts(self.state)
                 repair_pending_keywords(self.state)
                 refine_queries(self.state.get('scenes',[]),max([*self.state.get('done',[]),int(self.state.get('phase',{}).get('id',0)) if str(self.state.get('phase',{}).get('id','')).isdigit() else 0]))
                 self.state['mode']='paused'; self.state['message']='Đã khôi phục dự án. Kiểm tra đúng thiết kế Canva trước khi tiếp tục.'
@@ -142,7 +143,7 @@ class Engine:
                 return dict(task=None,mode='extension_outdated')
             if self.state['mode']=='opening_resume':
                 self.state['mode']='running';self.last_activity=now;self.log('Đã nối lại Chrome. Tiếp tục tiến độ đã lưu.')
-            if self.state['mode']!='running':return dict(task=None,mode=self.state['mode'])
+            if self.state['mode']!='running':return dict(task=None,mode=self.state['mode'],message=self.state['message'])
             old=self.browser
             if old and old.get('client')!=body.get('client') and time.time()-old.get('seen',0)<15:
                 return dict(task=None,mode='other_client')
@@ -192,6 +193,7 @@ class Engine:
                 part=self.state['parts'][index]
                 refine_queries(part['scenes'])
                 self.state.update(part_index=index,target=target,voice=part['voice'],scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
+                repair_scene_texts(self.state);refine_queries(self.state['scenes'])
                 self.browser={};msg=f'Chuyển phần {index+1}: voice gốc từ giây {part["source_start"]:.3f}.'
             elif key=='voice':self.state['voice_done']=True;msg='Đã đặt voice trên timeline.'
             elif key=='export':self.state['export_done']=True;self.state['mode']='complete';msg='Đã gửi lệnh xuất MP4 trong Canva. Theo dõi tải xuống trong trình duyệt.'

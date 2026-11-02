@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
-from canva_studio.editorial import add_title_cards,render_titles
+from canva_studio.editorial import add_title_cards,render_titles,neighboring_script
 from canva_studio.browser import open_chrome,chrome_path
 from canva_studio.batches import probe_duration, prepare_parts, cached_transcript
 from canva_studio import updater
@@ -169,6 +169,12 @@ class App:
             if not Path(self.ffmpeg.get()).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ.')
             if not self.transcript.get() and (not Path(self.python.get()).is_file() or not Path(self.model.get()).is_file()):raise ValueError('Cần Python có Whisper và mô hình, hoặc chọn JSON/SRT đã có mốc thời gian.')
         except Exception as e:return messagebox.showerror('Chưa đủ dữ liệu',str(e))
+        try:
+            if not self.script.get('1.0','end').strip():
+                nearby=neighboring_script(self.voice.get())
+                if nearby:
+                    self.script_path.set(str(nearby));self.script.insert('1.0',read_script(nearby))
+        except Exception as e:return messagebox.showerror('Không đọc được kịch bản',str(e))
         self.save_settings();self.worker_busy=True;self.plan_button.configure(state='disabled');self.notice.set('Đang nhận diện voice trên máy. Có thể mất vài phút…')
         inputs=dict(a=a,b=b,o=o,voice=self.voice.get(),ffmpeg=self.ffmpeg.get(),python=self.python.get(),model=self.model.get(),transcript=self.transcript.get(),script=self.script.get('1.0','end').strip())
         threading.Thread(target=self.analyze_worker,args=(inputs,),daemon=True).start()
@@ -212,7 +218,7 @@ class App:
         s=next(s for s in self.plan['scenes'] if str(s['id'])==self.tree.selection()[0])
         if s['id'] in self.engine.state['done']:return messagebox.showinfo('Cảnh đã dựng','Sửa cảnh này trực tiếp trong Canva để giữ timeline.')
         value=simpledialog.askstring('Từ khóa cảnh',s['text']+'\nMỗi từ khóa một dòng:',initialvalue='\n'.join(s['queries']))
-        if value and value.strip():s['queries']=[q.strip() for q in value.splitlines() if q.strip()];s['review']=False;s['requires_review']=False;s.pop('subjects',None);self.populate();self.engine.state['scenes']=self.plan['scenes'];self.engine.save()
+        if value and value.strip():s['queries']=[q.strip() for q in value.splitlines() if q.strip()];s['review']=False;s['requires_review']=False;s['manual_queries']=True;s.pop('subjects',None);s.pop('actions',None);self.populate();self.engine.state['scenes']=self.plan['scenes'];self.engine.save()
     def export_plan(self):
         if not self.plan:return
         p=filedialog.asksaveasfilename(defaultextension='.json',filetypes=[('Danh sách cảnh','*.json')]);
