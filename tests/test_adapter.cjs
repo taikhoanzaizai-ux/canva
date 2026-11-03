@@ -161,3 +161,18 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
  offset=1000000;await assert.rejects(()=>env.globalThis.SKSTAdapter.auditTask(task),/giây 0/);
  offset=0;name='SKST_voice_wrong.wav';await assert.rejects(()=>env.globalThis.SKSTAdapter.auditTask(task),/voice trên timeline/);
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+(async()=>{
+ let title='Thiết kế không tên - Video',value='Thiết kế không tên - Video',commits=0;
+ class Input{get value(){return value;}set value(v){value=v;}getAttribute(k){return k==='aria-label'?'Tên thiết kế':null;}focus(){}blur(){title=value+' - Canva';commits++;}dispatchEvent(){}get offsetWidth(){return 100;}}
+ class Textarea{}
+ const input=new Input();
+ const document={get title(){return title;},querySelectorAll:s=>s.startsWith('input,textarea')?[input]:[]};
+ const env={globalThis:{},document,HTMLInputElement:Input,HTMLTextAreaElement:Textarea,KeyboardEvent:class{},Event:class{},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ let checks=0;
+ const result=await env.globalThis.SKSTAdapter.run({kind:'rename',design_name:'Bài 1.2'},async()=>{checks++;});
+ assert.equal(result.design_name,'Bài 1.2');assert.equal(value,'Bài 1.2');assert.equal(commits,1);assert(checks>0,'Rename obeys the pause/session guard');
+ const again=await env.globalThis.SKSTAdapter.run({kind:'rename',design_name:'Bài 1.2'},async()=>{});
+ assert.equal(again.design_name,'Bài 1.2');assert.equal(value,'Bài 1.2','Resuming never appends a second part suffix');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -4,6 +4,13 @@ from canva_studio.core import make_plan,describe,load_transcript,align_script,va
 from canva_studio.bridge import Engine,serve,MIN_EXTENSION_VERSION
 
 class PlannerTests(unittest.TestCase):
+    def test_project_titles_use_base_name_then_numbered_parts(self):
+        from canva_studio.core import project_title
+        self.assertEqual([project_title('Bài 1',i) for i in range(3)],['Bài 1','Bài 1.2','Bài 1.3'])
+        self.assertEqual(project_title('Bài 1',9),'Bài 1.10')
+        self.assertEqual(project_title('',2),'')
+        self.assertEqual(project_title('  Bài   1  ',0),'Bài 1')
+        with self.assertRaises(ValueError):project_title('x'*181)
     def test_continuous_and_max_duration(self):
         words=[dict(word=t,start=i*.43,end=(i+1)*.43) for i,t in enumerate(('Sáng thức dậy, chân nặng trĩu, thắt lưng ê ẩm, đầu óc lờ đờ. '*20).split())]
         result=make_plan([dict(start=0,end=words[-1]['end'],words=words)],end=100)
@@ -39,6 +46,35 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_name_is_saved_and_rename_preserves_scene_checkpoint(self):
+        self.e.pause();self.e.set_project_name('Bài 1')
+        self.e.state.update(voice_done=True,phase=dict(id='1',stage='inserted'));self.e.save()
+        restored=Engine(self.tmp.name);restored.start()
+        task=restored.next_task(self.client)['task']
+        self.assertEqual(task['kind'],'rename');self.assertEqual(task['design_name'],'Bài 1')
+        restored.result(dict(id='rename',client='A',design_name='Bài 1'))
+        self.assertEqual(restored.state['done'],[])
+        task=restored.next_task(self.client)['task'];self.assertEqual(task['id'],'1');self.assertEqual(task['phase']['stage'],'inserted')
+        restored.pause();again=Engine(self.tmp.name);again.start()
+        self.assertEqual(again.next_task(self.client)['task']['id'],'1')
+
+    def test_each_new_part_is_named_from_original_base(self):
+        self.e.pause();self.e.set_project_name('Bài 1');self.e.start()
+        task=self.e.next_task(self.client)['task'];self.e.result(dict(id='rename',client='A',design_name=task['design_name']))
+        self.e.state['parts']=[dict(source_start=0,duration=4)]+[dict(source_start=i*4,duration=4,voice=f'part{i+1}.wav',scenes=[dict(id=1,start=0,duration=4,text='test',queries=['test'])]) for i in (1,2)]
+        client=dict(self.client)
+        for index in (1,2):
+            self.e.state.update(voice_done=True,done=[1],audit_done=True)
+            self.assertEqual(self.e.next_task(client)['task']['id'],'next_design')
+            client['url']=f'https://www.canva.com/design/part{index+1}/token/edit'
+            self.e.result(dict(id='next_design',client='A',new_target=client['url']))
+            task=self.e.next_task(client)['task']
+            self.assertEqual(task['design_name'],f'Bài 1.{index+1}')
+            self.e.result(dict(id='rename',client='A',design_name=task['design_name']))
+            self.assertEqual(self.e.next_task(client)['task']['kind'],'voice')
+            self.e.running=None
+        self.assertEqual(self.e.state['project_name'],'Bài 1')
+
     def test_error_image_endpoint_needs_no_ffmpeg_and_keeps_exact_time(self):
         self.e.state['voice_done']=True;self.e.next_task(self.client)
         self.e.result(dict(id='1',client='A',error='80%: không tìm được tư liệu'))

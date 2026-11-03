@@ -1,5 +1,12 @@
 # Các bản cập nhật
 
+## 0.10.1
+
+- Thêm ô Tên dự án / tên trên Canva, lưu cùng tiến độ và khôi phục khi mở lại. Để trống thì giữ cách đặt tên mặc định của Canva.
+- Tự đổi tên thiết kế trước khi dựng: tên gốc ở phần đầu, phần sau thêm .2, .3… vào tên gốc (ví dụ Bài 1, Bài 1.2, Bài 1.3). Không thêm .1 hoặc nối số lặp khi tiếp tục.
+- Đổi tên dự án đang tạm dừng không xóa cảnh đã dựng, voice hoặc mốc thao tác đang dở; khóa ô tên khi đang chạy để tránh đổi nhầm giữa chừng.
+- Kiểm tra ô nhập, tên lưu trên máy và quy tắc đánh số trong bản Windows đóng gói.
+
 ## 0.10.0
 
 - Cảnh lỗi chuyển thành một ảnh PNG báo lỗi đúng mốc/thời lượng, sau đó hoàn tất cảnh và chuyển tiếp; không tìm lại tư liệu gốc. Khôi phục chèn dở bằng đối chiếu số cảnh và mốc timeline, chỉ gỡ đúng cảnh cần thay. Nếu toàn bộ thao tác Canva không phản hồi sau ba lần phục hồi thì báo rõ, không đánh dấu giả đã dựng.

@@ -7,7 +7,7 @@ if getattr(sys,'frozen',False):
     os.environ['TCL_LIBRARY']='_tcl_data';os.environ['TK_LIBRARY']='_tk_data'
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script
+from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script,project_title
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio.editorial import add_title_cards,render_titles,neighboring_script
 from canva_studio.browser import open_chrome,chrome_path
@@ -39,14 +39,20 @@ class App:
         header=ttk.Frame(outer);header.pack(fill='x')
         ttk.Label(header,text='SKST  /  Canva Studio',font=('Segoe UI',23,'bold')).pack(side='left')
         self.update_button=ttk.Button(header,text='Kiểm tra cập nhật',command=self.check_update);self.update_button.pack(side='right')
-        ttk.Label(outer,text='Voice của bạn → cảnh ngắn sát lời đọc → dựng trong kho Canva',foreground='#55657c').pack(anchor='w',pady=(2,16))
+        ttk.Label(outer,text='Voice của bạn → cảnh ngắn sát lời đọc → dựng trong kho Canva',foreground='#55657c').pack(anchor='w',pady=(2,8))
         tabs=ttk.Notebook(outer);tabs.pack(fill='both',expand=True)
         build=ttk.Frame(tabs,padding=14);settings=ttk.Frame(tabs,padding=18);help_tab=ttk.Frame(tabs,padding=18)
         tabs.add(build,text='  Dựng video  ');tabs.add(settings,text='  Kết nối & công cụ  ');tabs.add(help_tab,text='  Hướng dẫn  ')
+        self.project_name=tk.StringVar(value=self.engine.state.get('project_name',''))
+        name_row=ttk.Frame(build);name_row.pack(fill='x',pady=3)
+        ttk.Label(name_row,text='Tên dự án / tên trên Canva',width=29).pack(side='left')
+        self.name_entry=ttk.Entry(name_row,textvariable=self.project_name);self.name_entry.pack(side='left',fill='x',expand=True)
+        self.name_entry.bind('<FocusOut>',self.save_project_name)
+        ttk.Label(name_row,text='  Ví dụ: Bài 1 → Bài 1.2 → Bài 1.3').pack(side='left')
         self.voice=tk.StringVar(value=self.settings.get('voice',''));self.script_path=tk.StringVar();self.transcript=tk.StringVar(value=self.settings.get('transcript',''))
         for label,var,command in [('Voice MP3 / WAV',self.voice,self.choose_voice),('Kịch bản DOCX / TXT',self.script_path,self.choose_script),('Lời đọc có thời gian (tùy chọn)',self.transcript,self.choose_transcript)]:
             row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text=label,width=29).pack(side='left');ttk.Entry(row,textvariable=var).pack(side='left',fill='x',expand=True);ttk.Button(row,text='Chọn…',command=command).pack(side='left',padx=(8,0))
-        self.script=tk.Text(build,height=3,wrap='word',font=('Segoe UI',10),relief='flat',padx=8,pady=7);self.script.pack(fill='x',pady=7)
+        self.script=tk.Text(build,height=2,wrap='word',font=('Segoe UI',10),relief='flat',padx=8,pady=7);self.script.pack(fill='x',pady=3)
         self.script.insert('1.0','')
         row=ttk.Frame(build);row.pack(fill='x',pady=6)
         self.start=tk.StringVar(value='0');self.end=tk.StringVar(value='');self.opening=tk.StringVar(value='35')
@@ -161,6 +167,11 @@ class App:
         if p:self.transcript.set(p)
     def save_settings(self):
         self.settings={k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript)]};atomic_json(DATA/'settings.json',self.settings)
+    def save_project_name(self,event=None):
+        try:self.engine.set_project_name(self.project_name.get())
+        except ValueError as exc:
+            if event is None:raise
+            self.notice.set(str(exc))
     def analyze(self):
         if self.worker_busy:return
         if self.engine.state['mode']=='running':return messagebox.showinfo('Đang dựng','Hãy tạm dừng trước khi chia lại cảnh.')
@@ -274,9 +285,11 @@ class App:
             if self.worker_busy:return
             if self.engine.state['mode'] in ('opening','opening_resume'):
                 self.notice.set('Chrome đang mở thiết kế. Không bấm lặp; tiện ích sẽ tự bắt đầu khi trang sẵn sàng.');return
+            self.save_project_name()
             if not self.plan:
                 self.analyze();self.analyze_then_run=self.worker_busy;return
             if not Path(self.voice.get()).is_file():raise ValueError('Chọn voice trước.')
+            self.plan['project_name']=project_title(self.project_name.get())
             u=self.target.get().strip();st=self.engine.state
             if u and not valid_canva(u):raise ValueError('Link thiết kế chưa đúng. Để trống để phần mềm tự tạo Video khổ ngang.')
             if not u or st['scenes']!=self.plan['scenes'] or st['target']!=u:
@@ -328,7 +341,7 @@ class App:
         messagebox.showinfo('Các phần đã dựng','\n\n'.join(rows) or 'Chưa có phần nào.')
     def new_project(self):
         if not messagebox.askyesno('Dự án mới','Xóa tiến độ dựng trong ứng dụng để chuẩn bị dự án mới? Thiết kế Canva hiện tại vẫn được giữ.'):return
-        self.engine.pause();self.engine.state.update(scenes=[],done=[],phase={},used=[],usage={},last_asset='',target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('')
+        self.engine.pause();self.engine.state.update(scenes=[],done=[],phase={},used=[],usage={},last_asset='',project_name='',named_title='',target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('');self.project_name.set('')
     def tick(self):
         while not self.tasks.empty():
             kind,value=self.tasks.get()
@@ -352,6 +365,7 @@ class App:
                     self.analyze_then_run=False;self.root.after(0,self.run)
         self.engine.watchdog()
         st=self.engine.state
+        self.name_entry.configure(state='disabled' if st['mode'] in ('running','opening','opening_resume') else 'normal')
         if st.get('part_index',0)!=self.display_part:
             self.display_part=st.get('part_index',0);self.plan=dict(scenes=st['scenes'],parts=st.get('parts',[]));self.prepared_voice=st['voice'];self.target.set(st['target']);self.populate()
         if st.get('auto_start') and st.get('target') and st['mode'] in ('running','opening_resume'):
@@ -361,7 +375,10 @@ class App:
         self.connection.set(self.engine.connection_status()['message'])
         self.root.after(500,self.tick)
     def close(self):
-        self.engine.pause();self.save_settings()
+        self.engine.pause()
+        try:self.save_project_name()
+        except ValueError:pass
+        self.save_settings()
         if self.process:self.process.terminate()
         self.server.shutdown();self.root.destroy()
 
@@ -378,8 +395,13 @@ def main():
         root.update_idletasks();gc.collect()
         token_visible=app.token_entry.get()==app.engine.token and len(app.token_entry.get())>=20
         app.copy_token();root.update_idletasks();copy_ok=root.clipboard_get()==app.engine.token
+        saved_name=app.project_name.get();app.project_name.set('Bài 1');app.save_project_name()
+        name_field=app.name_entry.get()=='Bài 1'
+        name_persisted=Engine(DATA).state.get('project_name')=='Bài 1'
+        app.project_name.set(saved_name);app.save_project_name()
         report=dict(version=VERSION,ui_opened=True,demo_scenes=len(app.tree.get_children()) if app.plan else 0,ffmpeg_found=Path(app.ffmpeg.get()).is_file(),whisper_found=Path(app.python.get()).is_file(),model_found=Path(app.model.get()).is_file(),pairing_code_visible=token_visible,pairing_copy_ok=copy_ok,update_button=app.update_button.cget('text')=='Kiểm tra cập nhật',portable_data=str(DATA),portable_temp=tempfile.gettempdir(),runtime_extracts_to_temp=bool(getattr(sys,'frozen',False) and Path(sys._MEIPASS).name!='_internal'),canva_live_tested=False)
-        if not token_visible or not copy_ok:raise RuntimeError('Pairing-code regression check failed')
+        report.update(project_name_field=name_field,project_name_persisted=name_persisted)
+        if not token_visible or not copy_ok or not name_field or not name_persisted:raise RuntimeError('Pairing/project-name regression check failed')
         atomic_json(DATA/'self-test.json',report);app.close();return
     root.mainloop()
 

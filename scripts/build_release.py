@@ -43,6 +43,7 @@ def build():
     subprocess.run([str(stage/'SKST Canva Studio.exe'),'--self-test'],env=env,check=True,timeout=45)
     report=json.loads((smoke/'self-test.json').read_text(encoding='utf8'))
     assert report['pairing_code_visible'] and report['pairing_copy_ok'] and report['update_button']
+    assert report['project_name_field'] and report['project_name_persisted']
     assert Path(report['portable_data']).resolve()==smoke.resolve()
     assert Path(report['portable_temp']).resolve()==(smoke/'Temp').resolve()
     assert not report['runtime_extracts_to_temp']

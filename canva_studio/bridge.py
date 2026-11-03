@@ -5,8 +5,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
-from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes
-MIN_EXTENSION_VERSION='0.10.0'
+from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
+MIN_EXTENSION_VERSION='0.10.1'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -47,13 +47,21 @@ class Engine:
             self.state['message']=text;self.save()
     def configure(self, plan, target, voice,allow_empty=False):
         with self.lock:
+            name=project_title(plan.get('project_name',''))
             if self.state['mode']=='running':raise ValueError('Hãy tạm dừng trước khi đổi dự án.')
             if not valid_canva(target) and not (allow_empty and target==''):raise ValueError('Dán đường dẫn chỉnh sửa Canva hợp lệ.')
             self.state=dict(mode='ready',message='Đã sẵn sàng. Mở thiết kế video ngang trống trong Canva.',scenes=plan['scenes'],done=[],phase={},used=[],usage={},last_asset='',target=target,voice=str(voice),voice_done=False,export_done=False)
             self.state['parts']=plan.get('parts',[]);self.state['part_index']=0;self.state['history']=[];self.state['audit_done']=False
             self.state['original_voice']=plan.get('original_voice',str(voice))
+            self.state['project_name']=name;self.state['named_title']=''
             for scene in self.state['scenes']:scene.update(real_people_only=False,allow_all_media=True,negative=[])
             self.running=None;self.save()
+    def set_project_name(self,name):
+        with self.lock:
+            name=project_title(name)
+            if name==self.state.get('project_name',''):return
+            if self.state['mode'] in ('running','opening','opening_resume'):raise ValueError('Tạm dừng dựng trước khi đổi tên dự án.')
+            self.state['project_name']=name;self.state['named_title']='';self.save()
     def bootstrap(self,plan,voice):
         from .browser import CREATE_VIDEO
         with self.lock:
@@ -169,7 +177,9 @@ class Engine:
                 return dict(task=None,mode='other_client')
             self.browser={**body,'seen':time.time()}
             if self.running and self.running['client']!=body.get('client'):return dict(task=None,mode='busy')
-            if not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
+            title=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
+            if title and self.state.get('named_title')!=title:task=dict(id='rename',kind='rename',design_name=title)
+            elif not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
                 if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,used=self.state['used'],usage=self.state.get('usage',{}),last_asset=self.state.get('last_asset',''),previous_scene=next((s for s in self.state['scenes'] if s['id']==scene['id']-1),None))
@@ -231,6 +241,13 @@ class Engine:
                 self.log(f'Cảnh/tác vụ {key} • bước {stage}: {detail}. Chưa thể chèn thẻ lỗi vì chưa xác nhận được trạng thái timeline.' if not cancelled else detail)
                 return dict(ok=True)
             key=str(body['id'])
+            if key=='rename':
+                expected=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
+                if not expected or body.get('design_name')!=expected:raise ValueError('Tên Canva chưa khớp tên phần hiện tại.')
+                self.state['named_title']=expected;self.running=None
+                self.log('Đã đặt tên Canva: '+expected)
+                # Renaming must not erase the checkpoint of an interrupted scene.
+                return dict(ok=True)
             if key=='audit':
                 scenes=self.state['scenes'];duration=round(scenes[-1]['start']+scenes[-1]['duration'],3)
                 if len(self.state['done'])!=len(scenes) or body.get('verified_count')!=len(scenes) or abs(float(body.get('verified_duration',-1))-duration)>.12:raise ValueError('Chưa xác nhận đủ cảnh và voice phần hiện tại.')
@@ -244,7 +261,7 @@ class Engine:
                 self.state.setdefault('history',[]).append(dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration']))
                 part=self.state['parts'][index]
                 refine_queries(part['scenes'])
-                self.state.update(part_index=index,target=target,voice=part['voice'],voice_name='',scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
+                self.state.update(part_index=index,target=target,voice=part['voice'],voice_name='',named_title='',scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
                 repair_scene_texts(self.state);refine_queries(self.state['scenes'])
                 self.browser={};msg=f'Chuyển phần {index+1}: voice gốc từ giây {part["source_start"]:.3f}.'
             elif key=='voice':

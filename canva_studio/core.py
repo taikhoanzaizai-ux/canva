@@ -4,7 +4,13 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.10.0'
+VERSION = '0.10.1'
+
+def project_title(name,part_index=0):
+    name=' '.join(str(name or '').split())
+    if len(name)>180:raise ValueError('Tên dự án tối đa 180 ký tự.')
+    if type(part_index) is not int or part_index<0:raise ValueError('Số phần không hợp lệ.')
+    return (name if part_index==0 else f'{name}.{part_index+1}') if name else ''
 
 def norm(text):
     return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower().replace('đ','d')) if unicodedata.category(c) != 'Mn')
