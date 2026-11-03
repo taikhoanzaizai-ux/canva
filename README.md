@@ -12,9 +12,11 @@
 4. Trong ứng dụng, chọn **Kết nối & công cụ → Sao chép mã**. Dán mã vào tiện ích SKST và bật kết nối.
 5. Chọn voice/kịch bản, phân tích, duyệt từ khóa rồi dán link một thiết kế Video 16:9 **trống** để dựng.
 
-Nhận diện voice cần môi trường Python có `openai-whisper` và mô hình `.pt` trên máy; có thể nhập Whisper JSON/SRT thay thế. FFmpeg/FFprobe có trong gói Windows đầy đủ. Không gửi voice đến dịch vụ AI bên ngoài.
+Từ **0.8.0**, máy mới tự tải bộ nhận diện CPU và mô hình tiếng Việt khi bấm Phân tích lần đầu (cần Internet, khoảng 152 MB). Không cần cài Python/Whisper. Các lần sau dùng lại ngoại tuyến. Có thể giữ cấu hình Python cũ hoặc nhập JSON/SRT. FFmpeg/FFprobe có trong ZIP Windows đầy đủ. Voice không gửi ra ngoài; bộ nhận diện/mô hình/tệp tải về đều nằm trong Data cạnh EXE.
 
 Voice mẫu riêng tư không được đưa lên GitHub. Người đã cài gói cũ vẫn giữ được voice mẫu trên máy; khi cài mới có thể chọn voice của mình.
+
+**Chuyển từ 0.7.x lên 0.8.0:** tải ZIP Windows đầy đủ một lần để thêm thư viện C++ app-local. Đóng ứng dụng, giải nén vào thư mục cũ và giữ Data. Bộ cập nhật cũ chưa cho phép tên DLL mới; các lần sau cập nhật bình thường.
 
 ## Cập nhật ngay trong ứng dụng
 

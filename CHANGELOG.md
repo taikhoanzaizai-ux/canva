@@ -1,5 +1,15 @@
 # Các bản cập nhật
 
+## 0.8.0
+
+- Cài máy mới bằng ZIP Windows đầy đủ. Máy đang dùng 0.7.x cần tải ZIP Windows đầy đủ một lần để thêm DLL C++; giữ Data, không dùng gói Update của bộ cập nhật cũ cho lần chuyển này.
+
+- Máy Windows mới tự tải và thiết lập bộ nhận diện CPU whisper.cpp cùng mô hình đa ngôn ngữ khi Phân tích lần đầu; không cần cài Python/Whisper thủ công. Vẫn dùng được cấu hình Python cũ hoặc JSON/SRT.
+- Tệp tải từ bản phát hành chính thức và kho mô hình gốc, đối chiếu SHA-256 cố định, giải nén theo danh sách cho phép. Tải lại khi lỗi không ghi đè tệp đã xác minh.
+- Bộ chạy, mô hình, tải về, bộ nhớ tạm đều nằm trong Data cạnh ứng dụng; nhận diện voice trên máy, hiện tiến độ tải, dùng lại ngoại tuyến sau lần thiết lập đầu.
+- Đóng gói các DLL C++ cần thiết theo hình thức app-local để máy mới không phải tự cài Visual C++ Runtime. Bộ cập nhật chỉ cho phép thêm đúng tên DLL đã kiểm tra.
+- Chuyển mốc từ tiếng Việt từ kết quả native, ghép lại token UTF-8 bị tách để giữ dấu tiếng Việt và thời gian chia cảnh.
+
 ## 0.7.1
 
 - Thẻ báo lỗi chuyển sang ảnh PNG nền đen/chữ trắng, chèn qua mục Hình ảnh tải lên; không phụ thuộc mục Video tải lên đang lỗi. Dự án cũ có thẻ lỗi MP4 tự tạo lại PNG khi tiếp tục.

@@ -51,6 +51,9 @@ jobs:
       - name: Build and smoke test EXE
         if: steps.version.outputs.exists == 'false'
         run: python scripts/build_release.py
+      - name: Test automatic recognition on a clean portable folder
+        if: steps.version.outputs.exists == 'false'
+        run: python scripts/smoke_recognizer.py
       - name: Publish verified release
         if: steps.version.outputs.exists == 'false'
         env:

@@ -109,3 +109,11 @@ Chỉ dừng khi không xác định được riêng cảnh cuối hoặc không
 
 TỪ BẢN 0.7.1
 Thẻ báo lỗi dùng ảnh PNG thay vì clip MP4. Vì vậy lỗi mở Video trong Tải lên không chặn chính bước thêm thẻ lỗi nữa. Dự án cũ đang dừng ở tải thẻ lỗi MP4 sẽ tạo PNG mới khi Tiếp tục, giữ nguyên các cảnh đã xong.
+
+
+TỪ BẢN 0.8.0: TỰ THIẾT LẬP MÁY MỚI
+Tải ZIP Windows đầy đủ, giải nén vào thư mục có quyền ghi. Đăng nhập Canva và đăng ký tiện ích một lần. Chọn voice rồi Phân tích: nếu máy chưa có Whisper/Python, ứng dụng tự tải bộ nhận diện CPU và mô hình tiếng Việt khoảng 152 MB. Lần đầu cần Internet tới GitHub và Hugging Face; các lần sau dùng lại ngoại tuyến. Voice luôn xử lý trên máy.
+Data/Tools chứa bộ nhận diện, Data/Models chứa mô hình, Data/Downloads chứa bộ cài tải về; các thư mục nằm cạnh EXE, không tự cài Python hay ghi cấu hình hệ thống. Giữ lại Data khi cập nhật. Máy mới không cần chọn ô Python/Mô hình.
+Hỗ trợ Windows 10/11 64-bit. Nếu mạng chặn tải hoặc thiếu dung lượng, ứng dụng báo lỗi; kết nối mạng và Phân tích lại, không phải cài lại ứng dụng. Tệp không đúng SHA-256 không được chạy. Máy cũ vẫn dùng môi trường Whisper đã cấu hình nếu hợp lệ.
+
+Chuyển từ 0.7.x lên 0.8.0: tải ZIP Windows đầy đủ một lần (bộ cập nhật cũ chưa cho phép DLL C++ mới), đóng ứng dụng, giải nén vào thư mục cũ và giữ Data. Các lần cập nhật sau dùng nút Kiểm tra cập nhật bình thường.

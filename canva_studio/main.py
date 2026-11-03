@@ -16,6 +16,7 @@ from canva_studio import updater
 from canva_studio.storage import data_dir, migrate_legacy
 from canva_studio.storage import application_dir
 from canva_studio.companion import companion_status
+from canva_studio.recognizer import paths as recognizer_paths,ensure_recognizer,command as recognition_command,convert_output
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
 DATA=data_dir()
@@ -81,10 +82,10 @@ class App:
         ttk.Button(settings,text='Xem danh sách lỗi dựng',command=self.show_errors).pack(anchor='w',pady=3)
         ttk.Label(settings,text='Nhận diện voice trên máy bằng Whisper',font=('Segoe UI',13,'bold')).pack(anchor='w',pady=(20,8))
         self.python=tk.StringVar(value=self.settings.get('python',self.detect_python()));self.model=tk.StringVar(value=self.settings.get('model',self.detect_model()));self.ffmpeg=tk.StringVar(value=self.settings.get('ffmpeg',self.detect_ffmpeg()))
-        for label,var in [('Python có Whisper',self.python),('Mô hình Whisper (.pt)',self.model),('FFmpeg (.exe)',self.ffmpeg)]:
+        for label,var in [('Python cũ (tùy chọn)',self.python),('Mô hình (tự tải máy mới)',self.model),('FFmpeg (.exe)',self.ffmpeg)]:
             r=ttk.Frame(settings);r.pack(fill='x',pady=5);ttk.Label(r,text=label,width=25).pack(side='left');ttk.Entry(r,textvariable=var).pack(side='left',fill='x',expand=True);ttk.Button(r,text='Chọn…',command=lambda v=var:self.choose_tool(v)).pack(side='left',padx=8)
         ttk.Button(settings,text='Lưu cấu hình',command=self.save_settings).pack(anchor='w',pady=12)
-        ttk.Label(settings,text='Máy này có thể dùng môi trường Whisper đã cài. Máy khác cần Python có openai-whisper và FFmpeg, hoặc nhập JSON/SRT có mốc thời gian. Không gửi voice đến dịch vụ AI bên ngoài.',wraplength=950).pack(anchor='w',pady=6)
+        ttk.Label(settings,text='Máy mới tự tải bộ nhận diện và mô hình tiếng Việt khi bấm Phân tích lần đầu (cần Internet, khoảng 152 MB). Không cần cài Python. Các lần sau chạy trên máy, không gửi voice ra ngoài.',wraplength=950).pack(anchor='w',pady=6)
         guide=(BASE/'HUONG_DAN.txt').read_text(encoding='utf8') if (BASE/'HUONG_DAN.txt').exists() else 'Xem HUONG_DAN.txt trong gói tải về.'
         ht=tk.Text(help_tab,wrap='word',font=('Segoe UI',11),relief='flat',padx=12,pady=12);ht.pack(fill='both',expand=True);ht.insert('1.0',guide);ht.configure(state='disabled')
         if self.engine.state['scenes']:
@@ -130,9 +131,9 @@ class App:
         p=filedialog.askopenfilename();
         if p:v.set(p)
     def detect_python(self):
-        p=Path('D:/Codex/QuanVoice-Studio/data/envs/whisper/Scripts/python.exe');return str(p) if p.exists() else ''
+        return '' # Existing custom Python remains in settings; new PCs use native setup.
     def detect_model(self):
-        for p in [Path('D:/Codex/QuanVoice-Studio/data/cache/whisper/base.pt'),Path.home()/'.cache/whisper/base.pt']:
+        for p in [recognizer_paths(DATA)[1],Path.home()/'.cache/whisper/base.pt']:
             if p.exists():return str(p)
         return ''
     def detect_ffmpeg(self):
@@ -164,11 +165,10 @@ class App:
         if self.worker_busy:return
         if self.engine.state['mode']=='running':return messagebox.showinfo('Đang dựng','Hãy tạm dừng trước khi chia lại cảnh.')
         try:
-            a=float(self.start.get());b=float(self.end.get()) if self.end.get().strip() else probe_duration(self.ffmpeg.get(),self.voice.get());o=float(self.opening.get())
-            if not 0<=a<b:raise ValueError('Mốc thời gian không hợp lệ.')
             if not Path(self.voice.get()).is_file():raise ValueError('Chọn tệp voice có sẵn trên máy.')
             if not Path(self.ffmpeg.get()).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ.')
-            if not self.transcript.get() and (not Path(self.python.get()).is_file() or not Path(self.model.get()).is_file()):raise ValueError('Cần Python có Whisper và mô hình, hoặc chọn JSON/SRT đã có mốc thời gian.')
+            a=float(self.start.get());b=float(self.end.get()) if self.end.get().strip() else probe_duration(self.ffmpeg.get(),self.voice.get());o=float(self.opening.get())
+            if not 0<=a<b:raise ValueError('Mốc thời gian không hợp lệ.')
         except Exception as e:return messagebox.showerror('Chưa đủ dữ liệu',str(e))
         try:
             if not self.script.get('1.0','end').strip():
@@ -181,6 +181,11 @@ class App:
         threading.Thread(target=self.analyze_worker,args=(inputs,),daemon=True).start()
     def analyze_worker(self,c):
         try:
+            native=not c['transcript'] and (not Path(c['python']).is_file() or not Path(c['model']).is_file() or Path(c['model']).suffix.lower()=='.bin')
+            if native:
+                exe,model=ensure_recognizer(DATA,lambda message:self.tasks.put(('setup_progress',message)))
+                c.update(cpp=str(exe),model=str(model))
+                self.tasks.put(('recognizer_ready',str(model)))
             job=DATA/'Projects'/uuid.uuid4().hex;job.mkdir(parents=True)
             clip=job/'recognition.wav'
             probe=Path(c['ffmpeg']).with_name('ffprobe.exe' if os.name=='nt' else 'ffprobe')
@@ -197,9 +202,11 @@ class App:
                 else:
                     log=(DATA/'whisper.log').open('w',encoding='utf8')
                     env=os.environ.copy();env['PATH']=str(Path(c['ffmpeg']).parent)+os.pathsep+env.get('PATH','')
-                    self.process=subprocess.Popen([c['python'],str(BASE/'canva_studio/transcribe_worker.py'),str(clip),str(out),c['model']],stdout=log,stderr=log,env=env,creationflags=NO_WINDOW)
+                    args=recognition_command(c['cpp'],c['model'],clip,job/'native') if native else [c['python'],str(BASE/'canva_studio/transcribe_worker.py'),str(clip),str(out),c['model']]
+                    self.process=subprocess.Popen(args,stdout=log,stderr=log,env=env,creationflags=NO_WINDOW)
                     code=self.process.wait();log.close();self.process=None
-                    if code:raise ValueError('Whisper chưa chạy được. Xem whisper.log trong thư mục dữ liệu; kiểm tra đúng Python có Whisper.')
+                    if code:raise ValueError('Bộ nhận diện chưa chạy được (mã '+str(code)+'). Xem Data/whisper.log trong thư mục ứng dụng.')
+                    if native:convert_output(job/'native.json',out)
                 seg=load_transcript(out);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,0,c['b']-c['a'],c['o'])
                 plan['source_start']=c['a']
                 for scene in plan['scenes']:scene['source_start']=round(scene['source_start']+c['a'],3)
@@ -324,6 +331,8 @@ class App:
         while not self.tasks.empty():
             kind,value=self.tasks.get()
             if kind.startswith('update_'):self.update_event(kind,value);continue
+            if kind=='setup_progress':self.notice.set(value);continue
+            if kind=='recognizer_ready':self.model.set(value);self.save_settings();continue
             self.worker_busy=False;self.plan_button.configure(state='normal')
             if kind=='error':self.analyze_then_run=False;self.notice.set('Phân tích chưa thành công.');messagebox.showerror('Chưa phân tích được',value)
             else:

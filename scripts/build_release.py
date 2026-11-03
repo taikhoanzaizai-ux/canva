@@ -23,7 +23,18 @@ def build():
         licenses=stage/'GiayPhep';licenses.mkdir(exist_ok=True)
         for name in ['LICENSE','README.txt']:
             if (tools/name).exists():shutil.copy2(tools/name,licenses/('FFmpeg-'+name))
+    # App-local Microsoft C++ runtime: no administrator installer on new PCs.
+    from canva_studio.recognizer import VC_FILES
+    vs=Path(os.environ.get('ProgramFiles','C:/Program Files'))/'Microsoft Visual Studio'
+    for name in VC_FILES:
+        candidates=list(vs.glob('2022/*/VC/Redist/MSVC/*/x64/Microsoft.VC143.*/'+name))
+        candidates+=list(vs.glob('18/*/VC/Redist/MSVC/*/x64/Microsoft.VC145.*/'+name))
+        candidates+=[Path(os.environ.get('WINDIR','C:/Windows'))/'System32'/name]
+        src=next((p for p in sorted(candidates,reverse=True) if p.is_file()),None)
+        if src is None:raise ValueError('Missing redistributable C++ runtime: '+name)
+        shutil.copy2(src,stage/'_internal'/name)
     (stage/'GiayPhep').mkdir(exist_ok=True)
+    (stage/'GiayPhep/Microsoft-Cpp-Runtime.txt').write_text('Microsoft Visual C++ redistributable runtime. Copyright Microsoft Corporation. App-local deployment. https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files\n',encoding='utf8')
     pylicense=Path(sys.base_prefix)/'LICENSE.txt'
     if pylicense.exists():shutil.copy2(pylicense,stage/'GiayPhep/Python.txt')
     tklicense=Path(sys.base_prefix)/'tcl/tk8.6/license.terms'

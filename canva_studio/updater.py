@@ -62,7 +62,7 @@ def allowed_file(relative):
         parts=relative.split('/')
         if any(part in ('','..','.') for part in parts) or '\\' in relative or ':' in relative:return False
         if len(parts)==2:
-            return p.name in {'base_library.zip','HUONG_DAN.txt','tcl86t.dll','tk86t.dll','ucrtbase.dll'} or bool(re.fullmatch(r'(?:python3\d{1,2}|api-ms-win-[a-z0-9-]+|VCRUNTIME140(?:_1)?|libcrypto[-_a-z0-9]*|libssl[-_a-z0-9]*|libffi[-_a-z0-9]*)\.dll',p.name,re.I)) or bool(re.fullmatch(r'[a-zA-Z0-9_]+\.pyd',p.name))
+            return p.name.lower() in {'msvcp140.dll','vcomp140.dll'} or p.name in {'base_library.zip','HUONG_DAN.txt','tcl86t.dll','tk86t.dll','ucrtbase.dll'} or bool(re.fullmatch(r'(?:python3\d{1,2}|api-ms-win-[a-z0-9-]+|VCRUNTIME140(?:_1)?|libcrypto[-_a-z0-9]*|libssl[-_a-z0-9]*|libffi[-_a-z0-9]*)\.dll',p.name,re.I)) or bool(re.fullmatch(r'[a-zA-Z0-9_]+\.pyd',p.name))
         if parts[1]=='canva_studio':return relative=='_internal/canva_studio/transcribe_worker.py'
         if parts[1]=='_tcl_data' and len(parts)>3 and parts[2]=='tzdata':
             return all(re.fullmatch(r'[A-Za-z0-9_+.-]+',part) and part not in {'.','..'} for part in parts[3:])
