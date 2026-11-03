@@ -123,3 +123,6 @@ Sửa lỗi nhận diện mã 2 khi thư mục cài đặt có dấu tiếng Vi�
 
 TỪ BẢN 0.8.2
 Tự gắn bộ dựng khi Canva chuyển vào /edit mà không tải lại trang. Sau khi cập nhật lên bản này, mở tiện ích một lần và bấm Cập nhật tiện ích để nạp mã mới. Những lần tạo Video tiếp theo tự nhận đúng tab dự án, không mở thêm thiết kế.
+
+TỪ BẢN 0.8.3
+Giữ bảng Tải lên đang mở thay vì bấm lại làm đóng bảng. Tránh lỗi không thấy Video/ảnh báo lỗi vừa tải khi chuyển bước chèn.

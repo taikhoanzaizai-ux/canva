@@ -78,3 +78,17 @@ assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subje
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
 assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'},{accept:'image/png'}]},'image').accept,'image/png','PNG error cards must use an image-compatible upload input');
+
+(async()=>{
+ let selected='true',clicks=0;
+ const tab={offsetWidth:10,textContent:'Tải lên',getAttribute:k=>k==='aria-label'?'Tải lên':k==='aria-selected'?selected:null,scrollIntoView:()=>{},click:()=>{clicks++;selected=selected==='true'?'false':'true';}};
+ const input={accept:'*/*',disabled:false};
+ const doc={querySelectorAll:s=>s.startsWith('input')?(selected==='true'?[input]:[]):[tab]};
+ const env={globalThis:{},document:doc,getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ await env.globalThis.SKSTAdapter.ensureUploadPanel();
+ assert.equal(clicks,0,'An open upload panel must never be collapsed by clicking its selected tab');
+ selected='false';await env.globalThis.SKSTAdapter.ensureUploadPanel();
+ assert.equal(clicks,1);assert.equal(selected,'true','A closed upload panel is opened once');
+ await env.globalThis.SKSTAdapter.ensureUploadPanel();assert.equal(clicks,1);
+})().catch(e=>{console.error(e);process.exitCode=1;});

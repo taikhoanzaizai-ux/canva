@@ -42,6 +42,12 @@
   function uploadedVideoTab(root=document){
     return [...root.querySelectorAll('[role="tab"],button,[role="button"]')].find(e=>visible(e)&&label(e)==='Video'&&!e.closest('[role="tablist"][aria-label="Bảng bên"]'))||null;
   }
+  async function ensureUploadPanel(){
+    const tab=await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy mục Tải lên');
+    // Clicking the selected sidebar tab collapses Canva's upload panel.
+    if(tab.getAttribute('aria-selected')!=='true')await click(tab);
+    await wait(()=>uploadInput(),'Bảng Tải lên chưa hiển thị ô chọn tệp');
+  }
   function durationInput(root=document){
     return [...root.querySelectorAll('input')].find(e=>e.getAttribute('placeholder')==='--'||e.getAttribute('aria-label')==='--')||null;
   }
@@ -310,7 +316,7 @@
       const name=raw.name.replace(/\.png$/i,'');
       const uploaded=()=>{const e=find(new RegExp(name));return e&&!e.closest('[role="group"]')?.querySelector('[role="progressbar"]')?e:null;};
       const imageTab=()=>[...document.querySelectorAll('[role="tab"],button,[role="button"]')].find(e=>visible(e)&&['Hình ảnh','Images'].includes(label(e)));
-      await closeMenu();await click(await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy Tải lên để thêm ảnh báo lỗi'));
+      await closeMenu();await ensureUploadPanel();
       if(imageTab())await click(imageTab());
       if(!uploaded()){
         const input=await wait(()=>uploadInput(document,'image'),'Không thấy ô tải ảnh báo lỗi');
@@ -322,9 +328,10 @@
       }
       await wait(uploaded,'Ảnh báo lỗi chưa tải xong',5000);
       await prepareUpload(s);
-      await click(await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy Tải lên để chèn thẻ lỗi'));
+      await ensureUploadPanel();
       if(imageTab())await click(imageTab());
-      await checkpoint('insert_intent',{asset:raw.name,media_kind:'image'});await click(await wait(uploaded,'Không thấy ảnh báo lỗi vừa tải'));
+      const imageCard=await wait(uploaded,'Không thấy ảnh báo lỗi vừa tải');
+      await checkpoint('insert_intent',{asset:raw.name,media_kind:'image'});await click(imageCard);
       await wait(()=>sceneCount()===s.id,'Chưa xác nhận được ảnh báo lỗi trên timeline');
       await checkpoint('inserted',{asset:raw.name,media_kind:'image'});
     }
@@ -347,7 +354,7 @@
         const group=e.closest('[role="group"]')||e.parentElement;
         return !group?.querySelector('[role="progressbar"]')?e:null;
       };
-      await click(await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy Tải lên'));
+      await ensureUploadPanel();
       const existingTab=uploadedVideoTab();if(existingTab)await click(existingTab);
       if(!uploaded()&&phase!=='title_uploading'){
         const input=await wait(()=>uploadInput(document,'video'),'Chưa có ô tải video tiêu đề');
@@ -359,7 +366,7 @@
       const videoTab=await wait(uploadedVideoTab,'Chưa thấy Video sau khi tải tệp lên',60000);await click(videoTab);
       await wait(uploaded,'Chưa tải xong video tiêu đề',90000);
       await prepareUpload(s);
-      await click(await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy thẻ Tải lên để chèn cảnh'));
+      await ensureUploadPanel();
       await click(await wait(()=>uploadedVideoTab(),'Không thấy thẻ Video trong Tải lên'));
       const card=await wait(()=>find(new RegExp(titleName)),'Không thấy video tiêu đề vừa tải');
       await checkpoint('insert_intent',{asset:raw.name,title:s.title_text});await click(card);
@@ -375,7 +382,7 @@
     if(task.phase?.stage==='upload_intent')throw Error('Voice có thể đã được tải. Kiểm tra Canva trước khi thử lại.');
     const last=await tail();
     if(last.image||last.end>5.1)throw Error('Cần thiết kế video ngang trống để bắt đầu. Ứng dụng không ghi đè bản dựng có sẵn.');
-    await click(await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy mục Tải lên'));
+    await ensureUploadPanel();
     const raw=await voice();
     const input=await wait(()=>uploadInput(),'Canva chưa hiển thị ô tải voice. Mở Tải lên và thử lại',30000);
     const bytes=Uint8Array.from(atob(raw.data),c=>c.charCodeAt(0));
@@ -417,7 +424,7 @@
     await wait(()=>/Đang tải xuống|Nếu quá trình tải xuống/.test(document.body.innerText),'Canva chưa bắt đầu xuất video',30000);
     return {};
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,searchReady,timelineScroller,timeline,tail,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,searchReady,timelineScroller,timeline,tail,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{

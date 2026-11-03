@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.8.3
+
+- Sửa bấm lại tab Tải lên đang chọn khiến Canva đóng bảng: kiểm tra aria-selected trước khi mở, dùng chung cho voice, clip tiêu đề và ảnh báo lỗi.
+- Chỉ ghi insert_intent sau khi đã tìm thấy thẻ ảnh sẵn sàng chèn, tránh báo chèn dở khi chưa hề bấm ảnh.
+- Đã đối chiếu trực tiếp hành vi đóng/mở Tải lên và chèn thẻ PNG đầu tiên trên Canva; không suy từ fixture sang xác nhận toàn quy trình.
+
 ## 0.8.2
 
 - Thay cờ gắn bộ dựng cũ bằng phiên bản/phiên điều khiển; bản cập nhật không bị cờ cũ chặn, vòng lặp đã thay thế tự ngừng để tránh hai bộ dựng chạy cùng tab.
