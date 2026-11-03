@@ -21,7 +21,7 @@ class EditorialTests(unittest.TestCase):
         self.assertEqual(repair_tiny_scenes(rows,[25]),0)
 
     def test_medical_queries_target_the_object_without_requiring_people(self):
-        for text,term in [('hồng cầu trong mạch máu','blood'),('niêm mạc đường ruột','intestine'),('đo đường huyết','glucose')]:
+        for text,term in [('Bụ căng tức dù chẳng ăn bao nhiêu','stomach'),('hồng cầu trong mạch máu','blood'),('niêm mạc đường ruột','intestine'),('đo đường huyết','glucose')]:
             rows=[dict(id=1,text=text,**describe(text))];refine_queries(rows)
             self.assertIn(term,rows[0]['subjects']);self.assertTrue(rows[0]['allow_all_media'])
             self.assertEqual(rows[0]['negative'],[]);self.assertFalse(rows[0]['real_people_only'])

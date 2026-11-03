@@ -1,5 +1,13 @@
 # Các bản cập nhật
 
+## 0.9.1
+
+- Nhận cụm căng tức/bụng căng và biến thể nhận diện Bụ căng, tìm trực tiếp đầy hơi/chướng bụng thay vì đưa cả câu dài vào Canva.
+
+- Đóng menu clip bằng chính nút Tùy chọn về trang đang mở thay vì chỉ phát Escape từ tiêu điểm ngoài menu. Khi cần Escape, đưa tiêu điểm vào menu trước.
+- Sau khi chọn clip, đóng ngay menu do thao tác chọn mở ra; bỏ qua điều khiển liên kết đơn lẻ không chặn dựng. Không bấm lệnh Hủy liên kết.
+- Giữ nguyên các tiêu chí tư liệu và chống trùng mềm của 0.9.0.
+
 ## 0.9.0
 
 - Chống trùng mềm theo từng dự án: ưu tiên video/ảnh chưa dùng; nếu không có lựa chọn phù hợp khác, thử lại đúng từ khóa với tư liệu đã dùng, ưu tiên số lần ít và tránh lặp liền cảnh. Dự án mới xóa lịch sử này, các phần trong cùng bài giữ lịch sử chung.

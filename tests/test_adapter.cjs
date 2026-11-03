@@ -117,3 +117,17 @@ const reusedOptions=['often','rare','recent'].map(id=>({id,duration:8,title:'Blo
 assert.equal(adapter.reuseEligibleCards(reusedOptions,reusableScene,['often','rare','recent'])[0].id,'rare','Prefer least-used matching footage and avoid immediate repeats');
 assert.equal(adapter.reuseEligibleCards([reusedOptions[2]],reusableScene,['recent'])[0].id,'recent','Reuse is allowed when it is the only fitting footage');
 assert.equal(adapter.reuseEligibleCards([{id:'irrelevant',duration:10,title:'Neon frame'}],reusableScene,[]).length,0,'Reuse must never bypass relevance');
+
+const unlinkItem={getAttribute:k=>k==='aria-label'?'Hủy liên kết thành phần đến clip':null};
+assert(adapter.timelineTransitionMenu({...persistentMenu,querySelectorAll:()=>[unlinkItem]}),'The single persistent unlink control is not a blocking menu');
+assert(!adapter.timelineTransitionMenu({...persistentMenu,querySelectorAll:()=>[unlinkItem,transition]}),'A real multi-action menu must still be closed');
+(async()=>{
+ let open=true,toggled=0,escaped=0;
+ const item={getAttribute:k=>k==='aria-label'?'Sao chép':null};
+ const menu={offsetWidth:10,getAttribute:k=>k==='role'?'menu':null,querySelectorAll:()=>[item,transition],textContent:'Menu clip'};
+ const owner={offsetWidth:10,scrollIntoView:()=>{},click:()=>{open=false;toggled++;},getAttribute:k=>k==='aria-label'?'Tùy chọn về trang':k==='aria-expanded'?String(open):null};
+ const env={globalThis:{},document:{activeElement:{dispatchEvent:()=>escaped++},querySelectorAll:s=>s.includes('aria-expanded')?(open?[owner]:[]):(open?[menu]:[])},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ await env.globalThis.SKSTAdapter.closeMenu();
+ assert.equal(toggled,1,'Close the exact expanded page menu owner');assert.equal(escaped,0,'Do not send Escape to an unrelated focused element');
+})().catch(e=>{console.error(e);process.exitCode=1;});

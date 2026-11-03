@@ -133,3 +133,6 @@ Không yêu cầu có người/mặt người. Video, ảnh, đồ vật, thực
 Sửa mốc chia cảnh 0,001 giây; dự án đang dở được sửa riêng các cảnh chưa hoàn tất, giữ voice và ID các cảnh trước. Cập nhật ứng dụng và tiện ích rồi Tiếp tục, không cần Phân tích lại.
 
 Hạn chế trùng theo DỰ ÁN, không cấm tuyệt đối: sau khi tìm video và ảnh phù hợp chưa dùng, nếu vẫn thiếu mới thử lại tư liệu Canva đã dùng, ưu tiên loại ít xuất hiện và tránh lặp liền cảnh. Dự án mới dùng lại bình thường; các phần của cùng bài dùng chung lịch sử. Tái sử dụng vẫn phải khớp chủ thể/từ khóa, không đổi sang hình khác chủ đề.
+
+TỪ BẢN 0.9.1
+Sửa dừng ở Không đóng được bảng thao tác sau khi chọn clip: đóng menu bằng đúng nút sở hữu; không nhầm điều khiển liên kết nhỏ là hộp thoại. Giữ dự án rồi cập nhật/Tiếp tục, không Phân tích lại.

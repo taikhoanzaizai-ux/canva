@@ -57,7 +57,7 @@
   function timelineTransitionMenu(element){
     if(element.getAttribute('role')!=='menu')return false;
     const items=[...element.querySelectorAll('[role="menuitem"]')];
-    return items.length===1&&label(items[0])==='Thêm chuyển cảnh';
+    return items.length===1&&['Thêm chuyển cảnh','Hủy liên kết thành phần đến clip'].includes(label(items[0]));
   }
   const menus=()=>[...document.querySelectorAll('[role="menu"],[role="dialog"]')].filter(e=>visible(e)&&!timelineTransitionMenu(e));
   const sceneCount=()=>document.querySelectorAll('[data-role="timeline-scene"]').length;
@@ -139,14 +139,23 @@
     return n;
   }
   const closeMenu=async()=>{
-    if(menus().length){key(document.activeElement||document.body,'Escape');await wait(()=>!menus().length,'Không đóng được bảng thao tác',3500);}
+    if(!menus().length)return;
+    const owner=[...document.querySelectorAll('button[aria-label="Tùy chọn về trang"][aria-expanded="true"],[role="button"][aria-label="Tùy chọn về trang"][aria-expanded="true"]')].find(visible);
+    if(owner){await click(owner);}
+    else{
+      const menu=menus()[0],target=menu.querySelector('[role="menuitem"],button,[tabindex]')||menu;
+      if(typeof target.focus==='function')target.focus();key(target,'Escape');
+    }
+    await wait(()=>!menus().length,'Không đóng được menu đang mở: '+menus().map(e=>label(e).slice(0,100)).join(' / '),3500);
   };
   const selectClip=async(row)=>{
     if(!row?.element)throw Error('Không tìm thấy clip cần chọn');
     // The thumbnail can have zero width for legacy 1ms clips. Its own page
     // button still has a direct selection handler; do not hit a neighbour.
     const button=row.element.querySelector('button[aria-label="Tùy chọn về trang"],[role="button"][aria-label="Tùy chọn về trang"]');
-    await click(button||row.element);await closeMenu();
+    await click(button||row.element);
+    if(button?.getAttribute('aria-expanded')==='true')await click(button);
+    await closeMenu();
   };
   const prepare=async(scene)=>{
     await closeMenu();
@@ -469,7 +478,7 @@
     await wait(()=>/Đang tải xuống|Nếu quá trình tải xuống/.test(document.body.innerText),'Canva chưa bắt đầu xuất video',30000);
     return {};
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,reuseEligibleCards,relatedCards,searchReady,timelineScroller,timeline,tail,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,reuseEligibleCards,relatedCards,searchReady,timelineScroller,timeline,tail,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{
