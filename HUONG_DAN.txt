@@ -117,3 +117,6 @@ Data/Tools chứa bộ nhận diện, Data/Models chứa mô hình, Data/Downloa
 Hỗ trợ Windows 10/11 64-bit. Nếu mạng chặn tải hoặc thiếu dung lượng, ứng dụng báo lỗi; kết nối mạng và Phân tích lại, không phải cài lại ứng dụng. Tệp không đúng SHA-256 không được chạy. Máy cũ vẫn dùng môi trường Whisper đã cấu hình nếu hợp lệ.
 
 Chuyển từ 0.7.x lên 0.8.0: tải ZIP Windows đầy đủ một lần (bộ cập nhật cũ chưa cho phép DLL C++ mới), đóng ứng dụng, giải nén vào thư mục cũ và giữ Data. Các lần cập nhật sau dùng nút Kiểm tra cập nhật bình thường.
+
+TỪ BẢN 0.8.1
+Sửa lỗi nhận diện mã 2 khi thư mục cài đặt có dấu tiếng Việt hoặc khoảng trắng. Giữ nguyên tên thư mục/voice, cập nhật ứng dụng rồi Phân tích lại. Bộ chạy và mô hình đã tải được giữ trong Data, không cần tải lại.

@@ -203,9 +203,11 @@ class App:
                     log=(DATA/'whisper.log').open('w',encoding='utf8')
                     env=os.environ.copy();env['PATH']=str(Path(c['ffmpeg']).parent)+os.pathsep+env.get('PATH','')
                     args=recognition_command(c['cpp'],c['model'],clip,job/'native') if native else [c['python'],str(BASE/'canva_studio/transcribe_worker.py'),str(clip),str(out),c['model']]
-                    self.process=subprocess.Popen(args,stdout=log,stderr=log,env=env,creationflags=NO_WINDOW)
+                    self.process=subprocess.Popen(args,stdout=log,stderr=log,env=env,cwd=job,creationflags=NO_WINDOW)
                     code=self.process.wait();log.close();self.process=None
-                    if code:raise ValueError('Bộ nhận diện chưa chạy được (mã '+str(code)+'). Xem Data/whisper.log trong thư mục ứng dụng.')
+                    if code:
+                        detail='Không mở được tệp âm thanh nội bộ. ' if code==2 and native else ''
+                        raise ValueError(detail+'Bộ nhận diện dừng với mã '+str(code)+'. Xem Data/whisper.log trong thư mục ứng dụng.')
                     if native:convert_output(job/'native.json',out)
                 seg=load_transcript(out);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,0,c['b']-c['a'],c['o'])
                 plan['source_start']=c['a']

@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.8.1
+
+- Sửa mã lỗi 2 của bộ nhận diện khi thư mục cài/Data có dấu tiếng Việt: chạy trong thư mục công việc bằng đường dẫn Unicode của Windows, chỉ truyền tên nội bộ tương đối không dấu cho bộ native. Không đổi tên hoặc di chuyển voice gốc.
+- Phép thử gói Windows nay dùng thư mục có dấu/khoảng trắng và tệp voice tên tiếng Việt, tránh bỏ sót lỗi máy mới.
+- Thông báo mã 2 nêu rõ không mở được âm thanh nội bộ, kèm vị trí log.
+
 ## 0.8.0
 
 - Cài máy mới bằng ZIP Windows đầy đủ. Máy đang dùng 0.7.x cần tải ZIP Windows đầy đủ một lần để thêm DLL C++; giữ Data, không dùng gói Update của bộ cập nhật cũ cho lần chuyển này.

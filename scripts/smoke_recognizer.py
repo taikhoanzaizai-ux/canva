@@ -4,8 +4,8 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 def main():
-    folder=ROOT/'work'/'clean-recognizer-check';folder.mkdir(parents=True,exist_ok=True)
-    audio=folder/'public-sample.wav'
+    folder=ROOT/'work'/'Máy mới có dấu và khoảng trắng';folder.mkdir(parents=True,exist_ok=True)
+    audio=folder/'giọng đọc mẫu.wav'
     with urllib.request.urlopen('https://raw.githubusercontent.com/ggml-org/whisper.cpp/v1.8.4/samples/jfk.wav',timeout=45) as response:raw=response.read(2*1024*1024)
     assert hashlib.sha256(raw).hexdigest()=='59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e'
     audio.write_bytes(raw)

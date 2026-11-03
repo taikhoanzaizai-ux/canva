@@ -46,7 +46,15 @@ class RecognizerTests(unittest.TestCase):
 
     def test_native_command_has_no_python_and_local_output(self):
         args=r.command('whisper-cli.exe','m.bin','voice.wav','out')
-        self.assertEqual(args[0],'whisper-cli.exe');self.assertIn('-ng',args);self.assertEqual(args[args.index('-l')+1],'vi')
+        self.assertEqual(Path(args[0]).name,'whisper-cli.exe');self.assertIn('-ng',args);self.assertEqual(args[args.index('-l')+1],'vi')
+
+    def test_accented_install_root_never_reaches_native_file_arguments(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'Ứng dụng tiếng Việt có dấu';job=root/'Data/Projects/abc';job.mkdir(parents=True)
+            args=r.command(root/'Data/Tools/whisper-cli.exe',root/'Data/Models/ggml-base.bin',job/'recognition.wav',job/'native')
+            self.assertEqual(args[4],'recognition.wav');self.assertEqual(args[-1],'native')
+            self.assertTrue(args[2].isascii());self.assertFalse(Path(args[2]).is_absolute())
+            self.assertEqual((job/args[2]).resolve(),(root/'Data/Models/ggml-base.bin').resolve())
 
     def test_utf8_split_tokens_reassemble_before_parsing_words(self):
         with tempfile.TemporaryDirectory() as d:

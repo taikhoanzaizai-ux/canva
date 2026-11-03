@@ -93,7 +93,14 @@ def ensure_recognizer(data,progress=lambda *_:None,runtime_root=None):
     return exe,model
 
 def command(exe,model,audio,out):
-    return [str(exe),'-m',str(model),'-f',str(audio),'-l','vi','-ng','-ojf','-of',str(out)]
+    # Windows narrow argv corrupts accented absolute paths in this native CLI.
+    # Its working directory is Unicode-safe via CreateProcessW; internal child
+    # names are ASCII, so model/audio/output arguments remain relative ASCII.
+    base=Path(out).resolve().parent
+    relative=lambda value:os.path.relpath(Path(value).resolve(),base)
+    args=[str(Path(exe).resolve()),'-m',relative(model),'-f',relative(audio),'-l','vi','-ng','-ojf','-of',relative(out)]
+    if any(not value.isascii() for value in [args[2],args[4],args[-1]]):raise ValueError('Đường dẫn nội bộ nhận diện phải dùng tên không dấu; voice gốc được giữ nguyên.')
+    return args
 
 def convert_output(source,target):
     raw=json.loads(Path(source).read_text(encoding='utf-8-sig',errors='surrogateescape'));segments=[];last=0
