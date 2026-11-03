@@ -120,3 +120,6 @@ Chuyển từ 0.7.x lên 0.8.0: tải ZIP Windows đầy đủ một lần (bộ
 
 TỪ BẢN 0.8.1
 Sửa lỗi nhận diện mã 2 khi thư mục cài đặt có dấu tiếng Việt hoặc khoảng trắng. Giữ nguyên tên thư mục/voice, cập nhật ứng dụng rồi Phân tích lại. Bộ chạy và mô hình đã tải được giữ trong Data, không cần tải lại.
+
+TỪ BẢN 0.8.2
+Tự gắn bộ dựng khi Canva chuyển vào /edit mà không tải lại trang. Sau khi cập nhật lên bản này, mở tiện ích một lần và bấm Cập nhật tiện ích để nạp mã mới. Những lần tạo Video tiếp theo tự nhận đúng tab dự án, không mở thêm thiết kế.

@@ -1,10 +1,15 @@
 (() => {
-  if(window.__skstContentStarted)return;window.__skstContentStarted=true;
+  const version=chrome.runtime.getManifest().version;
+  if(window.__skstContentStarted===version)return;
+  window.__skstContentStarted=version;
+  const epoch=crypto.randomUUID();window.__skstControllerEpoch=epoch;
+  const active=()=>window.__skstControllerEpoch===epoch;
   const client=crypto.randomUUID();let busy=false;
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message.type==='skst_controller_ping'){respond({ready:true,version:chrome.runtime.getManifest().version});return;}
   });
   async function api(route,body={}){
+    if(!active())throw Error('Bộ dựng cũ đã được thay bằng bản cập nhật.');
     const result=await chrome.runtime.sendMessage({type:'bridge',route,body:{title:document.title,...body,client}});
     if(!result)throw Error('Tiện ích chưa phản hồi. Bấm Kết nối Canva để gắn lại bộ dựng.');
     if(result?.error)throw Error(result.error);
@@ -12,6 +17,7 @@
     return result;
   }
   function showStatus(result){
+    if(!active())return;
     const existing=document.getElementById('skst-progress-status');
     if(result.mode!=='attention'){existing?.remove();return;}
     const panel=existing||document.createElement('div');panel.id='skst-progress-status';
@@ -20,7 +26,7 @@
     if(!existing)document.body.appendChild(panel);
   }
   async function cycle(){
-    if(busy)return;busy=true;let task;
+    if(busy||!active())return;busy=true;let task;
     try{
       const blank_video=!!document.querySelector('button[aria-label="Thêm nội dung đa phương tiện/cảnh trống"]')&&!document.querySelector('[data-role="timeline-scene"] img')&&![...document.querySelectorAll('button,[role="button"]')].some(e=>(e.getAttribute('aria-label')||'').includes('đoạn âm thanh'));
       const result=await api('next',{blank_video});showStatus(result);task=result.task;if(!task)return;

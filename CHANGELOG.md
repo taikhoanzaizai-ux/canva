@@ -1,5 +1,12 @@
 # Các bản cập nhật
 
+## 0.8.2
+
+- Thay cờ gắn bộ dựng cũ bằng phiên bản/phiên điều khiển; bản cập nhật không bị cờ cũ chặn, vòng lặp đã thay thế tự ngừng để tránh hai bộ dựng chạy cùng tab.
+
+- Khi Canva chuyển từ trang tạo Video sang /edit bằng điều hướng SPA, tự gắn bộ dựng sau thay đổi URL hoặc tải xong, không phụ thuộc người dùng mở popup. Chỉ nhận đúng link dự án hoặc marker thiết kế mới.
+- Khi Chrome khởi động lại, nối lại tab dự án đã có nếu tiện ích đã ghép nối; không tự tạo tab mới và không mở rộng quyền trình duyệt.
+
 ## 0.8.1
 
 - Sửa mã lỗi 2 của bộ nhận diện khi thư mục cài/Data có dấu tiếng Việt: chạy trong thư mục công việc bằng đường dẫn Unicode của Windows, chỉ truyền tên nội bộ tương đối không dấu cho bộ native. Không đổi tên hoặc di chuyển voice gốc.

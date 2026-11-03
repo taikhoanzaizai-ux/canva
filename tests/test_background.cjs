@@ -1,11 +1,11 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 function harness(tabs,diskVersion,updateVersion,options={}){
  const manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8'));
- const local={token:'test-token',enabled:true};const calls={fetch:[],inject:[],reload:0,created:[]};let listener,attached=false;
+ const local={token:'test-token',enabled:true};const calls={fetch:[],inject:[],reload:0,created:[]};let listener,updated,attached=false;
  const chrome={
   runtime:{id:'own',getURL:p=>'chrome-extension://own/'+p,getManifest:()=>manifest,onMessage:{addListener:fn=>listener=fn},onInstalled:{addListener:()=>{}},reload:()=>calls.reload++},
   storage:{local:{get:async()=>local,set:async value=>Object.assign(local,value)}},
-  tabs:{create:async spec=>{calls.created.push(spec);return {id:77,url:spec.url};},get:async()=>({id:77,url:options.finalURL||'https://www.canva.com/design/new/token/edit'}),query:async()=>tabs,sendMessage:async(id,msg)=>({ready:true})},
+  tabs:{onUpdated:{addListener:fn=>updated=fn},create:async spec=>{calls.created.push(spec);return {id:77,url:spec.url};},get:async()=>({id:77,url:options.finalURL||'https://www.canva.com/design/new/token/edit'}),query:async()=>tabs,sendMessage:async(id,msg)=>({ready:true})},
   scripting:{executeScript:async spec=>{calls.inject.push(spec);attached=true;}}
  };
  const context={chrome,URL,URLSearchParams,AbortSignal,setTimeout,Promise,console,fetch:async(url,opts)=>{
@@ -16,13 +16,26 @@ function harness(tabs,diskVersion,updateVersion,options={}){
   return {ok:true,json:async()=>({ok:true,version:manifest.version,target:'https://www.canva.com/design/target/token/edit',mode:'paused',active_task:false,connection:{ready:attached},...options.state})};
  }};
  vm.createContext(context);vm.runInContext(fs.readFileSync('extension/background.js','utf8'),context);
- return {calls,manifest,decision:context.reloadDecision,message:(msg,sender)=>new Promise(resolve=>listener(msg,sender,resolve))};
+ return {calls,manifest,navigate:(tab,change={url:tab.url})=>updated(tab.id,change,tab),decision:context.reloadDecision,message:(msg,sender)=>new Promise(resolve=>listener(msg,sender,resolve))};
 }
 (async()=>{
  const h=harness([{id:1,active:true,url:'https://www.canva.com/design/other/token/edit'},{id:2,active:false,url:'https://www.canva.com/design/target/token/edit?ui=e30',title:'Right design'}]);
  const result=await h.message({type:'probe'},{id:'own',url:'chrome-extension://own/popup.html'});
  assert.equal(result.attached,true);assert.equal(h.calls.inject.length,1);assert.equal(h.calls.inject[0].target.tabId,2,'Use configured design, not another active tab');
  assert.equal(h.calls.inject[0].files.join(','),'adapter.js,content.js','Inject bundled controller only');
+ const navigation=harness([{id:8,url:'https://www.canva.com/design/target/token/edit'}]);
+ await navigation.navigate({id:8,url:'https://www.canva.com/design/target/token/edit'});
+ assert.equal(navigation.calls.inject.length,1,'SPA URL transition attaches without opening popup');
+ assert.equal(navigation.calls.created.length,0,'SPA attachment never opens another tab');
+ const wrongNavigation=harness([{id:9,url:'https://www.canva.com/design/other/token/edit'}]);
+ await wrongNavigation.navigate({id:9,url:'https://www.canva.com/design/other/token/edit'});
+ await wrongNavigation.navigate({id:10,url:'https://example.com/'});
+ assert.equal(wrongNavigation.calls.inject.length,0,'Never claim unrelated Canva designs or non-Canva pages');
+ const nonceNav='abcdefghijklmnopqrstuvwx';
+ const createdNavigation=harness([{id:11,url:'https://www.canva.com/design/new/token/edit#skst_start='+nonceNav}],null,null,{state:{target:'',bootstrap_nonce:nonceNav}});
+ await createdNavigation.navigate({id:11,url:'https://www.canva.com/design/new/token/edit#skst_start='+nonceNav});
+ assert.equal(createdNavigation.calls.inject.length,1,'New design is attached only with exact bootstrap marker');
+ assert.equal(createdNavigation.calls.created.length,0);
  const bad=harness([{id:3,active:true,url:'https://example.com/'}]);
  const denied=await bad.message({type:'probe'},{id:'own',url:'chrome-extension://own/popup.html'});
  assert(denied.connected_only);assert.equal(bad.calls.inject.length,0,'Never inject outside Canva');
@@ -72,4 +85,17 @@ function harness(tabs,diskVersion,updateVersion,options={}){
  const manifest=JSON.parse(fs.readFileSync('extension/manifest.json','utf8'));
  assert(manifest.permissions.includes('scripting'));assert(manifest.host_permissions.every(v=>v.startsWith('https://www.canva.com/')||v.startsWith('http://127.0.0.1:8766/')));
  console.log('Controller attachment, exact design selection, and permission scope checks passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
+// A legacy boolean bootstrap flag must not block an updated controller.
+(async()=>{
+ let version='0.8.2',sent=0,ids=0;const loops=[];
+ const env={window:{__skstContentStarted:true},crypto:{randomUUID:()=>String(++ids)},chrome:{runtime:{getManifest:()=>({version}),onMessage:{addListener:()=>{}},sendMessage:async()=>{sent++;return {mode:'paused'};}}},document:{title:'Canva',querySelector:()=>null,querySelectorAll:()=>[],getElementById:()=>null},setInterval:fn=>loops.push(fn),Promise,console};
+ vm.createContext(env);const code=fs.readFileSync('extension/content.js','utf8');
+ vm.runInContext(code,env);await new Promise(r=>setTimeout(r,0));
+ assert.equal(loops.length,1,'Replace a stale pre-update boolean controller flag');
+ vm.runInContext(code,env);assert.equal(loops.length,1,'Do not duplicate a same-version controller');
+ const oldLoop=loops[0];version='0.8.3';vm.runInContext(code,env);await new Promise(r=>setTimeout(r,0));
+ assert.equal(loops.length,2);const before=sent;await oldLoop();
+ assert.equal(sent,before,'Superseded controller must stop polling/mutating');
 })().catch(e=>{console.error(e);process.exitCode=1;});

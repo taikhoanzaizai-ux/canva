@@ -44,6 +44,34 @@ async function bridgeFetch(route,body,token){
   const data=await response.json();if(!response.ok)throw Error(data.error||'Không kết nối được ứng dụng');return data;
 }
 let editorOpening=null;
+function matchesProject(data,url){
+  if(!editorURL(url))return false;
+  if(data.target)return canonical(url)===canonical(data.target);
+  return !!data.bootstrap_nonce&&new URLSearchParams(new URL(url).hash.slice(1)).get('skst_start')===data.bootstrap_nonce;
+}
+async function attachAfterNavigation(tab){
+  if(!editorURL(tab?.url))return;
+  const {token,enabled}=await chrome.storage.local.get(['token','enabled']);
+  if(!enabled||!token)return;
+  const data=await bridgeFetch('ping',{},token);
+  if(!matchesProject(data,tab.url))return;
+  await attachController(data,false);
+}
+// Canva can enter /edit through an SPA URL change: document_idle scripts for
+// /edit were not present on the initial creation page. Observe that transition
+// using the existing Canva-only host access, without opening another design.
+chrome.tabs.onUpdated?.addListener(async(id,change,tab)=>{
+  if(!change.url&&change.status!=='complete')return;
+  try{await attachAfterNavigation(tab);}catch(error){
+    await chrome.storage.local.set({lastConnectionError:'Chưa nối được bộ dựng sau khi mở Canva: '+error.message});
+  }
+});
+chrome.runtime.onStartup?.addListener(async()=>{
+  try{
+    const {token,enabled}=await chrome.storage.local.get(['token','enabled']);
+    if(enabled&&token)await attachController(await bridgeFetch('ping',{},token),false);
+  }catch{}
+});
 async function ensureEditor(data,allowOpen){
   const tabs=await chrome.tabs.query({url:'https://www.canva.com/design/*'});
   let candidates=tabs.filter(t=>editorURL(t.url));
