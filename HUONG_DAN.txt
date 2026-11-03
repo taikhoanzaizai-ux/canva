@@ -136,3 +136,10 @@ Hạn chế trùng theo DỰ ÁN, không cấm tuyệt đối: sau khi tìm vide
 
 TỪ BẢN 0.9.1
 Sửa dừng ở Không đóng được bảng thao tác sau khi chọn clip: đóng menu bằng đúng nút sở hữu; không nhầm điều khiển liên kết nhỏ là hộp thoại. Giữ dự án rồi cập nhật/Tiếp tục, không Phân tích lại.
+TỪ BẢN 0.10.0
+- Sau khi cập nhật phần mềm, tải lại tiện ích SKST một lần tại chrome://extensions (biểu tượng mũi tên vòng tròn), rồi tải lại tab Canva và kết nối.
+- Trong cửa sổ tiện ích, bấm “Cho phép kiểm tra tải MP4” và đồng ý quyền của Chrome. Chỉ dùng để xác nhận tệp xuất tải xong, không mở/xóa tệp.
+- Cảnh nào lỗi sẽ được thay bằng một ảnh báo lỗi đúng thời lượng, rồi dựng tiếp; không quay lại tìm tư liệu của cảnh lỗi. Voice giữ nguyên.
+- Nếu Canva không còn thao tác được hoặc không xác định được đúng cảnh trên timeline sau ba lần phục hồi, ứng dụng báo lỗi toàn phiên thay vì làm sai voice/cảnh khác. Các cảnh đã xong vẫn được giữ.
+- Chỉ xuất một dự án Canva mỗi lần để đối chiếu đúng tệp MP4. Chỉ báo hoàn tất sau khi Chrome tải xong và ứng dụng đọc được cả hình, âm thanh, thời lượng tệp.
+

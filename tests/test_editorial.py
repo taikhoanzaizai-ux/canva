@@ -3,6 +3,23 @@ from canva_studio.core import make_plan,describe,split_batches
 from canva_studio.editorial import headings,timed_headings,add_title_cards,refine_queries
 
 class EditorialTests(unittest.TestCase):
+    def test_explicit_action_survives_unrestricted_media_style(self):
+        rows=[dict(id=1,text='Nhón gót chân lên',**describe('Nhón gót chân lên'))]
+        refine_queries(rows)
+        self.assertIn('heel raise',rows[0]['actions']);self.assertTrue(rows[0]['allow_all_media'])
+
+    def test_long_diagnostic_reduces_font_size(self):
+        import tempfile,re
+        from pathlib import Path
+        from unittest.mock import patch
+        from canva_studio.editorial import render_titles
+        with tempfile.TemporaryDirectory() as folder:
+            font=Path(folder)/'font.ttf';font.touch()
+            with patch('subprocess.run') as run:
+                render_titles({'scenes':[dict(kind='title',title_text='Thông báo lỗi dài '*100,duration=5,error_card=True,still_image=True)]},'ffmpeg',folder,font)
+            args=run.call_args.args[0];size=int(re.search(r'fontsize=(\d+)',args[args.index('-vf')+1])[1])
+            self.assertLess(size,48)
+
     def test_cards_render_percent_and_expressions_as_literal_text(self):
         import tempfile
         from pathlib import Path

@@ -5,6 +5,8 @@ function harness(tabs,diskVersion,updateVersion,options={}){
  const chrome={
   runtime:{id:'own',getURL:p=>'chrome-extension://own/'+p,getManifest:()=>manifest,onMessage:{addListener:fn=>listener=fn},onInstalled:{addListener:()=>{}},reload:()=>calls.reload++},
   storage:{local:{get:async()=>local,set:async value=>Object.assign(local,value)}},
+  permissions:{contains:async()=>options.downloadPermission!==false},
+  downloads:{search:async query=>query.id?(options.downloads||[]).filter(x=>x.id===query.id):(options.downloads||[])},
   tabs:{onUpdated:{addListener:fn=>updated=fn},create:async spec=>{calls.created.push(spec);return {id:77,url:spec.url};},get:async()=>({id:77,url:options.finalURL||'https://www.canva.com/design/new/token/edit'}),query:async()=>tabs,sendMessage:async(id,msg)=>({ready:true})},
   scripting:{executeScript:async spec=>{calls.inject.push(spec);attached=true;}}
  };
@@ -98,4 +100,22 @@ function harness(tabs,diskVersion,updateVersion,options={}){
  const oldLoop=loops[0];version='0.8.3';vm.runInContext(code,env);await new Promise(r=>setTimeout(r,0));
  assert.equal(loops.length,2);const before=sent;await oldLoop();
  assert.equal(sent,before,'Superseded controller must stop polling/mutating');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
+(async()=>{
+ const sender={id:'own',url:'https://www.canva.com/design/target/token/edit',tab:{id:2}};
+ const options={downloads:[]};const h=harness([],null,null,options);
+ assert.equal((await h.message({type:'export_download',action:'arm'},sender)).tracking,true);
+ const good={id:22,startTime:new Date(Date.now()+100).toISOString(),url:'https://export-download.canva.com/video.mp4',filename:'video.mp4',mime:'video/mp4',state:'in_progress',exists:false,referrer:sender.url};
+ options.downloads.push({...good,id:21,url:'https://unrelated.example/video.mp4'});
+ assert.equal((await h.message({type:'export_download',action:'status'},sender)).id,undefined,'Ignore downloads from unrelated sources');
+ options.downloads.push(good);
+ assert.equal((await h.message({type:'export_download',action:'status'},sender)).complete,false,'Starting is not completion');
+ good.state='complete';good.exists=true;
+ const complete=await h.message({type:'export_download',action:'status'},sender);
+ assert.equal(complete.complete,true);assert.equal(complete.id,22);
+ good.state='interrupted';good.error='NETWORK_FAILED';assert.match((await h.message({type:'export_download',action:'status'},sender)).error,/gián đoạn/);
+ good.state='complete';good.exists=false;assert.match((await h.message({type:'export_download',action:'status'},sender)).error,/không còn/);
+ const denied=harness([],null,null,{downloadPermission:false});assert.match((await denied.message({type:'export_download',action:'arm'},sender)).error,/Cho phép/);
+ assert((await h.message({type:'export_download',action:'arm'},{...sender,url:'https://www.canva.com/design/other/token/edit'})).error,'Other design cannot arm tracking');
 })().catch(e=>{console.error(e);process.exitCode=1;});

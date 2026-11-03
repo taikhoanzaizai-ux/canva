@@ -39,6 +39,36 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_error_image_endpoint_needs_no_ffmpeg_and_keeps_exact_time(self):
+        self.e.state['voice_done']=True;self.e.next_task(self.client)
+        self.e.result(dict(id='1',client='A',error='80%: không tìm được tư liệu'))
+        self.e.next_task(self.client)
+        server=serve(self.e,18767)
+        try:
+            req=urllib.request.Request('http://127.0.0.1:18767/fallback',data=json.dumps(dict(id='1',client='A')).encode(),headers={'Content-Type':'application/json','X-SKST-Token':self.e.token},method='POST')
+            result=json.load(urllib.request.urlopen(req))
+            self.assertIn('80%',result['error_text']);self.assertIn('0.00–4.00',result['error_text'])
+            self.assertNotIn('pending',result);self.assertTrue(result['name'].endswith('.png'))
+        finally:server.shutdown();server.server_close()
+
+    def test_error_scene_moves_on_without_searching_it_again(self):
+        self.e.state['scenes'].append(dict(id=2,start=4,duration=5,text='next',queries=['next']))
+        self.e.state['voice_done']=True;self.e.next_task(self.client)
+        self.e.check(dict(id='1',client='A',stage='muted'))
+        self.e.result(dict(id='1',client='A',error='Sai thời lượng'))
+        task=self.e.next_task(self.client)['task'];self.assertIn('error_card',task['scene'])
+        self.e.result(dict(id='1',client='A',asset='error:1',title='LỖI CẢNH 1'))
+        task=self.e.next_task(self.client)['task'];self.assertEqual(task['id'],'2');self.assertEqual(task['scene']['start'],4)
+        self.assertEqual(self.e.state['done'],[1]);self.assertEqual(self.e.state['mode'],'running')
+
+    def test_export_requires_finished_download(self):
+        self.e.state.update(voice_done=True,done=[1],audit_done=True)
+        self.e.next_task(self.client)
+        with self.assertRaises(ValueError):self.e.result(dict(id='export',client='A'))
+        self.assertFalse(self.e.state['export_done'])
+        self.e.result(dict(id='export',client='A',download_complete=True,download_id=9))
+        self.assertEqual(self.e.state['mode'],'complete')
+
     def test_reuse_history_is_soft_and_scoped_to_one_project(self):
         self.e.state.update(voice_done=True,used=['blood'],usage={'blood':2},last_asset='blood')
         task=self.e.next_task(self.client)['task']
@@ -63,8 +93,9 @@ class EngineTests(unittest.TestCase):
         self.e.state['voice_done']=True;self.e.next_task(self.client)
         self.e.check(dict(id='1',client='A',stage='insert_intent'))
         self.e.result(dict(id='1',client='A',error='Chưa chèn được cảnh'))
-        self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(self.e.state['done'],[])
-        self.assertNotIn('error_card',self.e.state['scenes'][0])
+        self.assertEqual(self.e.state['mode'],'running');self.assertEqual(self.e.state['done'],[])
+        self.assertIn('error_card',self.e.state['scenes'][0])
+        self.assertEqual(self.e.state['scenes'][0]['error_recovery']['stage'],'insert_intent')
 
     def test_title_upload_failure_can_be_replaced_before_timeline_insertion(self):
         self.e.state['voice_done']=True;self.e.state['scenes'][0]['kind']='title'
@@ -88,9 +119,15 @@ class EngineTests(unittest.TestCase):
         self.e.state['voice_done']=True;self.e.next_task(self.client)
         self.e.result(dict(id='1',client='A',error='Không thấy ô tìm kiếm'))
         self.e.next_task(self.client);self.e.result(dict(id='1',client='A',error='Không thấy Tải lên'))
-        self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(len(self.e.state['errors']),2)
+        self.assertEqual(self.e.state['mode'],'running')
+        for _ in range(2):
+            self.e.next_task(self.client);self.e.result(dict(id='1',client='A',error='Canva không phản hồi'))
+        self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(len(self.e.state['errors']),4)
 
     def setUp(self):
+        from unittest.mock import patch
+        self.download_patch=patch('canva_studio.bridge.verify_download',return_value=dict(path='verified.mp4',duration=4));self.download_patch.start()
+        self.addCleanup(self.download_patch.stop)
         self.tmp=tempfile.TemporaryDirectory();self.e=Engine(self.tmp.name)
         self.e.configure(dict(scenes=[dict(id=1,start=0,duration=4,text='test',queries=['test'])]),'https://www.canva.com/design/abc/def/edit','voice.mp3')
         self.client=dict(client='A',url=self.e.state['target'],extension_version=MIN_EXTENSION_VERSION);self.e.start()
@@ -98,8 +135,9 @@ class EngineTests(unittest.TestCase):
     def test_durable_insert_intent_blocks_duplicate(self):
         self.e.state['voice_done']=True;t=self.e.next_task(self.client)['task'];self.e.check(dict(id=t['id'],client='A',stage='insert_intent'))
         resumed=Engine(self.tmp.name)
-        with self.assertRaises(ValueError):resumed.start()
-        resumed.recover('inserted');resumed.start();self.assertEqual(resumed.next_task(self.client)['task']['phase']['stage'],'inserted')
+        resumed.start();task=resumed.next_task(self.client)['task']
+        self.assertIn('error_card',task['scene']);self.assertEqual(task['phase'],{})
+        self.assertEqual(resumed.state['done'],[])
     def test_only_target_and_single_client(self):
         self.assertIsNone(self.e.next_task(dict(client='X',url='https://wrong.test'))['task'])
         self.assertEqual(self.e.next_task(self.client)['task']['kind'],'voice')
@@ -125,7 +163,7 @@ class EngineTests(unittest.TestCase):
     def test_full_lifecycle(self):
         for id_ in ['voice','1','audit','export']:
             task=self.e.next_task(self.client)['task'];self.assertEqual(task['id'],id_)
-            self.e.result(dict(id=id_,client='A',asset='unique' if id_=='1' else None,verified_duration=4,verified_count=1))
+            self.e.result(dict(id=id_,client='A',asset='unique' if id_=='1' else None,verified_duration=4,verified_count=1,download_complete=True,download_id=7))
         self.assertEqual(self.e.state['mode'],'complete');self.assertEqual(self.e.state['used'],['unique'])
     def test_resume_after_two_completed_scenes_keeps_voice(self):
         self.e.state.update(scenes=[dict(id=1,start=0,duration=2.76),dict(id=2,start=2.76,duration=3.98),dict(id=3,start=6.74,duration=4.84)],done=[1,2],voice_done=True,mode='attention',phase={})

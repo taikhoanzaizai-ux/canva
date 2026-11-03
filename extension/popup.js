@@ -29,3 +29,8 @@ document.getElementById('update').onclick=async()=>{
   status.textContent=r.reloading?'Đang nạp bản '+r.version+'. Mở lại SKST sau vài giây rồi bấm Kết nối Canva.':'Tiện ích '+r.version+' đã khớp ứng dụng.';
  }catch(e){status.textContent=e.message;}finally{button.disabled=false;}
 };
+
+// Chrome requires an explicit user gesture for optional download access.
+document.getElementById('downloads').onclick=async()=>{
+ try{const ok=await chrome.permissions.request({permissions:['downloads']});status.textContent=ok?'Đã bật xác nhận MP4 tải xong.':'Chưa cho phép kiểm tra tải MP4.';}catch(e){status.textContent=e.message;}
+};

@@ -140,14 +140,46 @@ async function openNextDesign(body,sender,token){
   }
   throw Error('Tab mới chưa tải xong. Giữ nguyên tab rồi bấm Tiếp tục.');
 }
+function canvaDownload(item,session){
+  const source=value=>{try{const h=new URL(String(value).replace(/^blob:/,'')).hostname;return h==='canva.com'||h.endsWith('.canva.com')||h==='canvausercontent.com'||h.endsWith('.canvausercontent.com');}catch{return false;}};
+  if(editorURL(item.referrer)&&canonical(item.referrer)!==session.target)return false;
+  return !session.before.includes(item.id)&&Date.parse(item.startTime)>=session.started&&source(item.finalUrl||item.url)&&(/\.mp4$/i.test(item.filename||'')||item.mime==='video/mp4');
+}
+async function exportDownload(action,sender){
+  const {token}=await chrome.storage.local.get(['token']);
+  const state=await bridgeFetch('ping',{},token);
+  if(canonical(state.target)!==canonical(sender.url))throw Error('Chỉ xác nhận tải MP4 của thiết kế đang dựng.');
+  if(!await chrome.permissions.contains({permissions:['downloads']}))throw Error('Mở tiện ích SKST và bấm Cho phép kiểm tra tải MP4 trước khi xuất.');
+  const key='export:'+canonical(sender.url);
+  if(action==='arm'){
+    const before=(await chrome.downloads.search({limit:100,orderBy:['-startTime']})).map(x=>x.id);
+    await chrome.storage.local.set({[key]:{started:Date.now(),before,target:canonical(sender.url)}});return {tracking:true};
+  }
+  if(action!=='status')throw Error('Lệnh tải xuống không hợp lệ');
+  const session=(await chrome.storage.local.get([key]))[key];if(!session)return {tracking:false};
+  const items=await chrome.downloads.search(session.id?{id:session.id}:{startedAfter:new Date(session.started).toISOString(),limit:100,orderBy:['-startTime']});
+  const matching=session.id?items.filter(i=>i.id===session.id):items.filter(i=>canvaDownload(i,session));
+  if(matching.length>1)throw Error('Có nhiều MP4 Canva tải cùng lúc, chưa xác định được tệp của dự án. Chỉ xuất một dự án mỗi lần.');
+  const item=matching[0];
+  if(!item)return {tracking:true};
+  if(!session.id){session.id=item.id;await chrome.storage.local.set({[key]:session});}
+  if(item.state==='interrupted')throw Error('Tải MP4 bị gián đoạn: '+(item.error||'Chrome chưa tải xong')+'. Tiếp tục tải trong Chrome rồi bấm Tiếp tục.');
+  if(item.state==='complete'&&item.exists===false)throw Error('MP4 đã tải nhưng tệp không còn trên máy.');
+  return {tracking:true,id:item.id,filename:item.filename,complete:item.state==='complete'&&item.exists===true};
+}
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (!['bridge','probe','update_companion','open_next'].includes(message.type)) return;
+  if (!['bridge','probe','update_companion','open_next','export_download'].includes(message.type)) return;
   const own = sender.id === chrome.runtime.id;
   const popup=['probe','update_companion'].includes(message.type)&&sender.url===chrome.runtime.getURL('popup.html');
   const canva = sender.tab && editorURL(sender.url);
   if (!own || (!canva&&!popup) || (message.type==='update_companion'&&!popup)) { respond({error:'Chỉ nhận yêu cầu từ Canva hoặc cửa sổ kết nối SKST.'}); return; }
   (async () => {
     try {
+      if(message.type==='export_download'){
+        if(!canva)throw Error('Chỉ kiểm tra MP4 từ tab thiết kế Canva.');
+        const {enabled}=await chrome.storage.local.get(['enabled']);if(!enabled)throw Error('Đã ngắt tiện ích');
+        respond(await exportDownload(message.action,sender));return;
+      }
       if(message.type==='open_next'){
         const {token,enabled}=await chrome.storage.local.get(['token','enabled']);
         if(!enabled)throw Error('Chưa bật kết nối.');

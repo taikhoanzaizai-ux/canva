@@ -8,7 +8,7 @@ NO_WINDOW=0x08000000 if os.name=='nt' else 0
 def probe_duration(ffmpeg,voice):
     probe=Path(ffmpeg).with_name('ffprobe.exe' if os.name=='nt' else 'ffprobe')
     if not probe.is_file():raise ValueError('Cần FFprobe đi kèm FFmpeg để kiểm tra voice.')
-    return float(subprocess.check_output([str(probe),'-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(voice)],creationflags=NO_WINDOW))
+    return float(subprocess.check_output([str(probe),'-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(voice)],timeout=20,creationflags=NO_WINDOW))
 
 def prepare_parts(plan,source,ffmpeg,folder):
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=True)

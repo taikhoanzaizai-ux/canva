@@ -1,5 +1,16 @@
 # Các bản cập nhật
 
+## 0.10.0
+
+- Cảnh lỗi chuyển thành một ảnh PNG báo lỗi đúng mốc/thời lượng, sau đó hoàn tất cảnh và chuyển tiếp; không tìm lại tư liệu gốc. Khôi phục chèn dở bằng đối chiếu số cảnh và mốc timeline, chỉ gỡ đúng cảnh cần thay. Nếu toàn bộ thao tác Canva không phản hồi sau ba lần phục hồi thì báo rõ, không đánh dấu giả đã dựng.
+- Tạo ảnh lỗi ngay trong tiện ích bằng canvas, không phụ thuộc FFmpeg/phông chữ ngoài; tự đo và co chữ vừa khung, giữ nguyên dấu phần trăm và chuỗi chẩn đoán dài.
+- Tác vụ dự phòng lỗi được thử lại khi có yêu cầu mới; không tạo worker trùng trong lúc chờ. Giới hạn thời gian tìm/tải nguồn ngoài, chuyển đổi và kiểm tra tệp để tránh treo vô hạn.
+- Tiêu đề tải thất bại được gửi lại khi chưa thấy tệp; không chèn lại nếu trạng thái chèn chưa được đối chiếu.
+- Cho phép mọi kiểu tư liệu nhưng vẫn kiểm tra hành động; bổ sung hành động cụ thể như nhón gót, thức dậy, đi bộ, xoa bóp, hít thở, đo đường huyết. Áp dụng cả ảnh, video, tư liệu dùng lại và nguồn ngoài.
+- Kiểm tra đúng tên voice theo nội dung tệp, mốc bắt đầu bằng 0 và biên kết thúc trước khi chuyển phần; xóa tên voice cũ khi đổi phần.
+- Quyền downloads là tùy chọn, chỉ xin khi người dùng bấm nút trong tiện ích. Xác nhận đúng phiên tải MP4 Canva hoàn tất và tệp còn trên máy; kiểm tra tệp có hình, âm thanh, đúng thời lượng bằng FFprobe rồi mới báo hoàn thành. Tiếp tục phiên xuất dở không tự bấm xuất trùng.
+- Do có quyền tùy chọn mới, cần tải lại tiện ích một lần trong trang Tiện ích của Chrome, sau đó bấm Cho phép kiểm tra tải MP4. Không cài bằng registry/chính sách, không thay quyền ngầm.
+
 ## 0.9.2
 
 - Sửa dừng dựng khi lời đọc hoặc thẻ lỗi chứa dấu phần trăm: hiển thị chữ nguyên văn, không diễn giải thành lệnh FFmpeg. Áp dụng cho mọi dự án, tiêu đề và thẻ lỗi.

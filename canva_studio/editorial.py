@@ -72,6 +72,16 @@ def refine_queries(scenes,preserve_before=0):
             else:
                 phrase=' '.join(scene.get('text','').strip(' ,.!?').split()[:10])
                 scene.update(queries=[phrase,' '.join(phrase.split()[:5])],positive=phrase.split(),subjects=[],actions=[],review=False,requires_review=False,query_basis='từ khóa câu lời đọc')
+        # Media style is unrestricted; the explicitly spoken action is not.
+        for pattern,terms in [
+            ('nhón gót|kiễng|nâng gót',['calf raise','heel raise','tiptoe','nhón gót','kiễng','nâng gót']),
+            ('thức dậy|tỉnh giấc',['wake','waking','thức dậy','tỉnh giấc']),
+            ('đi bộ',['walk','walking','đi bộ']),('xoa bóp|bấm huyệt',['massage','acupressure','xoa bóp','bấm huyệt']),
+            ('hít vào|thở ra|hít thở',['breath','breathing','hít thở','hít vào','thở ra']),
+            ('đo đường huyết',['test','testing','check','checking','monitor','đo']),
+            ('vắt chanh',['squeez','vắt']),('gọt vỏ',['peel','gọt']),('rửa rau',['wash','rửa'])]:
+            if any(w in scene.get('text','').casefold() for w in pattern.split('|')):
+                scene['actions']=terms;break
         scene.update(allow_all_media=True,real_people_only=False,negative=[])
     return scenes
 
@@ -175,7 +185,9 @@ def render_titles(plan,ffmpeg,folder,font=None):
         title=scene['title_text'];key=hashlib.sha256((title+str(scene['duration'])).encode()).hexdigest()[:16]
         textfile=folder/f'title-{key}.txt';video=folder/(f'SKST_error_{key}.png' if scene.get('still_image') else f'SKST_title_{key}.mp4')
         textfile.write_text('\n'.join(line for paragraph in title.splitlines() for line in textwrap.wrap(paragraph,width=52 if scene.get('error_card') else 38)),encoding='utf8')
-        size=48 if scene.get('error_card') else 72
+        lines=textfile.read_text(encoding='utf8').splitlines()
+        # Fit both axes, including long diagnostic cards; retain the full text.
+        size=min(48 if scene.get('error_card') else 72,max(1,int(900/max(1,len(lines))-18)),max(1,int(1720/max(1,max(map(len,lines),default=1)))))
         filters=f"drawtext=fontfile='{escaped_font}':textfile='{textfile.name}':expansion=none:fontsize={size}:fontcolor=white:line_spacing=18:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=0.2"
         output=['-frames:v','1'] if scene.get('still_image') else ['-t',str(scene['duration']),'-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p']
         if scene.get('still_image'):filters=filters.split(',fade=')[0]

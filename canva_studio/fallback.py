@@ -6,12 +6,13 @@ from .editorial import render_titles
 from .free_media import prepare_external
 from .storage import application_dir
 
-def begin_fallback(engine,scene):
+def begin_fallback(engine,scene,retry=False):
     jobs=getattr(engine,'asset_jobs',None)
     if jobs is None:engine.asset_jobs={};jobs=engine.asset_jobs
     key=hashlib.sha256((str(scene.get('source_start',scene['start']))+scene['text']+str(scene['duration'])+str(scene.get('error_card',{}).get('message',''))+'png-v1').encode()).hexdigest()[:20]
     if scene.get('fallback_path') and Path(scene['fallback_path']).is_file() and (not scene.get('error_card') or Path(scene['fallback_path']).suffix=='.png'):return dict(done=True)
-    if key in jobs:return jobs[key]
+    # A previous failure is not a running job. A new explicit request may retry.
+    if key in jobs and not (retry and jobs[key].get('error')):return jobs[key]
     status=jobs[key]=dict(pending=True)
     folder=engine.folder/'Projects'/'Media'/key
     try:settings=json.loads((engine.folder/'settings.json').read_text(encoding='utf8'))

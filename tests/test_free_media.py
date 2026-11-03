@@ -6,6 +6,23 @@ from canva_studio.fallback import begin_fallback
 from canva_studio.bridge import Engine
 
 class FreeMediaTests(unittest.TestCase):
+    def test_failed_fallback_is_retried_and_pending_job_is_not_duplicated(self):
+        with tempfile.TemporaryDirectory() as d:
+            e=Engine(d);s=dict(id=1,start=0,duration=3,text='test')
+            with patch('canva_studio.fallback.threading.Thread') as thread:
+                begin_fallback(e,s);self.assertEqual(thread.call_count,1)
+                begin_fallback(e,s);self.assertEqual(thread.call_count,1)
+                next(iter(e.asset_jobs.values())).update(pending=False,error='old error')
+                self.assertEqual(begin_fallback(e,s)['error'],'old error');self.assertEqual(thread.call_count,1)
+                begin_fallback(e,s,retry=True);self.assertEqual(thread.call_count,2)
+
+    def test_external_action_is_required_even_when_all_media_styles_allowed(self):
+        from canva_studio.free_media import relevant
+        scene=dict(allow_all_media=True,subjects=['heel'],actions=['raise'])
+        self.assertFalse(relevant(dict(title='Heel anatomy'),scene))
+        self.assertTrue(relevant(dict(title='3D heel raise exercise'),scene))
+        self.assertFalse(relevant(dict(title='Organic vegan food'),dict(allow_all_media=True,subjects=['gan','liver'])))
+
     def test_error_card_uses_error_text_and_never_searches_stock(self):
         with tempfile.TemporaryDirectory() as d:
             engine=Engine(d);scene=dict(id=8,start=12.14,duration=2.76,text='Lời đọc gốc',error_card=dict(start=12.14,message='Không thấy ô tìm kiếm video'))

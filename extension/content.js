@@ -35,8 +35,8 @@
         if(!state.continue_)throw Error('Đã tạm dừng theo yêu cầu.');
       };
       const fallback=async()=>{
-        for(let i=0;i<180;i++){
-          const result=await api('fallback',{id:task.id});if(!result.pending)return result;
+        for(let i=0;i<240;i++){
+          const result=await api('fallback',{id:task.id,retry:i===0});if(!result.pending)return result;
           await check();await new Promise(r=>setTimeout(r,1000));
         }
         throw Error('Tư liệu dự phòng chưa chuẩn bị xong. Tiến độ được giữ để tiếp tục.');

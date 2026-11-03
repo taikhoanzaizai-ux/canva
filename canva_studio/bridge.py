@@ -4,8 +4,9 @@ from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
+from .downloads import verify_download
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes
-MIN_EXTENSION_VERSION='0.9.1'
+MIN_EXTENSION_VERSION='0.10.0'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -93,7 +94,11 @@ class Engine:
         with self.lock:
             if not self.state['scenes']:raise ValueError('Chưa có danh sách cảnh.')
             if len(self.state['scenes'])>50:raise ValueError('Bản thử hỗ trợ tối đa 50 cảnh mỗi dự án. Hãy chọn đoạn ngắn hơn.')
-            if self.state['phase'].get('stage') in ('insert_intent','upload_intent','export_intent','create_intent'):
+            phase=self.state['phase'];scene=next((s for s in self.state['scenes'] if str(s['id'])==phase.get('id')),None)
+            if phase.get('stage') in ('insert_intent','rollback_intent') and scene:
+                scene.setdefault('error_card',dict(message='Lần trước dừng giữa thao tác chèn cảnh; thay bằng ảnh báo lỗi để tiếp tục.',start=scene['start']))
+                scene['error_recovery']=dict(phase);scene['error_card_attempts']=0;self.state['phase']={}
+            elif phase.get('stage') in ('upload_intent','create_intent'):
                 raise ValueError('Lần trước dừng giữa thao tác. Kiểm tra Canva rồi dùng nút Xử lý cảnh bị dở; ứng dụng sẽ không tự chèn trùng.')
             self.running=None;self.last_activity=time.time();self.state['mode']='running';self.log('Đang chờ tiện ích kết nối đúng thiết kế Canva…')
     def connection_status(self,target=None):
@@ -168,7 +173,12 @@ class Engine:
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
                 if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,used=self.state['used'],usage=self.state.get('usage',{}),last_asset=self.state.get('last_asset',''),previous_scene=next((s for s in self.state['scenes'] if s['id']==scene['id']-1),None))
-                elif not self.state.get('audit_done'):task=dict(id='audit',kind='audit',count=len(self.state['scenes']),duration=round(self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'],3))
+                elif not self.state.get('audit_done'):
+                    name=self.state.get('voice_name','')
+                    if not name and Path(self.state['voice']).is_file():
+                        with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
+                        self.state['voice_name']=name;self.save()
+                    task=dict(id='audit',kind='audit',voice_name=name,count=len(self.state['scenes']),duration=round(self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'],3))
                 elif self.state.get('part_index',0)+1<len(self.state.get('parts',[])):task=dict(id='next_design',kind='next_design')
                 elif not self.state['export_done']:task=dict(id='export',kind='export')
                 else:return dict(task=None,mode='complete')
@@ -200,13 +210,23 @@ class Engine:
                 atomic_json(self.folder/'Errors.json',self.state['errors'])
                 # A missing/search/UI failure before insertion can be replaced safely.
                 # Never mark a gap complete, or retry a click with an uncertain outcome.
-                safe=scene and not scene.get('error_card') and not stage in ('insert_intent','inserted','trimmed','muted','rollback_intent') and self.state['mode']=='running'
+                safe=scene and self.state['mode']=='running'
                 cancelled=any(t in detail.lower() for t in ('đã tạm dừng','phiên thao tác','mã kết nối','đã ngắt'))
                 if safe and not cancelled:
-                    scene['error_card']=record;scene.pop('fallback_path',None);scene.pop('fallback_source',None)
-                    self.state['phase']={};self.running=None
-                    self.log(f'Cảnh {key} lỗi: {detail}. Đang tạo thẻ báo lỗi đúng thời lượng rồi tiếp tục.')
-                    return dict(ok=True,continuing=True)
+                    if not scene.get('error_card'):
+                        scene['error_card']=record
+                        scene['error_recovery']=dict(phase)
+                        scene['error_card_attempts']=0
+                        scene.pop('fallback_path',None);scene.pop('fallback_source',None)
+                        self.state['phase']={}
+                    else:scene['error_card_attempts']=scene.get('error_card_attempts',0)+1
+                    self.running=None
+                    if scene.get('error_card_attempts',0)<3:
+                        self.log(f'Cảnh {key} lỗi. Đang thay bằng một ảnh báo lỗi đúng thời lượng; sau đó chuyển cảnh tiếp theo.')
+                        return dict(ok=True,continuing=True)
+                    self.state['mode']='attention'
+                    self.log(f'Không thể thao tác timeline để đặt ảnh lỗi cảnh {key} sau 3 lần phục hồi: {detail}. Tiến độ và voice được giữ nguyên.')
+                    return dict(ok=True)
                 self.state['mode']='paused' if cancelled else 'attention';self.running=None
                 self.log(f'Cảnh/tác vụ {key} • bước {stage}: {detail}. Chưa thể chèn thẻ lỗi vì chưa xác nhận được trạng thái timeline.' if not cancelled else detail)
                 return dict(ok=True)
@@ -224,11 +244,19 @@ class Engine:
                 self.state.setdefault('history',[]).append(dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration']))
                 part=self.state['parts'][index]
                 refine_queries(part['scenes'])
-                self.state.update(part_index=index,target=target,voice=part['voice'],scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
+                self.state.update(part_index=index,target=target,voice=part['voice'],voice_name='',scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
                 repair_scene_texts(self.state);refine_queries(self.state['scenes'])
                 self.browser={};msg=f'Chuyển phần {index+1}: voice gốc từ giây {part["source_start"]:.3f}.'
-            elif key=='voice':self.state['voice_done']=True;msg='Đã đặt voice trên timeline.'
-            elif key=='export':self.state['export_done']=True;self.state['mode']='complete';msg='Đã gửi lệnh xuất MP4 trong Canva. Theo dõi tải xuống trong trình duyệt.'
+            elif key=='voice':
+                self.state['voice_done']=True;self.state['voice_name']=body.get('voice_name','');msg='Đã đặt voice trên timeline.'
+            elif key=='export':
+                if body.get('download_complete') is not True or type(body.get('download_id')) is not int or body['download_id']<0:raise ValueError('Chưa xác nhận MP4 tải xuống hoàn tất.')
+                from .storage import application_dir
+                try:settings=json.loads((self.folder/'settings.json').read_text(encoding='utf8'))
+                except (OSError,ValueError):settings={}
+                expected=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration']
+                self.state['download_verified']=verify_download(body.get('download_path',''),settings.get('ffmpeg') or application_dir()/'CongCu/ffmpeg.exe',expected)
+                self.state['export_done']=True;self.state['mode']='complete';self.state['download_id']=body['download_id'];msg='Đã xác nhận MP4 tải xuống hoàn tất.'
             else:
                 i=int(key)
                 if i not in self.state['done']:self.state['done'].append(i)
@@ -268,7 +296,11 @@ def serve(engine,port=8766):
                     engine.check(body)
                     scene=next((s for s in engine.state['scenes'] if str(s['id'])==str(body.get('id'))),None)
                     if engine.state['mode']!='running' or not scene:raise ValueError('Không có lệnh chuẩn bị tư liệu.')
-                    with engine.lock:status=begin_fallback(engine,scene)
+                    if scene.get('error_card'):
+                        error=scene['error_card']
+                        v=dict(error_text=f"LỖI CẢNH {scene['id']} • {scene['start']:.2f}–{scene['start']+scene['duration']:.2f} giây\n{error['message'][:600]}\nLời đọc: {scene['text'][:400]}",name=f"SKST_error_{scene['id']}_{hashlib.sha256(str(error).encode()).hexdigest()[:12]}.png",asset_id=f"error:{scene['id']}")
+                        self.send(200,v);return
+                    with engine.lock:status=begin_fallback(engine,scene,retry=body.get('retry') is True)
                     if status.get('error'):raise ValueError(status['error'])
                     if status.get('pending'):v=dict(pending=True)
                     else:

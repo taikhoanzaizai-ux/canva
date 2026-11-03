@@ -94,7 +94,7 @@ assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'},{ac
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
 const bloodScene={duration:4,allow_all_media:true,subjects:['blood','artery'],actions:['flow'],positive:['blood','artery'],negative:[]};
-assert.equal(adapter.eligibleCards([{id:'anatomy',duration:10,title:'3D blood cells in an artery'}],bloodScene,[]).length,1,'Relevant medical 3D needs no people or face');
+assert.equal(adapter.eligibleCards([{id:'anatomy',duration:10,title:'3D blood cells flowing in an artery'}],bloodScene,[]).length,1,'Relevant medical 3D needs no people or face');
 assert.equal(adapter.eligibleCards([{id:'device',duration:8,title:'Blood glucose meter on a table'}],{duration:4,allow_all_media:true,subjects:['glucose'],positive:['glucose']},[]).length,1,'Objects and devices are valid');
 assert.equal(adapter.eligibleCards([{id:'wrong',duration:10,title:'Rainbow neon frame'}],bloodScene,[]).length,0,'Unrestricted media types still require script relevance');
 assert.equal(adapter.relatedCards([{id:'used',duration:10,title:'Blood cells flowing'}],bloodScene,['used']).length,0,'No repeats in related selection');
@@ -113,7 +113,7 @@ assert.equal(adapter.relatedCards([{id:'used',duration:10,title:'Blood cells flo
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
 const reusableScene={...bloodScene,_usage:{often:5,rare:1,recent:1},_lastAsset:'recent'};
-const reusedOptions=['often','rare','recent'].map(id=>({id,duration:8,title:'Blood circulation in an artery'}));
+const reusedOptions=['often','rare','recent'].map(id=>({id,duration:8,title:'Blood circulation flowing in an artery'}));
 assert.equal(adapter.reuseEligibleCards(reusedOptions,reusableScene,['often','rare','recent'])[0].id,'rare','Prefer least-used matching footage and avoid immediate repeats');
 assert.equal(adapter.reuseEligibleCards([reusedOptions[2]],reusableScene,['recent'])[0].id,'recent','Reuse is allowed when it is the only fitting footage');
 assert.equal(adapter.reuseEligibleCards([{id:'irrelevant',duration:10,title:'Neon frame'}],reusableScene,[]).length,0,'Reuse must never bypass relevance');
@@ -130,4 +130,34 @@ assert(!adapter.timelineTransitionMenu({...persistentMenu,querySelectorAll:()=>[
  vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
  await env.globalThis.SKSTAdapter.closeMenu();
  assert.equal(toggled,1,'Close the exact expanded page menu owner');assert.equal(escaped,0,'Do not send Escape to an unrelated focused element');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
+assert.equal(adapter.eligibleCards([{id:'wrongAction',duration:10,title:'Blood cells anatomy'}],bloodScene,[]).length,0,'All media styles must still match the spoken action');
+assert.equal(adapter.relatedCards([{id:'wrongAction',duration:10,title:'Blood cells anatomy'}],bloodScene,[]).length,0,'Related results cannot bypass action matching');
+assert.equal(adapter.errorPlacement(1,{start:0,end:5,image:''},{id:1,start:0}),'append');
+assert.equal(adapter.errorPlacement(17,{start:60,end:90,image:'clip'},{id:17,start:60}),'replace','A failed trim replaces only the exact failed scene');
+assert.equal(adapter.errorPlacement(16,{start:56,end:60,image:'clip'},{id:17,start:60}),'append','A failed search appends one error image');
+assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,start:60}),'unknown','Never delete a different scene');
+(async()=>{
+ const drawn=[];let ctx={font:'',fillRect:()=>{},measureText:t=>({width:t.length*parseInt(ctx.font.replace('bold ',''))*.65}),fillText:(text,x,y)=>drawn.push({text,x,y,font:ctx.font})};
+ const env={globalThis:{},document:{createElement:()=>({getContext:()=>ctx,toDataURL:()=> 'data:image/png;base64,UE5H'})},console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ assert.equal(env.globalThis.SKSTAdapter.errorImage(('LỖI 80% %{n} '+ 'x'.repeat(500)+'\n').repeat(3)),'UE5H');
+ assert(drawn.length>3);assert(drawn.every(d=>d.y>=70&&d.y<1000),'All error text must stay inside the card');
+ assert(drawn.some(d=>d.text.includes('80%')),'Percent signs are literal');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{
+ let offset=0,name='SKST_voice_correct.wav';
+ const slider=(kind,value)=>({getAttribute:k=>k==='aria-label'?kind:k==='aria-valuenow'?String(value):null});
+ const sliders=[slider('biên bắt đầu',0),slider('biên kết thúc',4000000)];
+ const row={parentElement:{querySelector:()=>sliders[0],querySelectorAll:()=>sliders},querySelector:()=>({src:'clip'}),querySelectorAll:()=>[]};
+ const plus={offsetWidth:10,getAttribute:k=>k==='aria-label'?'Thêm nội dung đa phương tiện/cảnh trống':null,scrollIntoView:()=>{}};
+ const audio={getAttribute:k=>k==='aria-label'?name+' đoạn âm thanh':null,querySelectorAll:()=>[slider('biên bắt đầu',offset),slider('biên kết thúc',4000000)]};
+ const doc={querySelectorAll:s=>s==='[data-role="timeline-scene"]'?[row]:s.includes('[role="menu"]')?[]:[plus,audio]};
+ const env={globalThis:{},document:doc,getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const task={count:1,duration:4,voice_name:'SKST_voice_correct.wav'};
+ await env.globalThis.SKSTAdapter.auditTask(task);
+ offset=1000000;await assert.rejects(()=>env.globalThis.SKSTAdapter.auditTask(task),/giây 0/);
+ offset=0;name='SKST_voice_wrong.wav';await assert.rejects(()=>env.globalThis.SKSTAdapter.auditTask(task),/voice trên timeline/);
 })().catch(e=>{console.error(e);process.exitCode=1;});
