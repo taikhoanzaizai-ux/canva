@@ -6,7 +6,7 @@ from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.10.1'
+MIN_EXTENSION_VERSION='0.10.2'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -103,6 +103,7 @@ class Engine:
             if not self.state['scenes']:raise ValueError('Chưa có danh sách cảnh.')
             if len(self.state['scenes'])>50:raise ValueError('Bản thử hỗ trợ tối đa 50 cảnh mỗi dự án. Hãy chọn đoạn ngắn hơn.')
             phase=self.state['phase'];scene=next((s for s in self.state['scenes'] if str(s['id'])==phase.get('id')),None)
+            if scene and scene.get('error_card'):scene['error_card_attempts']=0
             if phase.get('stage') in ('insert_intent','rollback_intent') and scene:
                 scene.setdefault('error_card',dict(message='Lần trước dừng giữa thao tác chèn cảnh; thay bằng ảnh báo lỗi để tiếp tục.',start=scene['start']))
                 scene['error_recovery']=dict(phase);scene['error_card_attempts']=0;self.state['phase']={}

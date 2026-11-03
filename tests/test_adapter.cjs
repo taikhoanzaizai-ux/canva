@@ -55,20 +55,22 @@ const photo={id:'photo:123',title:'Doctor explaining diagnosis to senior patient
 assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subjects:['doctor'],actions:['explain']},[]).length,1,'Still photos do not need a source-video duration');
 assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subjects:['doctor'],actions:['explain']},['photo:123']).length,0,'Do not reuse stock photos');
 
-// Canva keyboard handlers require legacy keyCode in addition to key/code.
+// Photo timing must also commit an already-open popover and retain tail seeking.
 (async()=>{
  let committed=5,focused=false,blurred=false,plusScrolled=false;
  class Input{
   constructor(){this.current='5';this.offsetWidth=10;}
   set value(v){this.current=v;} get value(){return this.current;}
   getAttribute(k){return k==='placeholder'?'--':null;}
-  focus(){focused=true;} blur(){blurred=true;}
+  focus(){focused=true;} blur(){blurred=true;committed=Number(this.value);}
   dispatchEvent(event){if(event.type==='keydown'&&event.key==='Enter'&&event.keyCode===13)committed=Number(this.value);} getClientRects(){return [1];}
  }
  const field=new Input();
- const button={offsetWidth:10,getAttribute:k=>k==='aria-label'?committed+' giây, sửa thời gian':null,getClientRects:()=>[1]};
+ const button={offsetWidth:10,getAttribute:k=>k==='aria-label'?committed+' giây, sửa thời gian':null,getClientRects:()=>[1],focus:()=>field.blur(),scrollIntoView:()=>{},click:()=>{field.offsetWidth=0;field.getClientRects=()=>[];}};
  const plus={...button,getAttribute:k=>k==='aria-label'?'Thêm nội dung đa phương tiện/cảnh trống':null,scrollIntoView:()=>plusScrolled=true};
- const doc={activeElement:field,body:field,querySelectorAll:s=>s==='input'?[field]:s==='[data-role="timeline-scene"]'?[]:[button,plus]};
+ const sliders=['biên bắt đầu','biên kết thúc'].map((l,i)=>({getAttribute:k=>k==='aria-label'?l:k==='aria-valuenow'?String(i?committed*1e6:0):null}));
+ const row={parentElement:{querySelector:()=>sliders[0],querySelectorAll:()=>sliders},querySelector:()=>({src:'image.png'}),querySelectorAll:()=>[]};
+ const doc={activeElement:field,body:field,querySelectorAll:s=>s==='input'?[field]:s==='[data-role="timeline-scene"]'?[row]:[button,plus]};
  const env={globalThis:{},document:doc,HTMLInputElement:Input,HTMLTextAreaElement:class{},Event:class{},KeyboardEvent:class{constructor(type,options){this.type=type;Object.assign(this,options);}},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>{f();},Promise,console};
  vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
  await env.globalThis.SKSTAdapter.timePhoto(4.24);
@@ -175,4 +177,26 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
  assert.equal(result.design_name,'Bài 1.2');assert.equal(value,'Bài 1.2');assert.equal(commits,1);assert(checks>0,'Rename obeys the pause/session guard');
  const again=await env.globalThis.SKSTAdapter.run({kind:'rename',design_name:'Bài 1.2'},async()=>{});
  assert.equal(again.design_name,'Bài 1.2');assert.equal(value,'Bài 1.2','Resuming never appends a second part suffix');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
+(async()=>{
+ let value='5.0 giây',end=114.98,open=true,enters=0,commits=0,applyAll=0;
+ const start=109.98;
+ class Input{get value(){return value;}set value(v){value=v;}getAttribute(k){return k==='placeholder'?'--':null;}focus(){}blur(){end=start+Math.round(Number(value)*10)/10;commits++;}dispatchEvent(e){if(e.key==='Enter')enters++;}get offsetWidth(){return open?50:0;}get offsetHeight(){return 0;}getClientRects(){return open?[{}]:[];}}
+ class Textarea{}
+ const field=new Input();
+ const owner={offsetWidth:50,scrollIntoView:()=>{},getAttribute:k=>k==='aria-label'?'5.0 giây, sửa thời gian':null,focus:()=>field.blur(),click:()=>{open=!open;}};
+ const all={offsetWidth:50,scrollIntoView:()=>{},getAttribute:k=>k==='aria-label'?'Áp dụng cho mọi trang':null,click:()=>applyAll++};
+ const slider=(label,read)=>({getAttribute:k=>k==='aria-label'?label:k==='aria-valuenow'?String(read()*1e6):null});
+ const sliders=[slider('biên bắt đầu',()=>start),slider('biên kết thúc',()=>end)];
+ const row={parentElement:{querySelector:()=>sliders[0],querySelectorAll:()=>sliders},querySelector:()=>({src:'error.png'}),querySelectorAll:()=>[]};
+ const document={querySelectorAll:s=>s==='[data-role="timeline-scene"]'?[row]:s==='input'?[field]:[owner,all]};
+ const env={globalThis:{},document,HTMLInputElement:Input,HTMLTextAreaElement:Textarea,KeyboardEvent:class{constructor(_,o){this.key=o.key;}},Event:class{},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ await env.globalThis.SKSTAdapter.timePhoto(4.02);
+ assert.equal(enters,0,'Never commit stale React state by sending immediate Enter');
+ assert.equal(commits,1);assert.equal(applyAll,0);assert.equal(open,false);
+ assert(Math.abs(end-113.98)<.001,'Persist the rounded image duration on the timeline');
+ // The stale toolbar caption is still 5.0 above: actual timeline is authoritative.
+ await env.globalThis.SKSTAdapter.timePhoto(4.02);assert.equal(commits,1,'A resumed correct error image must not be edited or uploaded again');
 })().catch(e=>{console.error(e);process.exitCode=1;});

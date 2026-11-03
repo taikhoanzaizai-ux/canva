@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.10.2
+
+- Sửa dừng khi đặt thời lượng ảnh/ảnh báo lỗi: chờ React nhận giá trị, chuyển tiêu điểm sang nút thời lượng để lưu rồi đóng bằng chính nút đó; không gửi Enter ngay sau input, không bấm Áp dụng cho mọi trang.
+- Xác nhận bằng mốc bắt đầu/kết thúc thực tế trên timeline thay vì chỉ nhãn thanh công cụ. Chấp nhận mức làm tròn 0,1 giây của Canva và bù sai số qua mốc tuyệt đối ở cảnh kế tiếp. Khi ảnh đã đúng thời lượng thì tiếp tục, không chèn lại.
+- Đã thử trực tiếp thao tác đổi thời lượng ảnh báo lỗi trên Canva và đối chiếu mốc timeline; voice giữ nguyên. Chưa xác minh toàn bài chạy tự động.
+
 ## 0.10.1
 
 - Thêm ô Tên dự án / tên trên Canva, lưu cùng tiến độ và khôi phục khi mở lại. Để trống thì giữ cách đặt tên mặc định của Canva.

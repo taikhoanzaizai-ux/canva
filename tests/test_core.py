@@ -159,6 +159,9 @@ class EngineTests(unittest.TestCase):
         for _ in range(2):
             self.e.next_task(self.client);self.e.result(dict(id='1',client='A',error='Canva không phản hồi'))
         self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(len(self.e.state['errors']),4)
+        self.e.state['phase']=dict(id='1',stage='inserted')
+        self.e.start();self.assertEqual(self.e.state['scenes'][0]['error_card_attempts'],0)
+        self.assertEqual(self.e.state['phase']['stage'],'inserted')
 
     def setUp(self):
         from unittest.mock import patch

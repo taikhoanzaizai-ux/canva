@@ -239,19 +239,27 @@
     return null;
   };
   const timePhoto=async(duration)=>{
-    // React commits this popover on blur. A synthetic Enter/Escape alone can
-    // leave the edited number visible while the scene remains at five seconds.
-    let field=durationInput();
-    if(!visible(field))await click(await wait(()=>find(/giây, sửa thời gian$/),'Không thấy thời lượng ảnh'));
-    field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không thấy ô đặt thời gian ảnh');
-    field.focus();fill(field,String(Math.round(duration*1000)/1000));key(field,'Enter');
-    field.blur();await sleep(500);
-    key(document.activeElement||document.body,'Escape');
-    await wait(()=>{
-      const button=find(/giây, sửa thời gian$/);
-      const value=label(button||{getAttribute:()=>null,textContent:''}).match(/([\d]+(?:[.,]\d+)?)\s*giây/);
-      return value&&Math.abs(Number(value[1].replace(',','.'))-duration)<=.12;
-    },'Canva chưa áp dụng thời lượng ảnh sau khi xác nhận',6000);
+    const before=timeline().at(-1),count=sceneCount();
+    if(!before||!Number.isFinite(duration)||duration<.1)throw Error('Không xác định được cảnh ảnh/thời lượng cần đặt.');
+    const expected=before.start+duration;
+    const applied=()=>{
+      const last=timeline().at(-1);
+      return sceneCount()===count&&last&&Math.abs(last.start-before.start)<=.02&&Math.abs(last.end-expected)<=.06;
+    };
+    // Canva rounds this control to tenths. Verify absolute timeline bounds,
+    // rather than the toolbar caption, and compensate rounding on the next cut.
+    if(applied()&&!visible(durationInput()))return;
+    const owner=()=>find(/giây, sửa thời gian$/);
+    if(!visible(durationInput()))await click(await wait(owner,'Không thấy thời lượng ảnh'));
+    const field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không thấy ô đặt thời gian ảnh');
+    field.focus();fill(field,String(Math.round(duration*1000)/1000));
+    // Do not send Enter in the same React turn as input. Moving focus to the
+    // owning toolbar button commits the current value without applying to all.
+    await sleep(350);
+    const button=await wait(owner,'Không thấy nút đóng thời lượng ảnh');button.focus();
+    await sleep(350);
+    if(visible(durationInput()))await click(await wait(owner,'Không đóng được thời lượng ảnh'));
+    await wait(applied,'Mốc bắt đầu/kết thúc ảnh chưa khớp sau khi lưu thời lượng',8000);
   };
   const trim=async(duration)=>{
     const button=await wait(()=>find(/^Xén video dài/),'Không tìm thấy công cụ cắt video');await click(button);
