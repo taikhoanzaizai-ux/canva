@@ -3,6 +3,33 @@ from canva_studio.core import make_plan,describe,split_batches
 from canva_studio.editorial import headings,timed_headings,add_title_cards,refine_queries
 
 class EditorialTests(unittest.TestCase):
+    def test_cards_render_percent_and_expressions_as_literal_text(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from canva_studio.editorial import render_titles
+        with tempfile.TemporaryDirectory() as folder:
+            font=Path(folder)/'font.ttf';font.touch()
+            for still in (False,True):
+                scene=dict(kind='title',title_text='80% dây thần kinh — %{n} 100% đúng',duration=4.81,still_image=still,error_card=still)
+                with patch('subprocess.run') as run:
+                    render_titles({'scenes':[scene]},'ffmpeg',folder,font)
+                args=run.call_args.args[0]
+                self.assertIn(':expansion=none:',args[args.index('-vf')+1])
+                self.assertEqual(run.call_args.kwargs['timeout'],120)
+                self.assertIn('80%',next(Path(folder).glob('title-*.txt')).read_text(encoding='utf8'))
+
+    def test_card_failure_reports_stderr_instead_of_command(self):
+        import tempfile,subprocess
+        from pathlib import Path
+        from unittest.mock import patch
+        from canva_studio.editorial import render_titles
+        with tempfile.TemporaryDirectory() as folder:
+            font=Path(folder)/'font.ttf';font.touch()
+            with patch('subprocess.run',side_effect=subprocess.CalledProcessError(22,['private-command'],stderr=b'Stray % near text')):
+                with self.assertRaisesRegex(ValueError,'Stray % near text'):
+                    render_titles({'scenes':[dict(kind='title',title_text='80%',duration=2)]},'ffmpeg',folder,font)
+
     def test_near_duplicate_boundaries_never_create_one_millisecond_scene(self):
         plan=dict(duration=9.682,source_start=0,scenes=[dict(id=1,start=0,duration=4.778,text='đường ruột'),dict(id=2,start=4.779,duration=4.903,text='hệ tiêu hóa')])
         result=add_title_cards(plan,[], '')

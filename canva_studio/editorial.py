@@ -176,10 +176,17 @@ def render_titles(plan,ffmpeg,folder,font=None):
         textfile=folder/f'title-{key}.txt';video=folder/(f'SKST_error_{key}.png' if scene.get('still_image') else f'SKST_title_{key}.mp4')
         textfile.write_text('\n'.join(line for paragraph in title.splitlines() for line in textwrap.wrap(paragraph,width=52 if scene.get('error_card') else 38)),encoding='utf8')
         size=48 if scene.get('error_card') else 72
-        filters=f"drawtext=fontfile='{escaped_font}':textfile='{textfile.name}':fontsize={size}:fontcolor=white:line_spacing=18:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=0.2"
+        filters=f"drawtext=fontfile='{escaped_font}':textfile='{textfile.name}':expansion=none:fontsize={size}:fontcolor=white:line_spacing=18:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=0.2"
         output=['-frames:v','1'] if scene.get('still_image') else ['-t',str(scene['duration']),'-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p']
         if scene.get('still_image'):filters=filters.split(',fade=')[0]
-        subprocess.run([str(ffmpeg),'-v','error','-y','-f','lavfi','-i','color=c=black:s=1920x1080:r=30','-vf',filters,*output,str(video.resolve())],cwd=folder,check=True,capture_output=True,creationflags=0x08000000 if os.name=='nt' else 0)
+        try:
+            subprocess.run([str(ffmpeg),'-v','error','-y','-f','lavfi','-i','color=c=black:s=1920x1080:r=30','-vf',filters,*output,str(video.resolve())],cwd=folder,check=True,capture_output=True,timeout=120,creationflags=0x08000000 if os.name=='nt' else 0)
+        except subprocess.CalledProcessError as exc:
+            detail=(exc.stderr or b'').decode('utf8','replace') if isinstance(exc.stderr,bytes) else str(exc.stderr or '')
+            detail=' '.join(detail.split())[:400]
+            raise ValueError(f'FFmpeg tạo thẻ chữ lỗi (mã {exc.returncode}): {detail or "không có thông báo chi tiết"}') from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError('FFmpeg tạo thẻ chữ quá thời gian chờ 120 giây.') from exc
         scene['title_path']=str(video.resolve())
     return plan
 

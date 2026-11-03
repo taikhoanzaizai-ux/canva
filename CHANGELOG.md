@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.9.2
+
+- Sửa dừng dựng khi lời đọc hoặc thẻ lỗi chứa dấu phần trăm: hiển thị chữ nguyên văn, không diễn giải thành lệnh FFmpeg. Áp dụng cho mọi dự án, tiêu đề và thẻ lỗi.
+- Báo nguyên nhân FFmpeg thực tế thay vì chuỗi lệnh bị cắt; giới hạn thời gian tạo thẻ chữ để tránh treo vô hạn.
+
 ## 0.9.1
 
 - Nhận cụm căng tức/bụng căng và biến thể nhận diện Bụ căng, tìm trực tiếp đầy hơi/chướng bụng thay vì đưa cả câu dài vào Canva.
