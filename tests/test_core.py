@@ -23,7 +23,7 @@ class PlannerTests(unittest.TestCase):
             p=Path(d)/'t.json';p.write_text('[{"start":2,"end":1}]')
             with self.assertRaises(ValueError):load_transcript(p)
     def test_topics_and_negative(self):
-        self.assertIn('ballet',describe('từ từ kiễng cao hai gót chân')['negative'])
+        self.assertTrue(describe('từ từ kiễng cao hai gót chân')['allow_all_media'])
         self.assertIn('đau lưng',describe('thắt lưng ê ẩm')['queries'][0])
     def test_script_alignment_weak_rejected(self):
         seg=[dict(start=0,end=10,words=[dict(word='xin',start=i,end=i+1) for i in range(10)])]
@@ -39,6 +39,15 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_reuse_history_is_soft_and_scoped_to_one_project(self):
+        self.e.state.update(voice_done=True,used=['blood'],usage={'blood':2},last_asset='blood')
+        task=self.e.next_task(self.client)['task']
+        self.assertEqual(task['usage']['blood'],2)
+        self.e.result(dict(id='1',client='A',asset='blood',title='Blood cells'))
+        self.assertEqual(self.e.state['usage']['blood'],3)
+        self.e.pause();self.e.configure(dict(scenes=[dict(id=1,start=0,duration=4,text='blood',queries=['blood'])]),self.client['url'],'new.wav')
+        self.assertEqual(self.e.state['usage'],{});self.assertEqual(self.e.state['used'],[])
+
     def test_scene_error_schedules_visible_card_without_skipping_voice_time(self):
         self.e.state['voice_done']=True;self.e.next_task(self.client)
         response=self.e.result(dict(id='1',client='A',error='Hết thời gian chờ: ô tìm kiếm video (16 giây).'))

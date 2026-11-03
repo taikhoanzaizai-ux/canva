@@ -1,6 +1,6 @@
 # SKST Canva Studio
 
-Ứng dụng Windows dựng video từ voice và kịch bản, dùng kho stock Canva qua tiện ích trình duyệt. Giao diện tiếng Việt, cắt cảnh ngắn, tránh dùng lại stock và lưu tiến độ. Đây vẫn là **bản thử**, tối đa 50 cảnh/thiết kế; việc điều khiển Canva trọn quy trình chưa được kiểm thử đầy đủ.
+Ứng dụng Windows dựng video từ voice và kịch bản, dùng toàn bộ loại video/ảnh/mô phỏng trong kho Canva theo đúng từ khóa qua tiện ích trình duyệt. Giao diện tiếng Việt, cắt cảnh ngắn, ưu tiên tránh trùng trong từng dự án, cho phép dùng lại khi thiếu tư liệu phù hợp và lưu tiến độ. Đây vẫn là **bản thử**, tối đa 50 cảnh/thiết kế; việc điều khiển Canva trọn quy trình chưa được kiểm thử đầy đủ.
 
 **[Tải bản Windows mới nhất](https://github.com/taikhoanzaizai-ux/canva/releases/latest)** · **[Các thay đổi](CHANGELOG.md)**
 

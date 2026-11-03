@@ -3,6 +3,28 @@ from canva_studio.core import make_plan,describe,split_batches
 from canva_studio.editorial import headings,timed_headings,add_title_cards,refine_queries
 
 class EditorialTests(unittest.TestCase):
+    def test_near_duplicate_boundaries_never_create_one_millisecond_scene(self):
+        plan=dict(duration=9.682,source_start=0,scenes=[dict(id=1,start=0,duration=4.778,text='đường ruột'),dict(id=2,start=4.779,duration=4.903,text='hệ tiêu hóa')])
+        result=add_title_cards(plan,[], '')
+        self.assertEqual(len(result['scenes']),2)
+        self.assertTrue(all(s['duration']>=.1 for s in result['scenes']))
+        self.assertAlmostEqual(sum(s['duration'] for s in result['scenes']),9.682,places=3)
+
+    def test_pending_tiny_repair_keeps_ids_completed_scenes_and_total_voice(self):
+        from canva_studio.core import repair_tiny_scenes
+        rows=[dict(id=25,start=71.627,duration=4.778),dict(id=26,start=76.405,duration=.001),dict(id=27,start=76.406,duration=4.903,source_start=76.406)]
+        before=copy.deepcopy(rows[0]);end=rows[-1]['start']+rows[-1]['duration']
+        self.assertEqual(repair_tiny_scenes(rows,[25]),1)
+        self.assertEqual(rows[0],before);self.assertEqual(rows[1]['id'],26);self.assertEqual(rows[1]['duration'],.25)
+        self.assertAlmostEqual(rows[1]['start']+rows[1]['duration'],rows[2]['start'])
+        self.assertAlmostEqual(rows[-1]['start']+rows[-1]['duration'],end)
+        self.assertEqual(repair_tiny_scenes(rows,[25]),0)
+
+    def test_medical_queries_target_the_object_without_requiring_people(self):
+        for text,term in [('hồng cầu trong mạch máu','blood'),('niêm mạc đường ruột','intestine'),('đo đường huyết','glucose')]:
+            rows=[dict(id=1,text=text,**describe(text))];refine_queries(rows)
+            self.assertIn(term,rows[0]['subjects']);self.assertTrue(rows[0]['allow_all_media'])
+            self.assertEqual(rows[0]['negative'],[]);self.assertFalse(rows[0]['real_people_only'])
     def test_explicit_headings_not_quantities(self):
         result=headings('1. Nhón gót chân\nĂn 2 quả mỗi ngày.\na) Hít thở chậm\n2. Xoa bóp bắp chân')
         self.assertEqual([h['label'] for h in result],['1','a','2'])

@@ -1,10 +1,16 @@
 """Script headings, time-preserving title cards, and concrete visual search intent."""
 import copy,difflib,re,unicodedata,zipfile
 from xml.etree.ElementTree import ParseError
-from .core import describe,norm
+from .core import describe,norm,repair_tiny_scenes
 
 # Ordered rules: specific food/preparation and symptoms beat broad organ terms.
 RULES=[
+ ('mạch máu|lòng mạch|tuần hoàn|hồng cầu|dòng máu|máu lưu thông',['máu lưu thông trong mạch máu','hồng cầu trong động mạch','blood flow red blood cells artery'],['blood','artery','vessel','circulation','máu','mạch'],[]),
+ ('đường ruột|đường duật|ruột|dạ dày|niêm mạc|niềm mạng|hệ vi sinh|hẹp vi sinh|tiêu hóa',['hệ tiêu hóa dạ dày đường ruột','niêm mạc ruột hệ vi sinh','digestive system stomach intestines microbiome'],['stomach','intestine','digestive','gut','microbiome','dạ dày','ruột','tiêu hóa'],[]),
+ ('đường huyết|tiểu đường|insulin',['đo đường huyết','máy đo đường huyết','blood glucose test glucometer diabetes'],['glucose','diabetes','glucometer','insulin','blood sugar','đường huyết'],[]),
+ ('gan|thải độc gan',['gan trong cơ thể','mô phỏng gan thải độc','liver anatomy detoxification'],['liver','gan'],[]),
+ ('thận|kinh thận',['thận trong cơ thể','thận lọc máu','kidney anatomy filtration'],['kidney','renal','thận'],[]),
+ ('trái tim|tim mạch|nhịp tim',['tim đập','cấu tạo tim mạch','heart anatomy heartbeat'],['heart','cardiac','tim'],[]),
  ('nước chanh|nước tranh|vỏ tranh|vỏ chanh|vỏ quýt|vỏ quyết|chanh|quýt',['tay vắt chanh pha nước','tay gọt vỏ quýt cam','hands squeezing lemon peeling citrus'],['lemon','lime','citrus','orange','chanh','quýt'],['hands','squeeze','peel','drink','tay','vắt','gọt','uống']),
  ('rau xanh|thực phẩm màu xanh|thực phẩm màu săng|màu xanh vị chua',['người sơ chế rau xanh trong bếp','tay rửa rau xanh làm salad','hands washing green vegetables salad'],['vegetable','greens','salad','rau'],['wash','prepare','eat','rửa','sơ chế','ăn']),
  ('thảo dược|trà thảo mộc',['người pha trà thảo mộc','tay pha trà thảo dược','person preparing herbal tea'],['herbal','tea','herb','trà','thảo dược'],['brew','prepar','drink','pha','uống']),
@@ -63,7 +69,10 @@ def refine_queries(scenes,preserve_before=0):
             # Do not accept an elderly/home match alone as proof of relevance.
             subjects=[w for w in base['positive'] if norm(w) not in {'senior','elderly','home','cao tuoi'}]
             if subjects:scene.update(subjects=subjects,query_basis='chủ đề cụ thể',requires_review=False)
-            else:scene.update(review=True,requires_review=True,query_basis='cần kiểm tra từ khóa')
+            else:
+                phrase=' '.join(scene.get('text','').strip(' ,.!?').split()[:10])
+                scene.update(queries=[phrase,' '.join(phrase.split()[:5])],positive=phrase.split(),subjects=[],actions=[],review=False,requires_review=False,query_basis='từ khóa câu lời đọc')
+        scene.update(allow_all_media=True,real_people_only=False,negative=[])
     return scenes
 
 def headings(script):
@@ -133,7 +142,13 @@ def add_title_cards(plan,segments,script,timing_offset=0):
     for scene in plan['scenes']:points.update([scene['start'],round(scene['start']+scene['duration'],3)])
     for title in windows:
         points={p for p in points if not title['start']<p<title['end']};points.update([title['start'],title['end']])
-    points=sorted(points);rows=[];section=''
+    ordered=sorted(round(p,3) for p in points);points=[]
+    for point in ordered:
+        if points and point-points[-1]<.1:
+            if point==round(end,3):points[-1]=point
+            continue
+        points.append(point)
+    rows=[];section=''
     for a,b in zip(points,points[1:]):
         if b-a<.001:continue
         title=next((t for t in windows if t['start']<=a<t['end']),None)
@@ -143,6 +158,7 @@ def add_title_cards(plan,segments,script,timing_offset=0):
             section=title['title'];row.update(kind='title',title_text=section,text=section,queries=['[Tiêu đề] '+section],review=False)
         row.update(id=len(rows)+1,start=round(a,3),duration=round(b-a,3),source_start=round(source+a,3),section_title=section)
         rows.append(row)
+    repair_tiny_scenes(rows)
     plan['scenes']=refine_queries(rows);plan['title_count']=len(windows)
     return plan
 

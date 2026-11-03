@@ -1,5 +1,15 @@
 # Các bản cập nhật
 
+## 0.9.0
+
+- Chống trùng mềm theo từng dự án: ưu tiên video/ảnh chưa dùng; nếu không có lựa chọn phù hợp khác, thử lại đúng từ khóa với tư liệu đã dùng, ưu tiên số lần ít và tránh lặp liền cảnh. Dự án mới xóa lịch sử này, các phần trong cùng bài giữ lịch sử chung.
+
+- Bỏ giới hạn tư liệu phải có người thật: dùng video/ảnh/mô phỏng/3D/đồ vật/thực phẩm trong Canva khi khớp chủ thể của lời đọc. Không nới sang tư liệu khác chủ đề; vẫn ưu tiên tránh trùng và ưu tiên video.
+- Từ khóa y khoa đi thẳng vào mạch máu/hồng cầu, đường huyết/máy đo, dạ dày/đường ruột/vi sinh, gan, thận, tim; không mặc định đổi mọi nội dung thành bác sĩ/người cao tuổi.
+- Gộp mốc cảnh gần trùng do làm tròn, không sinh cảnh 0,001 giây. Dự án dở giữ ID/cảnh đã xong và thời lượng voice, mượn một phần thời gian cảnh kế để sửa cảnh quá ngắn.
+- Đếm trực tiếp clip timeline thay vì nút thêm cảnh; suy mốc bắt đầu từ cảnh trước khi clip quá ngắn không có tay cắt. Chọn và đối chiếu cảnh cuối trước khi cắt, bù sai số cuối cảnh cho cả video và ảnh.
+- Khôi phục trường hợp cũ đã thu nhầm cảnh trước thành 0,001 giây khi xác nhận được đúng ID/mốc; không yêu cầu phân tích lại toàn bài.
+
 ## 0.8.3
 
 - Sửa bấm lại tab Tải lên đang chọn khiến Canva đóng bảng: kiểm tra aria-selected trước khi mở, dùng chung cho voice, clip tiêu đề và ảnh báo lỗi.

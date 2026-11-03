@@ -53,7 +53,7 @@ class App:
         for label,var in [('Từ giây',self.start),('Đến giây (trống = hết)',self.end),('Mở đầu dựng kỹ (giây)',self.opening)]:
             ttk.Label(row,text=label).pack(side='left',padx=(0,6));ttk.Entry(row,textvariable=var,width=8).pack(side='left',padx=(0,15))
         self.plan_button=ttk.Button(row,text='1. Phân tích & chia cảnh',style='Accent.TButton',command=self.analyze);self.plan_button.pack(side='right')
-        self.notice=tk.StringVar(value='Chỉ người thật • Tự chia 50 cảnh/phần • Để trống Đến giây để dựng hết voice gốc.')
+        self.notice=tk.StringVar(value='Video/ảnh đúng chủ đề • Tự chia 50 cảnh/phần • Để trống Đến giây để dựng hết voice gốc.')
         ttk.Label(build,textvariable=self.notice,foreground='#85601d',wraplength=1000).pack(anchor='w',pady=5)
         frame=ttk.Frame(build);frame.pack(fill='both',expand=True)
         self.tree=ttk.Treeview(frame,columns=('time','text','query'),show='headings',selectmode='browse',height=4)
@@ -328,7 +328,7 @@ class App:
         messagebox.showinfo('Các phần đã dựng','\n\n'.join(rows) or 'Chưa có phần nào.')
     def new_project(self):
         if not messagebox.askyesno('Dự án mới','Xóa tiến độ dựng trong ứng dụng để chuẩn bị dự án mới? Thiết kế Canva hiện tại vẫn được giữ.'):return
-        self.engine.pause();self.engine.state.update(scenes=[],done=[],phase={},used=[],target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('')
+        self.engine.pause();self.engine.state.update(scenes=[],done=[],phase={},used=[],usage={},last_asset='',target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('')
     def tick(self):
         while not self.tasks.empty():
             kind,value=self.tasks.get()

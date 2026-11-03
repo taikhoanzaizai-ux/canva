@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.8.3'
+VERSION = '0.9.0'
 
 def norm(text):
     return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower().replace('đ','d')) if unicodedata.category(c) != 'Mn')
@@ -65,8 +65,9 @@ def describe(text):
         desc=dict(queries=['người cao tuổi sinh hoạt tại nhà','người cao tuổi chăm sóc sức khỏe','senior healthy lifestyle at home'],positive=['senior','elderly','home'],negative=[],review=True)
     translations={'leg':'chân','calf':'bắp chân','doctor':'bác sĩ','patient':'bệnh nhân','massage':'xoa bóp','stretch':'giãn cơ','exercise':'tập thể dục','heel':'gót chân','breath':'hít thở','sleep':'ngủ','wake':'thức dậy','morning':'buổi sáng','walking':'đi bộ','senior':'cao tuổi','elderly':'cao tuổi','back pain':'đau lưng','tired':'mệt mỏi'}
     desc['positive']=list(dict.fromkeys(desc['positive']+[translations[w] for w in desc['positive'] if w in translations]))
-    desc['negative']=list(dict.fromkeys(desc['negative']+REAL_NEGATIVE))
-    desc['real_people_only']=True
+    desc['negative']=[]
+    desc['real_people_only']=False
+    desc['allow_all_media']=True
     return desc
 
 
@@ -208,6 +209,23 @@ def make_plan(segments, start=0, end=None, opening=35, max_seconds=5):
         desc=describe(context)
         scenes.append(dict(id=len(scenes)+1,start=round(a-start,3),source_start=round(a,3),duration=round(b-a,3),text=text,**desc))
     return dict(scenes=scenes,duration=round(end-start,3),source_start=start,approximate=approximate)
+
+def repair_tiny_scenes(scenes,completed=()):
+    """Borrow only from pending neighbours; preserve IDs, total voice and completed cuts."""
+    changed=0
+    for i,row in enumerate(scenes):
+        if row['id'] in completed or float(row.get('duration',0))>=.1:continue
+        if i+1>=len(scenes):continue
+        following=scenes[i+1]
+        if following['id'] in completed or following.get('kind')=='title':continue
+        old=float(row['duration']);borrow=.25-old
+        if borrow<=0 or following['duration']-borrow<.25:continue
+        row.update(timing_original_duration=old,duration=.25)
+        following['start']=round(following['start']+borrow,3)
+        following['source_start']=round(following.get('source_start',following['start']-borrow)+borrow,3)
+        following['duration']=round(following['duration']-borrow,3);changed+=1
+    return changed
+
 
 def atomic_json(path, value):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)

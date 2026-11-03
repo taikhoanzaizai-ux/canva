@@ -20,14 +20,14 @@ class BatchTests(unittest.TestCase):
     def test_truncated_output_rejected(self):
         with tempfile.TemporaryDirectory() as d,patch('canva_studio.batches.probe_duration',side_effect=[100,1]),patch('canva_studio.batches.subprocess.run'):
             with self.assertRaises(ValueError):prepare_parts(self.plan(3),'source.wav','ffmpeg',d)
-    def test_silence_has_contextual_people_queries(self):
+    def test_silence_keeps_contextual_queries(self):
         plan=make_plan([dict(start=2,end=4,text='người cao tuổi đi bộ')],end=12)
         for scene in plan['scenes']:
-            self.assertNotIn('Khoảng nghỉ',scene['queries']);self.assertTrue(scene['real_people_only'])
-    def test_all_anatomical_topics_require_live_people(self):
+            self.assertNotIn('Khoảng nghỉ',scene['queries']);self.assertFalse(scene['real_people_only']);self.assertTrue(scene['allow_all_media'])
+    def test_anatomical_topics_allow_non_people_media(self):
         for text in ['tuần hoàn máu','trái tim','kinh thận','gân gót chân','bắp chân','Khoảng nghỉ']:
             scene=describe(text)
-            self.assertTrue(scene['real_people_only']);self.assertIn('animation',scene['negative'])
+            self.assertFalse(scene['real_people_only']);self.assertTrue(scene['allow_all_media']);self.assertNotIn('animation',scene['negative'])
             self.assertFalse(any('mô phỏng' in q or 'anatomy' in q or 'blood clot' in q for q in scene['queries']))
     def test_handoff_requires_audit_and_retains_history_used(self):
         with tempfile.TemporaryDirectory() as d:

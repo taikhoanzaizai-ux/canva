@@ -4,8 +4,8 @@ from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
-from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe
-MIN_EXTENSION_VERSION='0.8.3'
+from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes
+MIN_EXTENSION_VERSION='0.9.0'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -30,6 +30,9 @@ class Engine:
         if self.path.exists():
             try:
                 self.state.update(json.loads(self.path.read_text(encoding='utf8')))
+                repair_tiny_scenes(self.state.get('scenes',[]),self.state.get('done',[]))
+                for part in self.state.get('parts',[])[self.state.get('part_index',0)+1:]:repair_tiny_scenes(part['scenes'])
+                for row in self.state.get('scenes',[]):row.update(allow_all_media=True,real_people_only=False,negative=[])
                 repair_scene_texts(self.state)
                 repair_pending_keywords(self.state)
                 refine_queries(self.state.get('scenes',[]),max([*self.state.get('done',[]),int(self.state.get('phase',{}).get('id',0)) if str(self.state.get('phase',{}).get('id','')).isdigit() else 0]))
@@ -45,10 +48,10 @@ class Engine:
         with self.lock:
             if self.state['mode']=='running':raise ValueError('Hãy tạm dừng trước khi đổi dự án.')
             if not valid_canva(target) and not (allow_empty and target==''):raise ValueError('Dán đường dẫn chỉnh sửa Canva hợp lệ.')
-            self.state=dict(mode='ready',message='Đã sẵn sàng. Mở thiết kế video ngang trống trong Canva.',scenes=plan['scenes'],done=[],phase={},used=[],target=target,voice=str(voice),voice_done=False,export_done=False)
+            self.state=dict(mode='ready',message='Đã sẵn sàng. Mở thiết kế video ngang trống trong Canva.',scenes=plan['scenes'],done=[],phase={},used=[],usage={},last_asset='',target=target,voice=str(voice),voice_done=False,export_done=False)
             self.state['parts']=plan.get('parts',[]);self.state['part_index']=0;self.state['history']=[];self.state['audit_done']=False
             self.state['original_voice']=plan.get('original_voice',str(voice))
-            for scene in self.state['scenes']:scene.update(real_people_only=True)
+            for scene in self.state['scenes']:scene.update(real_people_only=False,allow_all_media=True,negative=[])
             self.running=None;self.save()
     def bootstrap(self,plan,voice):
         from .browser import CREATE_VIDEO
@@ -164,7 +167,7 @@ class Engine:
             if not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
-                if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,used=self.state['used'])
+                if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,used=self.state['used'],usage=self.state.get('usage',{}),last_asset=self.state.get('last_asset',''),previous_scene=next((s for s in self.state['scenes'] if s['id']==scene['id']-1),None))
                 elif not self.state.get('audit_done'):task=dict(id='audit',kind='audit',count=len(self.state['scenes']),duration=round(self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'],3))
                 elif self.state.get('part_index',0)+1<len(self.state.get('parts',[])):task=dict(id='next_design',kind='next_design')
                 elif not self.state['export_done']:task=dict(id='export',kind='export')
@@ -235,7 +238,11 @@ class Engine:
                     sources=self.state.setdefault('sources',[])
                     if completed['fallback_source'] not in sources:sources.append(completed['fallback_source'])
                     atomic_json(self.folder/'Sources.json',sources)
-                if asset and asset not in self.state['used']:self.state['used'].append(asset)
+                if asset:
+                    usage=self.state.setdefault('usage',{})
+                    usage[asset]=usage.get(asset,1 if asset in self.state['used'] else 0)+1
+                    self.state['last_asset']=asset
+                    if asset not in self.state['used']:self.state['used'].append(asset)
                 msg=f'Đã dựng cảnh {i}/{len(self.state["scenes"])}: '+str(body.get('title',''))
             self.state['phase']={};self.running=None;self.log(msg);return dict(ok=True,handoff=key=='next_design',target=self.state['target'])
 

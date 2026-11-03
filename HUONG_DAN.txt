@@ -126,3 +126,10 @@ Tự gắn bộ dựng khi Canva chuyển vào /edit mà không tải lại tran
 
 TỪ BẢN 0.8.3
 Giữ bảng Tải lên đang mở thay vì bấm lại làm đóng bảng. Tránh lỗi không thấy Video/ảnh báo lỗi vừa tải khi chuyển bước chèn.
+
+
+TỪ BẢN 0.9.0: TẤT CẢ TƯ LIỆU CANVA ĐÚNG CHỦ ĐỀ
+Không yêu cầu có người/mặt người. Video, ảnh, đồ vật, thực phẩm và mô phỏng y khoa/3D đều dùng được khi khớp từ khóa/chủ thể trong voice. Không dùng cảnh chung chung khác nội dung để lấp khoảng trống. Vẫn ưu tiên video và không dùng trùng tư liệu. Các hướng dẫn cũ chỉ người thật không còn áp dụng.
+Sửa mốc chia cảnh 0,001 giây; dự án đang dở được sửa riêng các cảnh chưa hoàn tất, giữ voice và ID các cảnh trước. Cập nhật ứng dụng và tiện ích rồi Tiếp tục, không cần Phân tích lại.
+
+Hạn chế trùng theo DỰ ÁN, không cấm tuyệt đối: sau khi tìm video và ảnh phù hợp chưa dùng, nếu vẫn thiếu mới thử lại tư liệu Canva đã dùng, ưu tiên loại ít xuất hiện và tránh lặp liền cảnh. Dự án mới dùng lại bình thường; các phần của cùng bài dùng chung lịch sử. Tái sử dụng vẫn phải khớp chủ thể/từ khóa, không đổi sang hình khác chủ đề.

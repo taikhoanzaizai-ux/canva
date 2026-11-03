@@ -73,7 +73,7 @@ def extract_asset(markup,page_url,provider,kind):
 def relevant(asset,scene):
     text=norm(asset['title'])
     if any(norm(w) in text for w in scene.get('negative',[])):return False
-    if not re.search(r'\b(man|woman|people|person|doctor|patient|senior|elderly|hands|feet|male|female)\b',text):return False
+    if not scene.get('allow_all_media') and not re.search(r'\b(man|woman|people|person|doctor|patient|senior|elderly|hands|feet|male|female)\b',text):return False
     subjects=scene.get('subjects') or [w for w in scene.get('positive',[]) if norm(w) not in {'senior','elderly','home','cao tuoi'}]
     return bool(subjects) and any(norm(w) in text for w in subjects)
 
