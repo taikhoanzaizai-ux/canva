@@ -74,7 +74,7 @@ assert.equal(adapter.eligibleCards([photo],{duration:4,positive:['doctor'],subje
  const env={globalThis:{},document:doc,HTMLInputElement:Input,HTMLTextAreaElement:class{},Event:class{},KeyboardEvent:class{constructor(type,options){this.type=type;Object.assign(this,options);}},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>{f();},Promise,console};
  vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
  await env.globalThis.SKSTAdapter.timePhoto(4.24);
- assert(focused&&blurred);assert.equal(committed,4.24,'Commit pending duration even when popover was already open');
+ assert(focused&&blurred);assert.equal(committed,4.2,'Round and commit pending duration even when popover was already open');
  await env.globalThis.SKSTAdapter.tail();
  assert(plusScrolled,'Seek the picture-track endpoint, not the end of a longer voice');
 })().catch(e=>{console.error(e);process.exitCode=1;});
@@ -182,7 +182,7 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
 (async()=>{
  let value='5.0 giây',end=114.98,open=true,enters=0,commits=0,applyAll=0;
  const start=109.98;
- class Input{get value(){return value;}set value(v){value=v;}getAttribute(k){return k==='placeholder'?'--':null;}focus(){}blur(){end=start+Math.round(Number(value)*10)/10;commits++;}dispatchEvent(e){if(e.key==='Enter')enters++;}get offsetWidth(){return open?50:0;}get offsetHeight(){return 0;}getClientRects(){return open?[{}]:[];}}
+ class Input{get value(){return value;}set value(v){value=v;}getAttribute(k){return k==='placeholder'?'--':null;}focus(){}blur(){end=start+Math.floor(Number(value)*10+1e-8)/10;commits++;}dispatchEvent(e){if(e.key==='Enter')enters++;}get offsetWidth(){return open?50:0;}get offsetHeight(){return 0;}getClientRects(){return open?[{}]:[];}}
  class Textarea{}
  const field=new Input();
  const owner={offsetWidth:50,scrollIntoView:()=>{},getAttribute:k=>k==='aria-label'?'5.0 giây, sửa thời gian':null,focus:()=>field.blur(),click:()=>{open=!open;}};
@@ -199,4 +199,20 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
  assert(Math.abs(end-113.98)<.001,'Persist the rounded image duration on the timeline');
  // The stale toolbar caption is still 5.0 above: actual timeline is authoritative.
  await env.globalThis.SKSTAdapter.timePhoto(4.02);assert.equal(commits,1,'A resumed correct error image must not be edited or uploaded again');
+ open=true;value='5.0 giây';end=start+5;
+ await env.globalThis.SKSTAdapter.timePhoto(1.195);
+ assert.equal(value,'1.2','Round before sending to a control that truncates extra decimals');
+ assert(Math.abs(end-start-1.2)<.000001);assert.equal(commits,2);
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+// Canva truncates a long decimal input: send an explicitly rounded tenth.
+for(const d of [.1,.149,.15,.195,.999,1.195,2.999,4.782,4.25,5.057]){
+ const q=adapter.photoDuration(d),canva=Math.floor(Number(String(q))*10+1e-8)/10;
+ assert(Math.abs(canva-d)<=.050001,`Canva must keep rounded duration ${d}, got ${canva}`);
+}
+let plannedEnd=0,actualEnd=0;
+for(let i=0;i<500;i++){
+ plannedEnd+=[1.195,4.782,2.999,3.337,.195][i%5];
+ actualEnd+=adapter.photoDuration(plannedEnd-actualEnd);
+ assert(Math.abs(actualEnd-plannedEnd)<=.050001,'Absolute endpoint compensation must prevent cumulative drift');
+}

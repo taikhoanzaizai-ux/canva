@@ -238,9 +238,10 @@
     }
     return null;
   };
+  const photoDuration=duration=>Math.max(.1,Math.round((duration+Number.EPSILON)*10)/10);
   const timePhoto=async(duration)=>{
     const before=timeline().at(-1),count=sceneCount();
-    if(!before||!Number.isFinite(duration)||duration<.1)throw Error('Không xác định được cảnh ảnh/thời lượng cần đặt.');
+    if(!before||!Number.isFinite(duration)||duration<=0)throw Error('Không xác định được cảnh ảnh/thời lượng cần đặt.');
     const expected=before.start+duration;
     const applied=()=>{
       const last=timeline().at(-1);
@@ -252,7 +253,9 @@
     const owner=()=>find(/giây, sửa thời gian$/);
     if(!visible(durationInput()))await click(await wait(owner,'Không thấy thời lượng ảnh'));
     const field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không thấy ô đặt thời gian ảnh');
-    field.focus();fill(field,String(Math.round(duration*1000)/1000));
+    // Canva truncates extra decimal digits. Round explicitly before input;
+    // otherwise 1.195 becomes 1.1 and fails the absolute-end verification.
+    field.focus();fill(field,String(photoDuration(duration)));
     // Do not send Enter in the same React turn as input. Moving focus to the
     // owning toolbar button commits the current value without applying to all.
     await sleep(350);
@@ -567,7 +570,7 @@
     }
     throw Error('MP4 chưa tải xong sau 10 phút. Giữ tab để Tiếp tục kiểm tra; không tự xuất trùng.');
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,reuseEligibleCards,relatedCards,searchReady,timelineScroller,timeline,tail,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,reuseEligibleCards,relatedCards,searchReady,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{

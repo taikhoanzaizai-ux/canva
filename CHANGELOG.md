@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.10.3
+
+- Sửa lưu thời lượng ảnh có nhiều chữ số thập phân: Canva cắt bớt chữ số thay vì làm tròn gần nhất. Phần mềm chủ động làm tròn tới 0,1 giây trước khi gửi, rồi kiểm tra mốc kết thúc với voice gốc; áp dụng chung cho ảnh stock và ảnh báo lỗi, mọi dự án.
+- Giữ bù sai số theo mốc tuyệt đối ở cảnh kế tiếp, tránh sai số làm tròn cộng dồn. Ảnh đã đúng mốc được tiếp tục tại chỗ, không chèn lại.
+- Đã thử thao tác trực tiếp trên Canva và thêm kiểm thử nhiều thời lượng ngắn/lẻ cùng chuỗi cảnh dài; chưa xác minh toàn bộ bài chạy tự động.
+
 ## 0.10.2
 
 - Sửa dừng khi đặt thời lượng ảnh/ảnh báo lỗi: chờ React nhận giá trị, chuyển tiêu điểm sang nút thời lượng để lưu rồi đóng bằng chính nút đó; không gửi Enter ngay sau input, không bấm Áp dụng cho mọi trang.
