@@ -112,7 +112,7 @@
     return new RegExp('(^|[^a-z0-9])'+value+'(?:s|es)?($|[^a-z0-9])').test(norm(title));
   }
   function eligibleCards(items,scene,used){
-    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&(!scene.subjects?.length||scene.subjects.some(w=>subjectMatch(c.title,w)))&&(!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
+    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&(!scene.subjects?.length||scene.subjects.some(w=>subjectMatch(c.title,w)))&&(scene.topic_only||!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
   }
   function relatedCards(items,scene,used){
     return eligibleCards(items,scene,used).filter(c=>c.duration>=scene.duration+.1);
@@ -133,6 +133,7 @@
     const text=norm(card.title);let n=0;
     for(const word of scene.positive||[])if(text.includes(norm(word)))n+=4;
     for(const [index,word] of (scene.subjects||[]).entries())if(subjectMatch(text,word))n+=index<2?8:2;
+    if(scene.topic_only&&scene.actions?.some(w=>text.includes(norm(w))))n+=3;
     for(const word of scene.negative||[])if(text.includes(norm(word)))n-=100;
     if(/elderly|senior|aged|older|middle aged/.test(text))n+=2;
     if(scene.preferred&&text===norm(scene.preferred))n+=100;

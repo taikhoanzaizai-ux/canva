@@ -3,6 +3,18 @@ from canva_studio.core import make_plan,describe,split_batches
 from canva_studio.editorial import headings,timed_headings,add_title_cards,refine_queries
 
 class EditorialTests(unittest.TestCase):
+    def test_short_topics_and_direct_food_override_blood_context(self):
+        texts=['máu lưu thông trong mạch máu','đo đường huyết','người già thể dục','Nhưng khi cho 3–4 quả cam vào máy ép','Thứ chúng ta uống vào là nước ép']
+        rows=[dict(id=i+1,text=t,**describe(t)) for i,t in enumerate(texts)]
+        refine_queries(rows)
+        self.assertEqual([r['queries'][0] for r in rows],['mạch máu','đường huyết','người già thể dục','cam','nước ép'])
+        self.assertTrue(all(r['topic_only'] for r in rows))
+
+    def test_restored_generated_keywords_are_shortened_without_timing_changes(self):
+        row=dict(id=4,start=12,duration=4,text='đo đường huyết',queries=['old long query'],subjects=['glucose'],query_basis='old automatic')
+        refine_queries([row]);self.assertEqual(row['queries'][0],'đường huyết')
+        self.assertEqual((row['id'],row['start'],row['duration']),(4,12,4))
+
     def test_explicit_action_survives_unrestricted_media_style(self):
         rows=[dict(id=1,text='Nhón gót chân lên',**describe('Nhón gót chân lên'))]
         refine_queries(rows)

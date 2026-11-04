@@ -251,6 +251,7 @@ class App:
             status,tag,_=scene_status(scene,st);ident=str(scene['id'])
             if self.tree.exists(ident):
                 self.tree.set(ident,'time',f'{scene["id"]} | {scene["start"]:.2f} → {scene["start"]+scene["duration"]:.2f}')
+                self.tree.set(ident,'text',scene['text']);self.tree.set(ident,'query',scene.get('queries',[''])[0])
                 self.tree.set(ident,'status',status);self.tree.item(ident,tags=(tag,) if tag else ())
         errors=st.get('errors',[])
         marker=(st.get('part_index',0),len(errors))

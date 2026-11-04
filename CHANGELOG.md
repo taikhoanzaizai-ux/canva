@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.11.3
+
+- Rút gọn từ khóa theo chủ đề: mạch máu, đường huyết, người già thể dục… Chấp nhận tư liệu cùng chủ đề; hành động cụ thể chỉ được ưu tiên, không còn bắt buộc.
+- Ưu tiên chủ đề trực tiếp trong lời đọc (cam, nước ép…) thay vì kéo dài ngữ cảnh mạch máu sang cảnh khác. Giữ hạn chế lặp trong cùng dự án.
+- Tự cập nhật từ khóa tự động của cảnh chưa dựng khi mở lại dự án; giữ cảnh đã dựng và từ khóa người dùng tự sửa.
+
 ## 0.11.2
 
 - Sửa đổi tên Canva: kích hoạt ô tên qua phần tử tiêu đề trên thanh trên (Canva dùng menuitem), chờ giá trị nhập được nhận rồi chuyển tiêu điểm để lưu; không gửi Enter ngay sau input.

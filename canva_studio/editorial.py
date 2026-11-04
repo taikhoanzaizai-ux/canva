@@ -2,6 +2,7 @@
 import copy,difflib,re,unicodedata,zipfile
 from xml.etree.ElementTree import ParseError
 from .core import describe,norm,repair_tiny_scenes
+from .broad_search import broaden
 
 # Ordered rules: specific food/preparation and symptoms beat broad organ terms.
 RULES=[
@@ -52,7 +53,7 @@ def refine_queries(scenes,preserve_before=0):
     for i,scene in enumerate(scenes):
         if scene['id']<=preserve_before or scene.get('kind')=='title':continue
         # Respect manually edited query lists; generated fallback is explicitly review=True.
-        generated=scene.get('queries')==describe(scene.get('text',''))['queries'] or any(scene.get('queries')==r[1] for r in RULES)
+        generated=scene.get('query_basis') or scene.get('queries')==describe(scene.get('text',''))['queries'] or any(scene.get('queries')==r[1] for r in RULES)
         if scene.get('manual_queries') or (not scene.get('review') and not generated):continue
         direct=rule_for(scene.get('text',''))
         context=scene.get('section_title','')+' '+sentence_context(scenes,i)
@@ -83,6 +84,7 @@ def refine_queries(scenes,preserve_before=0):
             if any(w in scene.get('text','').casefold() for w in pattern.split('|')):
                 scene['actions']=terms;break
         scene.update(allow_all_media=True,real_people_only=False,negative=[])
+        broaden(scene)
     return scenes
 
 def headings(script):

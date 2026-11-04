@@ -96,6 +96,10 @@ assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'},{ac
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
 const bloodScene={duration:4,allow_all_media:true,subjects:['blood','artery'],actions:['flow'],positive:['blood','artery'],negative:[]};
+const broadBlood={...bloodScene,topic_only:true};
+assert.equal(adapter.eligibleCards([{id:'diagram',duration:10,title:'Blood cells anatomy'}],broadBlood,[]).length,1,'Broad topics accept related footage without exact action');
+assert.equal(adapter.eligibleCards([{id:'rainbow',duration:10,title:'Rainbow neon frame'}],broadBlood,[]).length,0,'Broad topics still reject unrelated footage');
+assert.equal(adapter.eligibleCards([{id:'diagram',duration:10,title:'Blood cells anatomy'}],broadBlood,['diagram']).length,0,'Prefer unused footage within a project');
 assert.equal(adapter.eligibleCards([{id:'anatomy',duration:10,title:'3D blood cells flowing in an artery'}],bloodScene,[]).length,1,'Relevant medical 3D needs no people or face');
 assert.equal(adapter.eligibleCards([{id:'device',duration:8,title:'Blood glucose meter on a table'}],{duration:4,allow_all_media:true,subjects:['glucose'],positive:['glucose']},[]).length,1,'Objects and devices are valid');
 assert.equal(adapter.eligibleCards([{id:'wrong',duration:10,title:'Rainbow neon frame'}],bloodScene,[]).length,0,'Unrestricted media types still require script relevance');

@@ -75,12 +75,12 @@ def relevant(asset,scene):
     if any(norm(w) in text for w in scene.get('negative',[])):return False
     if not scene.get('allow_all_media') and not re.search(r'\b(man|woman|people|person|doctor|patient|senior|elderly|hands|feet|male|female)\b',text):return False
     subjects=scene.get('subjects') or [w for w in scene.get('positive',[]) if norm(w) not in {'senior','elderly','home','cao tuoi'}]
-    return bool(subjects) and any(re.search(r'(?<!\w)'+re.escape(norm(w))+r'(?:s|es)?(?!\w)',text) for w in subjects) and (not scene.get('actions') or any(norm(w) in text for w in scene['actions']))
+    return bool(subjects) and any(re.search(r'(?<!\w)'+re.escape(norm(w))+r'(?:s|es)?(?!\w)',text) for w in subjects) and (scene.get('topic_only') or not scene.get('actions') or any(norm(w) in text for w in scene['actions']))
 
 def prepare_external(scene,used,folder,ffmpeg):
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=True);diagnostics=[];blocked=set()
     deadline=time.monotonic()+60
-    english=[w for w in scene.get('subjects',[]) if w.isascii()][:2]
+    english=[w for w in scene.get('subjects',[]) if w.isascii()][:1 if scene.get('topic_only') else 2]
     query=' '.join(english) or scene.get('queries',['health'])[0]
     # Native video libraries first, then photos. Sponsored destinations never qualify.
     for kind in ['video','image']:

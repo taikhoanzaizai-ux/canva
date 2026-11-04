@@ -6,6 +6,12 @@ from canva_studio.fallback import begin_fallback
 from canva_studio.bridge import Engine
 
 class FreeMediaTests(unittest.TestCase):
+    def test_broad_topic_accepts_device_without_exact_action(self):
+        from canva_studio.free_media import relevant
+        scene=dict(topic_only=True,allow_all_media=True,subjects=['glucose'],actions=['testing'])
+        self.assertTrue(relevant(dict(title='Glucose meter on table'),scene))
+        self.assertFalse(relevant(dict(title='Rainbow animation'),scene))
+
     def test_failed_fallback_is_retried_and_pending_job_is_not_duplicated(self):
         with tempfile.TemporaryDirectory() as d:
             e=Engine(d);s=dict(id=1,start=0,duration=3,text='test')

@@ -6,7 +6,7 @@ from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.11.2'
+MIN_EXTENSION_VERSION='0.11.3'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -55,6 +55,7 @@ class Engine:
             self.state['original_voice']=plan.get('original_voice',str(voice))
             self.state['project_name']=name;self.state['named_title']=''
             for scene in self.state['scenes']:scene.update(real_people_only=False,allow_all_media=True,negative=[])
+            refine_queries(self.state['scenes'])
             self.running=None;self.save()
     def set_project_name(self,name):
         with self.lock:
