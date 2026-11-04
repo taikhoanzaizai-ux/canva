@@ -17,6 +17,7 @@ from canva_studio.storage import data_dir, migrate_legacy
 from canva_studio.storage import application_dir
 from canva_studio.companion import companion_status
 from canva_studio.recognizer import paths as recognizer_paths,ensure_recognizer,command as recognition_command,convert_output
+from canva_studio.scene_status import scene_status
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
 DATA=data_dir()
@@ -24,7 +25,7 @@ NO_WINDOW=0x08000000 if os.name=='nt' else 0
 
 class App:
     def __init__(self,root):
-        self.root=root;root.title('SKST Canva Studio • Bản thử '+VERSION);root.geometry('1130x820');root.minsize(940,700)
+        self.root=root;root.title('SKST Canva Studio • Bản thử '+VERSION);root.geometry('1130x900');root.minsize(940,760)
         legacy=Path(os.environ.get('LOCALAPPDATA',Path.home()))/'SKST Canva Studio'
         imported=0
         if '--self-test' not in sys.argv:
@@ -62,10 +63,18 @@ class App:
         self.notice=tk.StringVar(value='Video/ảnh đúng chủ đề • Tự chia 50 cảnh/phần • Để trống Đến giây để dựng hết voice gốc.')
         ttk.Label(build,textvariable=self.notice,foreground='#85601d',wraplength=1000).pack(anchor='w',pady=5)
         frame=ttk.Frame(build);frame.pack(fill='both',expand=True)
-        self.tree=ttk.Treeview(frame,columns=('time','text','query'),show='headings',selectmode='browse',height=4)
-        for name,title,width in [('time','Thời gian',125),('text','Lời đọc',480),('query','Từ khóa Canva',300)]:self.tree.heading(name,text=title);self.tree.column(name,width=width)
+        self.tree=ttk.Treeview(frame,columns=('time','text','query','status'),show='headings',selectmode='browse',height=4)
+        for name,title,width in [('time','Cảnh / Thời gian',165),('text','Lời đọc',360),('query','Từ khóa Canva',260),('status','Trạng thái',190)]:self.tree.heading(name,text=title);self.tree.column(name,width=width)
+        self.tree.tag_configure('error',background='#ffe0de',foreground='#8a1711');self.tree.tag_configure('manual',background='#def2e5',foreground='#14572d');self.tree.tag_configure('review',background='#fff2ce')
         self.tree.pack(side='left',fill='both',expand=True);sb=ttk.Scrollbar(frame,orient='vertical',command=self.tree.yview);sb.pack(side='right',fill='y');self.tree.configure(yscrollcommand=sb.set)
         self.tree.bind('<Double-1>',self.edit_scene)
+        self.tree.bind('<<TreeviewSelect>>',self.scene_selected)
+        self.manual_scene=tk.StringVar();self.scene_detail=tk.StringVar(value='Chọn cảnh để xem lỗi hoặc tự sửa trên Canva.');self.last_error_marker=None
+        repair=ttk.Frame(build);repair.pack(fill='x',pady=4)
+        ttk.Label(repair,text='Cảnh số').pack(side='left');ttk.Entry(repair,textvariable=self.manual_scene,width=6).pack(side='left',padx=5)
+        ttk.Button(repair,text='Mở Canva để sửa',command=self.open_manual_scene).pack(side='left')
+        self.manual_button=ttk.Button(repair,text='Đã sửa trên Canva — tiếp tục',command=self.confirm_manual_scene);self.manual_button.pack(side='left',padx=6)
+        tk.Label(build,textvariable=self.scene_detail,fg='#8a1711',bg='#f3f5fa',font=('Segoe UI',10),wraplength=1020,height=3,anchor='w',justify='left').pack(fill='x')
         row=ttk.Frame(build);row.pack(fill='x',pady=9)
         ttk.Button(row,text='Sửa từ khóa cảnh',command=self.edit_scene).pack(side='left');ttk.Button(row,text='Lưu danh sách cảnh',command=self.export_plan).pack(side='left',padx=6);ttk.Button(row,text='Nạp danh sách cảnh',command=self.import_plan).pack(side='left');ttk.Button(row,text='Mẫu Nhón gót chân',command=self.load_demo).pack(side='right')
         row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text='Link Canva (trống = tự tạo)').pack(side='left');self.target=tk.StringVar(value=self.engine.state['target']);ttk.Entry(row,textvariable=self.target).pack(side='left',fill='x',expand=True,padx=8);ttk.Button(row,text='Mở Canva',command=self.open_canva).pack(side='right')
@@ -232,7 +241,51 @@ class App:
     def populate(self):
         self.tree.delete(*self.tree.get_children())
         for s in self.plan['scenes']:
-            self.tree.insert('','end',iid=str(s['id']),values=(f'{s["start"]:.2f} → {s["start"]+s["duration"]:.2f}',s['text'],s['queries'][0]))
+            self.tree.insert('','end',iid=str(s['id']),values=(f'{s["id"]} | {s["start"]:.2f} → {s["start"]+s["duration"]:.2f}',s['text'],s.get('queries',[''])[0],''))
+        self.refresh_scene_status()
+    def refresh_scene_status(self):
+        if not self.plan:return
+        st=self.engine.state if self.engine.state.get('scenes')==self.plan['scenes'] else {}
+        for scene in self.plan['scenes']:
+            status,tag,_=scene_status(scene,st);ident=str(scene['id'])
+            if self.tree.exists(ident):
+                self.tree.set(ident,'status',status);self.tree.item(ident,tags=(tag,) if tag else ())
+        errors=st.get('errors',[])
+        marker=(st.get('part_index',0),len(errors))
+        if errors and marker!=self.last_error_marker:
+            self.last_error_marker=marker
+            latest=next((r for r in reversed(errors) if r.get('part',1)==st.get('part_index',0)+1 and self.tree.exists(str(r.get('id')))),None)
+            if latest:self.tree.selection_set(str(latest['id']));self.tree.see(str(latest['id']))
+        self.scene_selected(update_number=False)
+    def scene_selected(self,event=None,update_number=True):
+        if not self.plan or not self.tree.selection():return
+        ident=int(self.tree.selection()[0])
+        if update_number:self.manual_scene.set(str(ident))
+        scene=next((s for s in self.plan['scenes'] if s['id']==ident),None)
+        if scene:
+            status,_,reason=scene_status(scene,self.engine.state if self.engine.state.get('scenes')==self.plan['scenes'] else {})
+            self.scene_detail.set(f'Cảnh {ident} • {scene["start"]:.3f}–{scene["start"]+scene["duration"]:.3f} giây • {status}'+(' • '+reason[:240] if reason else ''))
+    def manual_scene_id(self):
+        if self.worker_busy or not self.plan or self.engine.state.get('scenes')!=self.plan['scenes']:raise ValueError('Chọn cảnh trong dự án đang dựng trước khi tự sửa trên Canva.')
+        try:ident=int(self.manual_scene.get())
+        except ValueError:raise ValueError('Chọn cảnh trong bảng hoặc nhập số cảnh cần sửa.')
+        if not any(s['id']==ident for s in self.engine.state.get('scenes',[])):raise ValueError('Số cảnh không có trong phần Canva hiện tại.')
+        return ident
+    def open_manual_scene(self):
+        try:
+            ident=self.manual_scene_id();self.engine.begin_manual_edit(ident)
+            self.tree.selection_set(str(ident));self.tree.see(str(ident))
+            scene=next(s for s in self.engine.state['scenes'] if s['id']==ident)
+            open_chrome(self.engine.state['target'])
+            self.notice.set(f'Đã tạm dừng để bạn sửa cảnh {ident} trên Canva: giữ một cảnh tại mốc {scene["start"]:.3f}–{scene["start"]+scene["duration"]:.3f} giây. Sửa xong bấm Đã sửa trên Canva — tiếp tục.')
+        except Exception as exc:messagebox.showerror('Chưa mở được cảnh tự sửa',str(exc))
+    def confirm_manual_scene(self):
+        try:
+            ident=self.manual_scene_id();self.engine.pause();self.engine.request_manual_review(ident)
+            self.tree.selection_set(str(ident));self.tree.see(str(ident))
+            if not self.engine.connection_status()['ready']:open_chrome(self.engine.state['target'])
+            self.notice.set(f'Đang kiểm tra cảnh {ident} bạn đã sửa trên Canva…')
+        except Exception as exc:messagebox.showerror('Chưa xác nhận được cảnh tự sửa',str(exc))
     def edit_scene(self,event=None):
         if not self.plan or not self.tree.selection():return
         if self.engine.state['mode']=='running':return messagebox.showinfo('Đang dựng','Tạm dừng trước khi sửa từ khóa.')
@@ -254,7 +307,7 @@ class App:
             for i,s in enumerate(scenes,1):
                 if s['id']!=i or abs(s['start']-at)>.05 or not .1<=s['duration']<=5.05 or not s['queries']:raise ValueError('Danh sách cảnh không liên tục hoặc quá 5 giây.')
                 at=s['start']+s['duration']
-            self.plan=plan;self.prepared_voice='';self.populate();self.engine.state.update(scenes=scenes,done=[],used=[],phase={},voice_done=False,target='',voice='',mode='ready');self.engine.save();self.target.set('');self.notice.set('Đã nạp danh sách. Chọn đúng voice đã cắt theo độ dài danh sách này.')
+            self.plan=plan;self.prepared_voice='';self.engine.state.update(scenes=scenes,done=[],used=[],phase={},errors=[],voice_done=False,target='',voice='',mode='ready');self.engine.state.pop('manual_review',None);self.engine.state.pop('manual_review_error',None);self.engine.state.pop('manual_edit_scene',None);self.populate();self.engine.save();self.target.set('');self.notice.set('Đã nạp danh sách. Chọn đúng voice đã cắt theo độ dài danh sách này.')
         except Exception as e:messagebox.showerror('Không nạp được',str(e))
     def load_demo(self):
         if self.engine.state['mode']=='running':return
@@ -285,6 +338,8 @@ class App:
             if self.worker_busy:return
             if self.engine.state['mode'] in ('opening','opening_resume'):
                 self.notice.set('Chrome đang mở thiết kế. Không bấm lặp; tiện ích sẽ tự bắt đầu khi trang sẵn sàng.');return
+            if self.engine.state.get('manual_edit_scene'):
+                self.manual_scene.set(str(self.engine.state['manual_edit_scene']));self.confirm_manual_scene();return
             self.save_project_name()
             if not self.plan:
                 self.analyze();self.analyze_then_run=self.worker_busy;return
@@ -341,7 +396,7 @@ class App:
         messagebox.showinfo('Các phần đã dựng','\n\n'.join(rows) or 'Chưa có phần nào.')
     def new_project(self):
         if not messagebox.askyesno('Dự án mới','Xóa tiến độ dựng trong ứng dụng để chuẩn bị dự án mới? Thiết kế Canva hiện tại vẫn được giữ.'):return
-        self.engine.pause();self.engine.state.update(scenes=[],done=[],phase={},used=[],usage={},last_asset='',project_name='',named_title='',target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('');self.project_name.set('')
+        self.engine.pause();self.engine.state.update(scenes=[],done=[],phase={},errors=[],used=[],usage={},last_asset='',project_name='',named_title='',target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.state.pop('manual_review',None);self.engine.state.pop('manual_review_error',None);self.engine.state.pop('manual_edit_scene',None);self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('');self.project_name.set('');self.manual_scene.set('');self.scene_detail.set('Chọn cảnh để xem lỗi hoặc tự sửa trên Canva.')
     def tick(self):
         while not self.tasks.empty():
             kind,value=self.tasks.get()
@@ -371,6 +426,7 @@ class App:
         if st.get('auto_start') and st.get('target') and st['mode'] in ('running','opening_resume'):
             self.target.set(st['target'])
         n=len(st['scenes']);done=len(st['done']);self.progress['value']=100*done/max(1,n)
+        self.refresh_scene_status()
         self.status.set(f'Phần {st.get("part_index",0)+1}/{max(1,len(st.get("parts",[])))} • {done}/{n} cảnh  •  '+st['message'])
         self.connection.set(self.engine.connection_status()['message'])
         self.root.after(500,self.tick)
@@ -399,9 +455,19 @@ def main():
         name_field=app.name_entry.get()=='Bài 1'
         name_persisted=Engine(DATA).state.get('project_name')=='Bài 1'
         app.project_name.set(saved_name);app.save_project_name()
+        manual_ui=app.manual_button.cget('text')=='Đã sửa trên Canva — tiếp tục' and app.tree.heading('status')['text']=='Trạng thái'
+        error_row=False
+        if app.plan and app.plan['scenes']:
+            first=app.plan['scenes'][0];first['error_card']=dict(message='Kiểm tra hiển thị lỗi');app.populate()
+            error_row='error' in app.tree.item(str(first['id']),'tags') and 'Lỗi' in app.tree.set(str(first['id']),'status')
+            first.pop('error_card');app.populate()
+            app.tree.selection_set(str(first['id']));root.update()
+            app.manual_scene.set('2');app.refresh_scene_status()
+            manual_number_kept=app.manual_scene.get()=='2'
+        else:manual_number_kept=False
         report=dict(version=VERSION,ui_opened=True,demo_scenes=len(app.tree.get_children()) if app.plan else 0,ffmpeg_found=Path(app.ffmpeg.get()).is_file(),whisper_found=Path(app.python.get()).is_file(),model_found=Path(app.model.get()).is_file(),pairing_code_visible=token_visible,pairing_copy_ok=copy_ok,update_button=app.update_button.cget('text')=='Kiểm tra cập nhật',portable_data=str(DATA),portable_temp=tempfile.gettempdir(),runtime_extracts_to_temp=bool(getattr(sys,'frozen',False) and Path(sys._MEIPASS).name!='_internal'),canva_live_tested=False)
-        report.update(project_name_field=name_field,project_name_persisted=name_persisted)
-        if not token_visible or not copy_ok or not name_field or not name_persisted:raise RuntimeError('Pairing/project-name regression check failed')
+        report.update(project_name_field=name_field,project_name_persisted=name_persisted,manual_repair_ui=manual_ui,error_row_visible=error_row,manual_number_kept=manual_number_kept)
+        if not all((token_visible,copy_ok,name_field,name_persisted,manual_ui,error_row,manual_number_kept)):raise RuntimeError('Pairing/project-name/manual-repair regression check failed')
         atomic_json(DATA/'self-test.json',report);app.close();return
     root.mainloop()
 

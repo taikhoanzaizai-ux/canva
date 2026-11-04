@@ -216,3 +216,23 @@ for(let i=0;i<500;i++){
  actualEnd+=adapter.photoDuration(plannedEnd-actualEnd);
  assert(Math.abs(actualEnd-plannedEnd)<=.050001,'Absolute endpoint compensation must prevent cumulative drift');
 }
+
+(async()=>{
+ let image=true,end=4,voiceEnd=8,changed=0,checks=0;
+ const slider=(label,get)=>({getAttribute:k=>k==='aria-label'?label:k==='aria-valuenow'?String(get()*1e6):null});
+ const sliders=[slider('biên bắt đầu',()=>0),slider('biên kết thúc',()=>end)];
+ const row={parentElement:{querySelector:()=>sliders[0],querySelectorAll:()=>sliders},querySelector:()=>image?{src:'manual-photo'}:null,querySelectorAll:()=>[]};
+ const rows=[row];
+ const plus={offsetWidth:20,getAttribute:k=>k==='aria-label'?'Thêm nội dung đa phương tiện/cảnh trống':null,scrollIntoView:()=>{},click:()=>changed++};
+ const audio={getAttribute:k=>k==='aria-label'?'SKST_voice_manual.wav đoạn âm thanh':null,querySelectorAll:()=>[slider('biên bắt đầu',()=>0),slider('biên kết thúc',()=>voiceEnd)]};
+ const doc={querySelectorAll:s=>s==='[data-role="timeline-scene"]'?rows:s.includes('[role="menu"]')?[]:[plus,audio]};
+ const env={globalThis:{},document:doc,getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const task={id:'manual:1',kind:'manual_review',scene:{id:1,start:0,duration:4},allowed_counts:[1],voice_name:'SKST_voice_manual.wav',voice_duration:8};
+ const run=()=>env.globalThis.SKSTAdapter.run(task,async()=>{checks++;});
+ const ok=await run();assert.equal(ok.manual_verified,true);assert.equal(ok.verified_end,4);assert.equal(ok.verified_voice_end,8);assert(checks>0);assert.equal(changed,0,'Manual review must never insert, trim or delete the user repair');
+ end=5;await assert.rejects(run,/Cảnh 1 đang ở/);end=4;
+ image=false;await assert.rejects(run,/chưa có ảnh/);image=true;
+ rows.push(row);await assert.rejects(run,/Canva có 2 cảnh/);rows.pop();
+ voiceEnd=7;await assert.rejects(run,/Voice trên Canva/);assert.equal(changed,0);
+})().catch(e=>{console.error(e);process.exitCode=1;});

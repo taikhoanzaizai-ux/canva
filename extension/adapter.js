@@ -497,17 +497,32 @@
     await wait(()=>audioOnTimeline(raw.name),'Voice chưa xuất hiện trên timeline');
     return {voice_name:raw.name};
   }
-  async function auditTask(task){
-    await closeMenu();const last=await tail();
-    if(sceneCount()!==task.count)throw Error(`Canva có ${sceneCount()} cảnh, cần ${task.count} cảnh. Không chuyển phần khi số cảnh chưa khớp.`);
-    if(Math.abs(last.end-task.duration)>.12)throw Error(`Hình kết thúc ở ${last.end.toFixed(3)} giây nhưng voice phần này dài ${task.duration.toFixed(3)} giây. Cần sửa cảnh cuối trước khi chuyển phần.`);
-    if(!task.voice_name)throw Error('Thiếu tên voice cần đối chiếu; chưa xác nhận phần dựng.');
-    const audio=[...document.querySelectorAll('button,[role="button"]')].find(e=>label(e).includes(task.voice_name)&&label(e).includes('đoạn âm thanh'));
+  function verifyVoice(name,duration){
+    if(!name)throw Error('Thiếu tên voice cần đối chiếu; chưa xác nhận phần dựng.');
+    const audio=[...document.querySelectorAll('button,[role="button"]')].find(e=>label(e).includes(name)&&label(e).includes('đoạn âm thanh'));
     if(!audio)throw Error('Không xác nhận được voice trên timeline; không chuyển sang phần mới.');
     const starts=[...audio.querySelectorAll('[role="slider"]')].filter(e=>label(e).includes('biên bắt đầu')).map(e=>Number(e.getAttribute('aria-valuenow'))/1e6);
     if(!starts.length||starts.some(v=>!Number.isFinite(v)||Math.abs(v)>.12))throw Error('Voice chưa bắt đầu từ giây 0; cần đưa đúng voice về đầu timeline.');
     const ends=[...audio.querySelectorAll('[role="slider"]')].filter(e=>label(e).includes('biên kết thúc')).map(e=>Number(e.getAttribute('aria-valuenow'))/1e6);
-    if(!ends.length||Math.abs(Math.max(...ends)-task.duration)>.12)throw Error('Voice trên Canva chưa đủ thời lượng phần này. Không xuất hoặc chuyển phần.');
+    if(!ends.length||!ends.every(Number.isFinite)||Math.abs(Math.max(...ends)-duration)>.12)throw Error('Voice trên Canva chưa đủ thời lượng phần này. Không xuất hoặc chuyển phần.');
+    return {verified_voice_start:Math.min(...starts),verified_voice_end:Math.max(...ends),voice_name:name};
+  }
+  async function manualReviewTask(task){
+    await closeMenu();await tail();
+    const count=sceneCount(),scene=task.scene,row=timeline()[scene.id-1];
+    if(!task.allowed_counts.includes(count))throw Error(`Canva có ${count} cảnh, cần ${task.allowed_counts.join(' hoặc ')} cảnh. Hãy thay cảnh tại chỗ, không thêm thừa hay xóa cảnh khác.`);
+    if(!row||!row.image)throw Error(`Cảnh ${scene.id} chưa có ảnh/video trên timeline.`);
+    if(!Number.isFinite(row.start)||!Number.isFinite(row.end))throw Error('Chưa đọc được mốc thời gian cảnh tự sửa.');
+    const expected=scene.start+scene.duration;
+    if(Math.abs(row.start-scene.start)>.12||Math.abs(row.end-expected)>.12)throw Error(`Cảnh ${scene.id} đang ở ${row.start.toFixed(2)}–${row.end.toFixed(2)} giây; cần ${scene.start.toFixed(2)}–${expected.toFixed(2)} giây.`);
+    const voice=verifyVoice(task.voice_name,task.voice_duration);
+    return {manual_verified:true,review_token:task.review_token,verified_count:count,verified_start:row.start,verified_end:row.end,asset:row.image,...voice};
+  }
+  async function auditTask(task){
+    await closeMenu();const last=await tail();
+    if(sceneCount()!==task.count)throw Error(`Canva có ${sceneCount()} cảnh, cần ${task.count} cảnh. Không chuyển phần khi số cảnh chưa khớp.`);
+    if(Math.abs(last.end-task.duration)>.12)throw Error(`Hình kết thúc ở ${last.end.toFixed(3)} giây nhưng voice phần này dài ${task.duration.toFixed(3)} giây. Cần sửa cảnh cuối trước khi chuyển phần.`);
+    verifyVoice(task.voice_name,task.duration);
     return {verified_duration:last.end,verified_count:sceneCount()};
   }
   function designTitleInput(root=document){
@@ -574,6 +589,7 @@
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{
+    if(task.kind==='manual_review')return await manualReviewTask(task);
     if(task.kind==='rename')return await renameTask(task);
     if(task.kind==='scene'&&['rollback_intent','rollback_done'].includes(task.phase?.stage)){
       const reason=task.phase.reason||'Tiếp tục thay cảnh lỗi bằng thẻ chữ';

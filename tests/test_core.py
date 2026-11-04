@@ -46,6 +46,60 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def manual_result(self,ident=1,count=1):
+        return dict(id=f'manual:{ident}',client='A',review_token=self.e.state['manual_review']['token'],manual_verified=True,verified_count=count,verified_start=0,verified_end=4,verified_voice_start=0,verified_voice_end=8,voice_name='SKST_voice_test.wav',asset='manual-image')
+    def prepare_manual(self,done=None,phase=None):
+        self.e.pause();self.e.state.update(voice_done=True,voice_name='SKST_voice_test.wav',done=done or [],phase=phase or {})
+        self.e.state['scenes'].append(dict(id=2,start=4,duration=4,text='next',queries=['next']))
+        self.e.state['scenes'][0]['error_card']=dict(message='test error')
+    def test_manual_repair_finishes_current_scene_and_continues_without_replacing_it(self):
+        self.prepare_manual(phase=dict(id='1',stage='inserted'))
+        voice=self.e.state['voice'];self.e.request_manual_review(1)
+        task=self.e.next_task(self.client)['task'];self.assertEqual(task['kind'],'manual_review')
+        self.e.result(self.manual_result())
+        self.assertEqual(self.e.state['done'],[1]);self.assertEqual(self.e.state['phase'],{})
+        self.assertTrue(self.e.state['scenes'][0]['manual_verified']);self.assertEqual(self.e.state['voice'],voice)
+        self.assertEqual(self.e.next_task(self.client)['task']['id'],'2')
+    def test_manual_repair_of_completed_scene_preserves_other_scene_checkpoint(self):
+        self.prepare_manual(done=[1],phase=dict(id='2',stage='inserted'))
+        self.e.request_manual_review(1);task=self.e.next_task(self.client)['task']
+        self.assertEqual(task['allowed_counts'],[1,2])
+        self.e.result(self.manual_result(count=2))
+        self.assertEqual(self.e.state['phase']['id'],'2')
+        self.assertEqual(self.e.next_task(self.client)['task']['phase']['stage'],'inserted')
+    def test_bad_manual_scene_never_marks_done_or_schedules_error_replacement(self):
+        self.prepare_manual();self.e.request_manual_review(1);self.e.next_task(self.client)
+        for field,value in [('verified_start',1),('verified_end',7),('verified_count',3),('verified_voice_start',1),('verified_voice_end',7),('voice_name','wrong.wav'),('verified_end',float('nan'))]:
+            body=self.manual_result();body[field]=value
+            with self.assertRaises(ValueError):self.e.result(body)
+        self.e.result(dict(id='manual:1',client='A',review_token=self.e.state['manual_review']['token'],error='Cảnh chưa đúng mốc'))
+        self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(self.e.state['done'],[])
+        self.assertEqual(self.e.state['manual_review']['scene_id'],1)
+        self.assertIn('chưa đúng',self.e.state['manual_review_error'])
+    def test_manual_review_survives_restart_and_cannot_skip_gap(self):
+        self.prepare_manual()
+        with self.assertRaises(ValueError):self.e.request_manual_review(2)
+        self.e.request_manual_review(1);restored=Engine(self.tmp.name);restored.start()
+        self.assertEqual(restored.next_task(self.client)['task']['kind'],'manual_review')
+    def test_repeated_manual_confirmation_rejects_stale_result(self):
+        self.prepare_manual();self.e.request_manual_review(1);self.e.next_task(self.client);old=self.manual_result()
+        self.e.pause();self.e.request_manual_review(1);self.e.next_task(self.client)
+        with self.assertRaises(ValueError):self.e.result(old)
+        self.assertEqual(self.e.state['done'],[]);self.assertEqual(self.e.state['mode'],'running')
+        self.e.result(self.manual_result());self.assertEqual(self.e.state['done'],[1])
+    def test_standard_continue_checks_manual_edit_instead_of_replacing_it(self):
+        self.prepare_manual(phase=dict(id='1',stage='inserted'))
+        self.e.begin_manual_edit(1);self.assertEqual(self.e.state['mode'],'paused')
+        self.e.start();task=self.e.next_task(self.client)['task']
+        self.assertEqual(task['kind'],'manual_review');self.assertEqual(self.e.state['phase']['stage'],'inserted')
+        self.e.result(self.manual_result());self.assertNotIn('manual_edit_scene',self.e.state)
+        self.assertEqual(self.e.next_task(self.client)['task']['id'],'2')
+    def test_restarted_review_does_not_reset_another_insert_intent(self):
+        self.prepare_manual(done=[1],phase=dict(id='2',stage='insert_intent'))
+        self.e.request_manual_review(1);restored=Engine(self.tmp.name);restored.start()
+        self.assertEqual(restored.next_task(self.client)['task']['kind'],'manual_review')
+        self.assertEqual(restored.state['phase'],dict(id='2',stage='insert_intent'))
+
     def test_name_is_saved_and_rename_preserves_scene_checkpoint(self):
         self.e.pause();self.e.set_project_name('Bài 1')
         self.e.state.update(voice_done=True,phase=dict(id='1',stage='inserted'));self.e.save()

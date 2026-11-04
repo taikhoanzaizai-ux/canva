@@ -1,5 +1,13 @@
 # Các bản cập nhật
 
+## 0.11.0
+
+- Thêm cột Trạng thái và đánh dấu đỏ cảnh lỗi ngay trong bảng Cảnh/Thời gian, Lời đọc, Từ khóa Canva. Tự cuộn tới lỗi mới; chọn cảnh để xem lý do và mốc cần sửa. Giữ trạng thái lỗi khi ảnh báo lỗi đã được chèn, phân biệt với cảnh người dùng đã tự sửa.
+- Cho chọn cảnh hoặc nhập số cảnh, mở đúng Canva để sửa sau khi tạm dừng. Nút Đã sửa trên Canva — tiếp tục gửi tác vụ chỉ kiểm tra, không chèn/cắt/xóa lại tư liệu người dùng.
+- Chỉ xác nhận tự sửa khi có tư liệu đúng cảnh, đúng mốc đầu/cuối, số cảnh hợp lệ và voice gốc còn đủ thời lượng từ giây 0. Đạt yêu cầu thì đánh dấu đã tự sửa, giữ các cảnh hoàn tất và tiếp tục cảnh chưa xong; sai mốc thì báo cụ thể ngay trong phần mềm để sửa lại.
+- Lưu yêu cầu kiểm tra và trạng thái tự sửa theo từng phần/dự án, khôi phục sau khi mở lại. Sửa cảnh cũ không xóa mốc thao tác của cảnh khác đang dở.
+- Trong chế độ tự sửa, nút Bắt đầu / Tiếp tục thông thường cũng chuyển qua kiểm tra cảnh tự sửa; không quay lại chèn ảnh báo lỗi vào tư liệu người dùng đã thay.
+
 ## 0.10.3
 
 - Sửa lưu thời lượng ảnh có nhiều chữ số thập phân: Canva cắt bớt chữ số thay vì làm tròn gần nhất. Phần mềm chủ động làm tròn tới 0,1 giây trước khi gửi, rồi kiểm tra mốc kết thúc với voice gốc; áp dụng chung cho ảnh stock và ảnh báo lỗi, mọi dự án.

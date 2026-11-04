@@ -31,7 +31,7 @@
       const blank_video=!!document.querySelector('button[aria-label="Thêm nội dung đa phương tiện/cảnh trống"]')&&!document.querySelector('[data-role="timeline-scene"] img')&&![...document.querySelectorAll('button,[role="button"]')].some(e=>(e.getAttribute('aria-label')||'').includes('đoạn âm thanh'));
       const result=await api('next',{blank_video});showStatus(result);task=result.task;if(!task)return;
       const check=async(stage,extra={})=>{
-        const state=await api('checkpoint',{id:task.id,...(stage?{stage,...extra}:{})});
+        const state=await api('checkpoint',{id:task.id,review_token:task.review_token,...(stage?{stage,...extra}:{})});
         if(!state.continue_)throw Error('Đã tạm dừng theo yêu cầu.');
       };
       const fallback=async()=>{
@@ -49,7 +49,7 @@
       await api('result',{id:task.id,...output});
     }catch(e){
       if(task){
-        try{const result=await api('result',{id:task.id,error:e.message});
+        try{const result=await api('result',{id:task.id,review_token:task.review_token,error:e.message});
           showStatus({mode:'attention',message:result.continuing?'Cảnh '+task.id+': '+e.message+' Đang chèn thẻ lỗi rồi tiếp tục.':e.message});
         }catch(connectionError){showStatus({mode:'attention',message:'Mất kết nối khi báo lỗi cảnh '+task.id+': '+connectionError.message+'. Đang thử nối lại; tiến độ được giữ.'});}
       }else showStatus({mode:'attention',message:'Chưa nhận được lệnh dựng: '+e.message+'. Đang thử kết nối lại.'});

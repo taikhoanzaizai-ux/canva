@@ -143,3 +143,10 @@ TỪ BẢN 0.10.0
 - Nếu Canva không còn thao tác được hoặc không xác định được đúng cảnh trên timeline sau ba lần phục hồi, ứng dụng báo lỗi toàn phiên thay vì làm sai voice/cảnh khác. Các cảnh đã xong vẫn được giữ.
 - Chỉ xuất một dự án Canva mỗi lần để đối chiếu đúng tệp MP4. Chỉ báo hoàn tất sau khi Chrome tải xong và ứng dụng đọc được cả hình, âm thanh, thời lượng tệp.
 
+
+TỪ BẢN 0.11.0 — TỰ SỬA CẢNH LỖI
+1. Cảnh lỗi được đánh dấu đỏ trong bảng, có số cảnh, thời gian, lời đọc, từ khóa và cột Trạng thái. Chọn dòng để xem lý do bên dưới.
+2. Chọn dòng hoặc nhập Cảnh số, bấm Mở Canva để sửa. Phần mềm tạm dừng; bạn thay ảnh/video tại đúng cảnh đó, giữ mốc đầu/cuối như phần mềm hiển thị và giữ voice. Không thêm thừa cảnh vào timeline.
+3. Sửa xong bấm Đã sửa trên Canva — tiếp tục. Tiện ích chỉ kiểm tra vị trí, thời lượng, số cảnh và voice; không thay lại tư liệu bạn vừa chọn.
+4. Nếu đạt, dòng chuyển xanh Đã tự sửa trên Canva rồi phần mềm tiếp tục cảnh chưa hoàn tất kế tiếp. Nếu chưa đạt, phần mềm báo rõ mốc cần sửa; chỉnh lại trên Canva rồi bấm xác nhận lần nữa.
+Yêu cầu kiểm tra và trạng thái tự sửa được lưu theo phần/dự án. Không cần phân tích lại voice hay dựng lại các cảnh đã xong.

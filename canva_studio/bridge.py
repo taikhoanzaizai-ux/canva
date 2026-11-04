@@ -1,12 +1,12 @@
 """Authenticated loopback bridge. Stores no Canva cookies or passwords."""
-import base64, hashlib, json, secrets, threading, time
+import base64, hashlib, json, math, secrets, threading, time
 from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.10.3'
+MIN_EXTENSION_VERSION='0.11.0'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -102,6 +102,11 @@ class Engine:
         with self.lock:
             if not self.state['scenes']:raise ValueError('Chưa có danh sách cảnh.')
             if len(self.state['scenes'])>50:raise ValueError('Bản thử hỗ trợ tối đa 50 cảnh mỗi dự án. Hãy chọn đoạn ngắn hơn.')
+            if self.state.get('manual_edit_scene'):
+                if not self.state.get('manual_review'):self.request_manual_review(self.state['manual_edit_scene'])
+                else:
+                    self.running=None;self.last_activity=time.time();self.state['mode']='running';self.log('Tiếp tục kiểm tra cảnh bạn đã tự sửa trên Canva…')
+                return
             phase=self.state['phase'];scene=next((s for s in self.state['scenes'] if str(s['id'])==phase.get('id')),None)
             if scene and scene.get('error_card'):scene['error_card_attempts']=0
             if phase.get('stage') in ('insert_intent','rollback_intent') and scene:
@@ -137,6 +142,27 @@ class Engine:
             elif action=='not_inserted':self.state['phase']={}
             else:raise ValueError('Không thể xác nhận tự động. Kiểm tra và chọn lại trạng thái.')
             self.running=None;self.save()
+    def begin_manual_edit(self,scene_id):
+        with self.lock:
+            self.pause()
+            scene=next((s for s in self.state['scenes'] if s['id']==scene_id),None)
+            if not scene or not self.state.get('voice_done') or not valid_canva(self.state['target']):raise ValueError('Chọn cảnh của dự án đang dựng, đã có voice.')
+            pending=next((s['id'] for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
+            if scene_id not in self.state['done'] and scene_id!=pending:raise ValueError('Chọn cảnh đã dựng hoặc cảnh đang dở; chưa thể tự sửa một cảnh chưa đến lượt dựng.')
+            self.state['manual_edit_scene']=scene_id;self.state.pop('manual_review',None);self.state.pop('manual_review_error',None)
+            self.running=None;self.log(f'Đang chờ bạn tự sửa cảnh {scene_id} trên Canva. Sửa xong bấm Đã sửa trên Canva — tiếp tục.')
+    def request_manual_review(self,scene_id):
+        with self.lock:
+            if self.state['mode'] in ('running','opening','opening_resume'):raise ValueError('Tạm dừng trước khi xác nhận cảnh tự sửa.')
+            scene=next((s for s in self.state['scenes'] if s['id']==scene_id),None)
+            if not scene or not self.state.get('voice_done') or not valid_canva(self.state['target']):raise ValueError('Chọn một cảnh trong dự án Canva đang dựng, đã có voice.')
+            pending=next((s['id'] for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
+            if scene_id not in self.state['done'] and scene_id!=pending:raise ValueError('Cần hoàn tất các cảnh trước đoạn này, không bỏ qua khoảng trống.')
+            self.state['manual_review']=dict(scene_id=scene_id,token=secrets.token_hex(12))
+            self.state['manual_edit_scene']=scene_id
+            self.state.pop('manual_review_error',None);self.running=None
+            self.state['mode']='running';self.last_activity=time.time()
+            self.log(f'Đang kiểm tra cảnh {scene_id} bạn đã sửa trên Canva; đạt yêu cầu sẽ tự dựng tiếp.')
     def next_task(self, body):
         with self.lock:
             now=time.time()
@@ -179,7 +205,19 @@ class Engine:
             self.browser={**body,'seen':time.time()}
             if self.running and self.running['client']!=body.get('client'):return dict(task=None,mode='busy')
             title=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
-            if title and self.state.get('named_title')!=title:task=dict(id='rename',kind='rename',design_name=title)
+            manual=self.state.get('manual_review')
+            if manual:
+                scene=next(s for s in self.state['scenes'] if s['id']==manual['scene_id'])
+                counts={max([scene['id'],*self.state['done']])}
+                phase=self.state.get('phase',{})
+                if str(phase.get('id','')).isdigit() and phase.get('stage') in ('insert_intent','inserted','trimmed','muted'):
+                    counts.add(max(max(counts),int(phase['id'])))
+                name=self.state.get('voice_name','')
+                if not name and Path(self.state['voice']).is_file():
+                    with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
+                manual.update(allowed_counts=sorted(counts),voice_name=name)
+                task=dict(id=f'manual:{scene["id"]}',kind='manual_review',review_token=manual['token'],scene=scene,allowed_counts=sorted(counts),voice_name=name,voice_duration=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'])
+            elif title and self.state.get('named_title')!=title:task=dict(id='rename',kind='rename',design_name=title)
             elif not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
@@ -200,6 +238,7 @@ class Engine:
     def check(self, body):
         with self.lock:
             if not self.running or self.running['id']!=str(body.get('id')) or self.running['client']!=body.get('client'):raise ValueError('Phiên thao tác không còn hợp lệ.')
+            if str(body.get('id')).startswith('manual:') and body.get('review_token')!=self.state.get('manual_review',{}).get('token'):raise ValueError('Yêu cầu kiểm tra tự sửa đã được thay thế.')
             if self.state['mode']!='running':return dict(continue_=False)
             self.last_activity=time.time()
             if body.get('client') in self.peers:self.peers[body['client']]['seen']=self.last_activity
@@ -212,7 +251,11 @@ class Engine:
     def result(self, body):
         with self.lock:
             if not self.running or self.running['id']!=str(body.get('id')) or self.running['client']!=body.get('client'):raise ValueError('Kết quả không thuộc phiên đang chạy.')
+            if str(body.get('id')).startswith('manual:') and body.get('review_token')!=self.state.get('manual_review',{}).get('token'):raise ValueError('Yêu cầu kiểm tra tự sửa đã được thay thế.')
             if body.get('error'):
+                if str(body['id']).startswith('manual:'):
+                    detail=str(body['error'])[:600];self.state.update(mode='attention',manual_review_error=detail);self.running=None
+                    self.log('Cảnh tự sửa chưa đạt: '+detail+' Sửa lại trên Canva rồi bấm Đã sửa trên Canva — tiếp tục.');return dict(ok=True)
                 key=str(body['id']);scene=next((s for s in self.state['scenes'] if str(s['id'])==key),None)
                 phase=self.state.get('phase',{});stage=phase.get('stage','chưa chèn cảnh')
                 detail=str(body['error'])[:600]
@@ -242,6 +285,21 @@ class Engine:
                 self.log(f'Cảnh/tác vụ {key} • bước {stage}: {detail}. Chưa thể chèn thẻ lỗi vì chưa xác nhận được trạng thái timeline.' if not cancelled else detail)
                 return dict(ok=True)
             key=str(body['id'])
+            if key.startswith('manual:'):
+                review=self.state.get('manual_review',{});scene=next((s for s in self.state['scenes'] if s['id']==review.get('scene_id')),None)
+                if not scene or key!=f'manual:{scene["id"]}' or body.get('manual_verified') is not True:raise ValueError('Chưa xác nhận đúng cảnh tự sửa.')
+                values=[float(body.get(k,-1)) for k in ('verified_start','verified_end','verified_voice_start','verified_voice_end')]
+                total=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration']
+                if not all(map(math.isfinite,values)) or abs(values[0]-scene['start'])>.12 or abs(values[1]-scene['start']-scene['duration'])>.12:raise ValueError('Mốc cảnh tự sửa chưa khớp voice.')
+                if body.get('verified_count') not in review.get('allowed_counts',[]) or not review.get('voice_name') or body.get('voice_name')!=review['voice_name'] or abs(values[2])>.12 or abs(values[3]-total)>.12:raise ValueError('Số cảnh hoặc voice đã thay đổi; chưa thể tiếp tục.')
+                scene['manual_verified']=True;scene['manual_asset']=str(body.get('asset','manual:'+str(scene['id'])))
+                if scene['id'] not in self.state['done']:self.state['done'].append(scene['id']);self.state['done'].sort()
+                if self.state['phase'].get('id')==str(scene['id']):self.state['phase']={}
+                self.state.pop('manual_review',None);self.state.pop('manual_review_error',None);self.state.pop('manual_edit_scene',None)
+                self.state['audit_done']=False;self.state['export_done']=False
+                asset=scene['manual_asset']
+                if asset not in self.state['used']:self.state['used'].append(asset)
+                self.running=None;self.log(f'Đã xác nhận cảnh {scene["id"]} tự sửa. Tiếp tục từ cảnh chưa hoàn tất kế tiếp.');return dict(ok=True)
             if key=='rename':
                 expected=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
                 if not expected or body.get('design_name')!=expected:raise ValueError('Tên Canva chưa khớp tên phần hiện tại.')
