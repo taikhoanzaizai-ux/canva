@@ -46,6 +46,22 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_failed_rename_continues_drafting_and_gets_one_final_retry(self):
+        self.e.pause();self.e.set_project_name('Bài 1');self.e.start()
+        self.assertEqual(self.e.next_task(self.client)['task']['kind'],'rename')
+        self.e.result(dict(id='rename',client='A',design_name='Bài 1',rename_warning='Canva chưa nhận tên'))
+        self.assertEqual(self.e.state['mode'],'running');self.assertEqual(self.e.state['named_title'],'')
+        self.assertEqual(self.e.next_task(self.client)['task']['kind'],'voice')
+        self.e.running=None;self.e.state.update(voice_done=True,done=[1],audit_done=True)
+        self.assertEqual(self.e.next_task(self.client)['task']['kind'],'rename')
+        self.e.result(dict(id='rename',client='A',design_name='Bài 1',rename_warning='Vẫn chưa nhận tên'))
+        self.assertEqual(self.e.next_task(self.client)['task']['kind'],'export')
+    def test_successful_rename_retry_clears_warning_without_losing_scene_checkpoint(self):
+        self.e.pause();self.e.set_project_name('Bài 1');self.e.state['phase']=dict(id='1',stage='inserted');self.e.start()
+        self.e.next_task(self.client);self.e.result(dict(id='rename',client='A',design_name='Bài 1',rename_warning='delay'))
+        self.e.pause();self.e.state['rename_failed_title']='';self.e.start();self.e.next_task(self.client)
+        self.e.result(dict(id='rename',client='A',design_name='Bài 1'))
+        self.assertNotIn('rename_warning',self.e.state);self.assertEqual(self.e.state['phase']['stage'],'inserted')
     def manual_result(self,ident=1,count=1):
         return dict(id=f'manual:{ident}',client='A',review_token=self.e.state['manual_review']['token'],manual_verified=True,verified_count=count,verified_start=0,verified_end=4,frames=[dict(start=0,end=4)]+([dict(start=4,end=8)] if count==2 else []),verified_voice_start=0,verified_voice_end=8,voice_name='SKST_voice_test.wav',asset='manual-image')
     def prepare_manual(self,done=None,phase=None):

@@ -6,7 +6,7 @@ from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.11.1'
+MIN_EXTENSION_VERSION='0.11.2'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -61,7 +61,7 @@ class Engine:
             name=project_title(name)
             if name==self.state.get('project_name',''):return
             if self.state['mode'] in ('running','opening','opening_resume'):raise ValueError('Tạm dừng dựng trước khi đổi tên dự án.')
-            self.state['project_name']=name;self.state['named_title']='';self.save()
+            self.state['project_name']=name;self.state['named_title']='';self.state.pop('rename_failed_title',None);self.state.pop('rename_final_title',None);self.state.pop('rename_warning',None);self.save()
     def bootstrap(self,plan,voice):
         from .browser import CREATE_VIDEO
         with self.lock:
@@ -217,7 +217,7 @@ class Engine:
                     with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
                 manual.update(allowed_counts=sorted(counts),voice_name=name)
                 task=dict(id=f'manual:{scene["id"]}',kind='manual_review',review_token=manual['token'],scene=scene,allowed_counts=sorted(counts),voice_name=name,voice_duration=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'])
-            elif title and self.state.get('named_title')!=title:task=dict(id='rename',kind='rename',design_name=title)
+            elif title and self.state.get('named_title')!=title and (self.state.get('rename_failed_title')!=title or self.state.get('audit_done') and self.state.get('rename_final_title')!=title):task=dict(id='rename',kind='rename',design_name=title)
             elif not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
@@ -311,6 +311,12 @@ class Engine:
             if key=='rename':
                 expected=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
                 if not expected or body.get('design_name')!=expected:raise ValueError('Tên Canva chưa khớp tên phần hiện tại.')
+                if body.get('rename_warning'):
+                    warning=str(body['rename_warning'])[:400]
+                    if self.state.get('audit_done'):self.state['rename_final_title']=expected
+                    self.state['rename_failed_title']=expected;self.state['rename_warning']=warning;self.running=None
+                    self.log('Chưa đổi được tên Canva; vẫn tiếp tục dựng. '+warning);return dict(ok=True)
+                self.state.pop('rename_warning',None);self.state.pop('rename_failed_title',None);self.state.pop('rename_final_title',None)
                 self.state['named_title']=expected;self.running=None
                 self.log('Đã đặt tên Canva: '+expected)
                 # Renaming must not erase the checkpoint of an interrupted scene.
@@ -329,6 +335,7 @@ class Engine:
                 part=self.state['parts'][index]
                 refine_queries(part['scenes'])
                 self.state.update(part_index=index,target=target,voice=part['voice'],voice_name='',named_title='',scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
+                self.state.pop('rename_warning',None);self.state.pop('rename_failed_title',None);self.state.pop('rename_final_title',None)
                 repair_scene_texts(self.state);refine_queries(self.state['scenes'])
                 self.browser={};msg=f'Chuyển phần {index+1}: voice gốc từ giây {part["source_start"]:.3f}.'
             elif key=='voice':

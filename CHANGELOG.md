@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.11.2
+
+- Sửa đổi tên Canva: kích hoạt ô tên qua phần tử tiêu đề trên thanh trên (Canva dùng menuitem), chờ giá trị nhập được nhận rồi chuyển tiêu điểm để lưu; không gửi Enter ngay sau input.
+- Xác nhận tên qua ô nhập và phần tiêu đề hiển thị, chấp nhận tiêu đề tab trình duyệt cập nhật chậm. Tên đã đúng thì giữ nguyên, không nhập lại.
+- Nếu Canva chưa nhận tên sau các lần thử có giới hạn, báo cạnh ô tên và vẫn dựng tiếp; thử tên lại sau khi kiểm tra xong các cảnh. Không lặp bước đặt tên vô hạn hoặc tạo ảnh lỗi cho tác vụ đổi tên.
+
 ## 0.11.1
 
 - Chấp nhận thời lượng tương đối khi người dùng tự sửa: giữ nguyên cảnh đã sửa, đọc lại các mốc thực tế rồi bù chênh lệch vào cảnh chưa dựng tiếp theo. Ví dụ 3–4–5 giây, cảnh đầu đổi thành 2 giây thì kế hoạch tiếp theo thành 2–5–5 giây.

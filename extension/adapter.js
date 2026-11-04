@@ -530,26 +530,41 @@
   async function renameTask(task){
     const name=task.design_name;
     if(typeof name!=='string'||!name.trim()||name.length>200)throw Error('Tên thiết kế không hợp lệ.');
-    await closeMenu();
-    let input=designTitleInput();
-    if(!input){
-      const current=document.title.replace(/\s*[-–|]\s*Canva\s*$/i,'').trim();
-      const button=find(/^(Đổi tên thiết kế|Sửa tên thiết kế|Rename design|Edit design title)$/i)||
-        [...document.querySelectorAll('button,[role="button"]')].find(e=>visible(e)&&(label(e)===current||/^(Thiết kế không tên(?: - Video)?|Untitled design(?: - Video)?)$/i.test(label(e))));
-      await click(button);input=await wait(()=>designTitleInput(),'Không thấy ô tên thiết kế Canva');
-    }
     const value=e=>e?.getAttribute('contenteditable')==='true'?e.textContent:e?.value;
-    input.focus();
-    if(input.getAttribute('contenteditable')==='true'){
-      input.textContent=name;input.dispatchEvent(new Event('input',{bubbles:true}));
-    }else fill(input,name);
-    key(input,'Enter');input.blur();await sleep(500);
-    await wait(()=>{
+    const confirmed=()=>{
       const field=designTitleInput();
-      const header=[...document.querySelectorAll('button,[role="button"]')].some(e=>visible(e)&&label(e)===name);
-      return header||(field&&value(field)===name&&String(document.title).startsWith(name));
-    },'Canva chưa xác nhận tên mới: '+name);
-    return {design_name:name};
+      const owner=field?.closest?.('[role="menuitem"],[role="button"],button');
+      const mirror=(owner?.textContent||'').replace(/\s+/g,' ').trim();
+      return field&&value(field)===name&&(mirror===name||String(document.title)===name||String(document.title).startsWith(name+' - '));
+    };
+    let failure;
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        await guard();await closeMenu();if(confirmed())return {design_name:name};
+        let input=designTitleInput();
+        const owner=input?.closest?.('[role="menuitem"],[role="button"],button');
+        if(owner&&document.activeElement!==input)await click(owner);
+        if(!input){
+          const current=document.title.replace(/\s*[-–|]\s*Canva\s*$/i,'').trim();
+          await click(find(/^(Đổi tên thiết kế|Sửa tên thiết kế|Rename design|Edit design title)$/i)||
+            [...document.querySelectorAll('button,[role="button"],[role="menuitem"]')].find(e=>visible(e)&&label(e)===current));
+        }
+        input=await wait(()=>designTitleInput(),'Không thấy ô tên thiết kế Canva',5000);
+        input.focus();
+        if(input.getAttribute('contenteditable')==='true'){
+          input.textContent=name;input.dispatchEvent(new Event('input',{bubbles:true}));
+        }else fill(input,name);
+        await sleep(350);
+        const outside=find('Điểm bắt đầu khung vẽ')||find('Tệp','[role="menuitem"]');
+        if(outside?.focus)outside.focus();else input.blur();
+        await wait(confirmed,'Canva chưa xác nhận tên mới: '+name,5000);
+        return {design_name:name};
+      }catch(error){
+        if(/đã tạm dừng|phiên thao tác|đã ngắt/i.test(error.message))throw error;
+        failure=error.message;
+      }
+    }
+    return {design_name:name,rename_warning:failure||'Canva chưa nhận tên thiết kế; tiếp tục dựng và thử tên lại sau.'};
   }
   async function nextDesignTask(task,checkpoint){
     await closeMenu();await click(await wait(()=>find('Tệp'),'Không thấy menu Tệp'));

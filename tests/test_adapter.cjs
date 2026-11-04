@@ -236,3 +236,28 @@ for(let i=0;i<500;i++){
  rows.push(row);await assert.rejects(run,/Canva có 2 cảnh/);rows.pop();
  voiceEnd=7;await assert.rejects(run,/Voice trên Canva/);assert.equal(changed,0);
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+(async()=>{
+ let display='Untitled design - Video',pending=display,editing=false,activated=0,enters=0;
+ let document;
+ class Input{
+  get value(){return pending;}set value(v){pending=v;}
+  getAttribute(k){return k==='aria-label'?'Tiêu đề thiết kế':k==='tabindex'?'-1':null;}
+  closest(){return owner;}get offsetWidth(){return 100;}
+  focus(){document.activeElement=this;}blur(){if(editing){display=pending;editing=false;}}
+  dispatchEvent(e){if(e.key==='Enter')enters++;}
+ }
+ const field=new Input();
+ const owner={offsetWidth:100,get textContent(){return display;},getAttribute:()=>null,scrollIntoView(){},click(){activated++;editing=true;pending='';document.activeElement=field;}};
+ const outside={offsetWidth:20,getAttribute:k=>k==='aria-label'?'Điểm bắt đầu khung vẽ':null,focus(){field.blur();document.activeElement=this;}};
+ document={title:'Untitled design - Video',activeElement:null,querySelectorAll:s=>s.startsWith('input,textarea')?[field]:s.includes('[role="menu"]')?[]:[outside,owner]};
+ const env={globalThis:{},document,HTMLInputElement:Input,HTMLTextAreaElement:class{},Event:class{},KeyboardEvent:class{constructor(_,o){Object.assign(this,o);}},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const run=()=>env.globalThis.SKSTAdapter.run({kind:'rename',design_name:'Bài 9.5'},async()=>{});
+ const output=await run();assert.equal(output.design_name,'Bài 9.5');assert.equal(output.rename_warning,undefined);
+ assert.equal(activated,1,'Activate Canva menuitem before editing the initially inactive title field');
+ assert.equal(display,'Bài 9.5');assert.equal(enters,0,'Do not send immediate Enter');
+ assert.equal(document.title,'Untitled design - Video','A stale browser title must not block a committed header name');
+ await run();assert.equal(activated,1,'An already named part is idempotent');
+ let n=0;await assert.rejects(()=>env.globalThis.SKSTAdapter.run({kind:'rename',design_name:'Bài 9.6'},async()=>{if(++n===2)throw Error('Đã tạm dừng theo yêu cầu.');}),/tạm dừng/);
+})().catch(e=>{console.error(e);process.exitCode=1;});

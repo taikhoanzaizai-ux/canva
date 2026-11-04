@@ -49,7 +49,8 @@ class App:
         ttk.Label(name_row,text='Tên dự án / tên trên Canva',width=29).pack(side='left')
         self.name_entry=ttk.Entry(name_row,textvariable=self.project_name);self.name_entry.pack(side='left',fill='x',expand=True)
         self.name_entry.bind('<FocusOut>',self.save_project_name)
-        ttk.Label(name_row,text='  Ví dụ: Bài 1 → Bài 1.2 → Bài 1.3').pack(side='left')
+        self.name_hint=tk.StringVar(value='  Ví dụ: Bài 1 → Bài 1.2 → Bài 1.3')
+        ttk.Label(name_row,textvariable=self.name_hint).pack(side='left')
         self.voice=tk.StringVar(value=self.settings.get('voice',''));self.script_path=tk.StringVar();self.transcript=tk.StringVar(value=self.settings.get('transcript',''))
         for label,var,command in [('Voice MP3 / WAV',self.voice,self.choose_voice),('Kịch bản DOCX / TXT',self.script_path,self.choose_script),('Lời đọc có thời gian (tùy chọn)',self.transcript,self.choose_transcript)]:
             row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text=label,width=29).pack(side='left');ttk.Entry(row,textvariable=var).pack(side='left',fill='x',expand=True);ttk.Button(row,text='Chọn…',command=command).pack(side='left',padx=(8,0))
@@ -422,6 +423,7 @@ class App:
         self.engine.watchdog()
         st=self.engine.state
         self.name_entry.configure(state='disabled' if st['mode'] in ('running','opening','opening_resume') else 'normal')
+        self.name_hint.set('  Canva chưa nhận tên; vẫn tiếp tục dựng.' if st.get('rename_warning') else '  Ví dụ: Bài 1 → Bài 1.2 → Bài 1.3')
         if st.get('part_index',0)!=self.display_part:
             self.display_part=st.get('part_index',0);self.plan=dict(scenes=st['scenes'],parts=st.get('parts',[]));self.prepared_voice=st['voice'];self.target.set(st['target']);self.populate()
         if st.get('auto_start') and st.get('target') and st['mode'] in ('running','opening_resume'):
