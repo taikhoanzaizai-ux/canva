@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.11.1
+
+- Chấp nhận thời lượng tương đối khi người dùng tự sửa: giữ nguyên cảnh đã sửa, đọc lại các mốc thực tế rồi bù chênh lệch vào cảnh chưa dựng tiếp theo. Ví dụ 3–4–5 giây, cảnh đầu đổi thành 2 giây thì kế hoạch tiếp theo thành 2–5–5 giây.
+- Nếu cảnh tự sửa dài hơn nhiều, phân bổ phần cần rút ngắn qua các cảnh chưa dựng, giữ cảnh dương thời lượng và tổng độ dài voice. Các cảnh đã dựng trên Canva được giữ nguyên, mốc trong bảng cập nhật theo thực tế.
+- Lưu mốc voice ban đầu để nhiều lần tự sửa không làm cộng dồn sai số. Vẫn kiểm tra số cảnh, tính liên tục của timeline và đúng voice; không yêu cầu người dùng khớp từng phần trăm giây.
+
 ## 0.11.0
 
 - Thêm cột Trạng thái và đánh dấu đỏ cảnh lỗi ngay trong bảng Cảnh/Thời gian, Lời đọc, Từ khóa Canva. Tự cuộn tới lỗi mới; chọn cảnh để xem lý do và mốc cần sửa. Giữ trạng thái lỗi khi ảnh báo lỗi đã được chèn, phân biệt với cảnh người dùng đã tự sửa.

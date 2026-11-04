@@ -47,7 +47,7 @@ class PlannerTests(unittest.TestCase):
 
 class EngineTests(unittest.TestCase):
     def manual_result(self,ident=1,count=1):
-        return dict(id=f'manual:{ident}',client='A',review_token=self.e.state['manual_review']['token'],manual_verified=True,verified_count=count,verified_start=0,verified_end=4,verified_voice_start=0,verified_voice_end=8,voice_name='SKST_voice_test.wav',asset='manual-image')
+        return dict(id=f'manual:{ident}',client='A',review_token=self.e.state['manual_review']['token'],manual_verified=True,verified_count=count,verified_start=0,verified_end=4,frames=[dict(start=0,end=4)]+([dict(start=4,end=8)] if count==2 else []),verified_voice_start=0,verified_voice_end=8,voice_name='SKST_voice_test.wav',asset='manual-image')
     def prepare_manual(self,done=None,phase=None):
         self.e.pause();self.e.state.update(voice_done=True,voice_name='SKST_voice_test.wav',done=done or [],phase=phase or {})
         self.e.state['scenes'].append(dict(id=2,start=4,duration=4,text='next',queries=['next']))
@@ -99,6 +99,13 @@ class EngineTests(unittest.TestCase):
         self.e.request_manual_review(1);restored=Engine(self.tmp.name);restored.start()
         self.assertEqual(restored.next_task(self.client)['task']['kind'],'manual_review')
         self.assertEqual(restored.state['phase'],dict(id='2',stage='insert_intent'))
+    def test_manual_shorter_cut_is_kept_and_next_scene_absorbs_difference(self):
+        self.prepare_manual();self.e.request_manual_review(1);self.e.next_task(self.client)
+        body=self.manual_result();body.update(verified_end=2,frames=[dict(start=0,end=2)])
+        self.e.result(body)
+        self.assertEqual(self.e.state['scenes'][0]['duration'],2)
+        next_scene=self.e.next_task(self.client)['task']['scene']
+        self.assertEqual((next_scene['start'],next_scene['duration']),(2,6))
 
     def test_name_is_saved_and_rename_preserves_scene_checkpoint(self):
         self.e.pause();self.e.set_project_name('Bài 1')

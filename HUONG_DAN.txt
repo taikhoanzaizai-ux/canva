@@ -150,3 +150,7 @@ TỪ BẢN 0.11.0 — TỰ SỬA CẢNH LỖI
 3. Sửa xong bấm Đã sửa trên Canva — tiếp tục. Tiện ích chỉ kiểm tra vị trí, thời lượng, số cảnh và voice; không thay lại tư liệu bạn vừa chọn.
 4. Nếu đạt, dòng chuyển xanh Đã tự sửa trên Canva rồi phần mềm tiếp tục cảnh chưa hoàn tất kế tiếp. Nếu chưa đạt, phần mềm báo rõ mốc cần sửa; chỉnh lại trên Canva rồi bấm xác nhận lần nữa.
 Yêu cầu kiểm tra và trạng thái tự sửa được lưu theo phần/dự án. Không cần phân tích lại voice hay dựng lại các cảnh đã xong.
+
+TỪ BẢN 0.11.1 — TỰ BÙ THỜI GIAN SAU KHI SỬA
+Bạn có thể chỉnh độ dài tương đối trên Canva. Khi bấm Đã sửa trên Canva — tiếp tục, phần mềm giữ nguyên cảnh bạn đã sửa và bù phần chênh lệch vào các cảnh chưa dựng tiếp theo, giữ tổng thời lượng voice. Ví dụ 3–4–5 giây chuyển thành 2–5–5 giây nếu cảnh đầu được bạn rút còn 2 giây. Các mốc mới tự cập nhật trong bảng.
+Vẫn giữ một cảnh cho mỗi dòng, không thêm/xóa thừa số cảnh hoặc di chuyển voice. Nếu bạn sửa một cảnh cũ, các cảnh khác đã dựng vẫn được giữ; phần bù áp dụng từ cảnh chưa dựng kế tiếp.

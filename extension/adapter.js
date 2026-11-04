@@ -239,12 +239,12 @@
     return null;
   };
   const photoDuration=duration=>Math.max(.1,Math.round((duration+Number.EPSILON)*10)/10);
-  const timePhoto=async(duration)=>{
-    const before=timeline().at(-1),count=sceneCount();
+  const timePhoto=async(duration,index=sceneCount()-1)=>{
+    const before=timeline()[index],count=sceneCount();
     if(!before||!Number.isFinite(duration)||duration<=0)throw Error('Không xác định được cảnh ảnh/thời lượng cần đặt.');
     const expected=before.start+duration;
     const applied=()=>{
-      const last=timeline().at(-1);
+      const last=timeline()[index];
       return sceneCount()===count&&last&&Math.abs(last.start-before.start)<=.02&&Math.abs(last.end-expected)<=.06;
     };
     // Canva rounds this control to tenths. Verify absolute timeline bounds,
@@ -509,14 +509,13 @@
   }
   async function manualReviewTask(task){
     await closeMenu();await tail();
-    const count=sceneCount(),scene=task.scene,row=timeline()[scene.id-1];
+    const count=sceneCount(),scene=task.scene;let row=timeline()[scene.id-1];
     if(!task.allowed_counts.includes(count))throw Error(`Canva có ${count} cảnh, cần ${task.allowed_counts.join(' hoặc ')} cảnh. Hãy thay cảnh tại chỗ, không thêm thừa hay xóa cảnh khác.`);
     if(!row||!row.image)throw Error(`Cảnh ${scene.id} chưa có ảnh/video trên timeline.`);
     if(!Number.isFinite(row.start)||!Number.isFinite(row.end))throw Error('Chưa đọc được mốc thời gian cảnh tự sửa.');
-    const expected=scene.start+scene.duration;
-    if(Math.abs(row.start-scene.start)>.12||Math.abs(row.end-expected)>.12)throw Error(`Cảnh ${scene.id} đang ở ${row.start.toFixed(2)}–${row.end.toFixed(2)} giây; cần ${scene.start.toFixed(2)}–${expected.toFixed(2)} giây.`);
     const voice=verifyVoice(task.voice_name,task.voice_duration);
-    return {manual_verified:true,review_token:task.review_token,verified_count:count,verified_start:row.start,verified_end:row.end,asset:row.image,...voice};
+    const frames=timeline().map(r=>({start:r.start,end:r.end}));
+    return {manual_verified:true,review_token:task.review_token,verified_count:count,verified_start:row.start,verified_end:row.end,frames,asset:row.image,...voice};
   }
   async function auditTask(task){
     await closeMenu();const last=await tail();

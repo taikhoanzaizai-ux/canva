@@ -231,7 +231,7 @@ for(let i=0;i<500;i++){
  const task={id:'manual:1',kind:'manual_review',scene:{id:1,start:0,duration:4},allowed_counts:[1],voice_name:'SKST_voice_manual.wav',voice_duration:8};
  const run=()=>env.globalThis.SKSTAdapter.run(task,async()=>{checks++;});
  const ok=await run();assert.equal(ok.manual_verified,true);assert.equal(ok.verified_end,4);assert.equal(ok.verified_voice_end,8);assert(checks>0);assert.equal(changed,0,'Manual review must never insert, trim or delete the user repair');
- end=5;await assert.rejects(run,/Cảnh 1 đang ở/);end=4;
+ end=5;assert.equal((await run()).verified_end,5,'Keep a relative user edit and send its real endpoint for compensation');end=4;
  image=false;await assert.rejects(run,/chưa có ảnh/);image=true;
  rows.push(row);await assert.rejects(run,/Canva có 2 cảnh/);rows.pop();
  voiceEnd=7;await assert.rejects(run,/Voice trên Canva/);assert.equal(changed,0);

@@ -6,7 +6,7 @@ from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.11.0'
+MIN_EXTENSION_VERSION='0.11.1'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -290,16 +290,24 @@ class Engine:
                 if not scene or key!=f'manual:{scene["id"]}' or body.get('manual_verified') is not True:raise ValueError('Chưa xác nhận đúng cảnh tự sửa.')
                 values=[float(body.get(k,-1)) for k in ('verified_start','verified_end','verified_voice_start','verified_voice_end')]
                 total=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration']
-                if not all(map(math.isfinite,values)) or abs(values[0]-scene['start'])>.12 or abs(values[1]-scene['start']-scene['duration'])>.12:raise ValueError('Mốc cảnh tự sửa chưa khớp voice.')
+                if not all(map(math.isfinite,values)) or values[1]<=values[0]:raise ValueError('Chưa đọc được khoảng thời gian cảnh tự sửa.')
                 if body.get('verified_count') not in review.get('allowed_counts',[]) or not review.get('voice_name') or body.get('voice_name')!=review['voice_name'] or abs(values[2])>.12 or abs(values[3]-total)>.12:raise ValueError('Số cảnh hoặc voice đã thay đổi; chưa thể tiếp tục.')
-                scene['manual_verified']=True;scene['manual_asset']=str(body.get('asset','manual:'+str(scene['id'])))
+                from .manual_timing import compensate
+                frames=body.get('frames',[])
+                if len(frames)!=body['verified_count']:raise ValueError('Chưa đọc đủ mốc các cảnh trên timeline.')
+                selected=frames[scene['id']-1]
+                if abs(float(selected['start'])-values[0])>.001 or abs(float(selected['end'])-values[1])>.001:raise ValueError('Mốc cảnh tự sửa không thống nhất; hãy xác nhận lại.')
+                completed=set(self.state['done'])|{scene['id']}
+                updates=compensate(self.state['scenes'],completed,frames)
+                for item,update in zip(self.state['scenes'],updates):item.update(update)
+                scene['manual_verified']=True;scene['manual_asset']=str(body.get('asset','manual:'+str(scene['id'])));scene['manual_actual_start']=values[0];scene['manual_actual_end']=values[1]
                 if scene['id'] not in self.state['done']:self.state['done'].append(scene['id']);self.state['done'].sort()
                 if self.state['phase'].get('id')==str(scene['id']):self.state['phase']={}
                 self.state.pop('manual_review',None);self.state.pop('manual_review_error',None);self.state.pop('manual_edit_scene',None)
                 self.state['audit_done']=False;self.state['export_done']=False
                 asset=scene['manual_asset']
                 if asset not in self.state['used']:self.state['used'].append(asset)
-                self.running=None;self.log(f'Đã xác nhận cảnh {scene["id"]} tự sửa. Tiếp tục từ cảnh chưa hoàn tất kế tiếp.');return dict(ok=True)
+                self.running=None;self.log(f'Đã giữ thời lượng cảnh {scene["id"]} bạn tự sửa; phần chênh lệch được bù vào các cảnh dựng tiếp theo.');return dict(ok=True)
             if key=='rename':
                 expected=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
                 if not expected or body.get('design_name')!=expected:raise ValueError('Tên Canva chưa khớp tên phần hiện tại.')

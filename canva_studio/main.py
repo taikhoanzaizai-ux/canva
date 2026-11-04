@@ -249,6 +249,7 @@ class App:
         for scene in self.plan['scenes']:
             status,tag,_=scene_status(scene,st);ident=str(scene['id'])
             if self.tree.exists(ident):
+                self.tree.set(ident,'time',f'{scene["id"]} | {scene["start"]:.2f} → {scene["start"]+scene["duration"]:.2f}')
                 self.tree.set(ident,'status',status);self.tree.item(ident,tags=(tag,) if tag else ())
         errors=st.get('errors',[])
         marker=(st.get('part_index',0),len(errors))
@@ -277,14 +278,14 @@ class App:
             self.tree.selection_set(str(ident));self.tree.see(str(ident))
             scene=next(s for s in self.engine.state['scenes'] if s['id']==ident)
             open_chrome(self.engine.state['target'])
-            self.notice.set(f'Đã tạm dừng để bạn sửa cảnh {ident} trên Canva: giữ một cảnh tại mốc {scene["start"]:.3f}–{scene["start"]+scene["duration"]:.3f} giây. Sửa xong bấm Đã sửa trên Canva — tiếp tục.')
+            self.notice.set(f'Đã tạm dừng để sửa cảnh {ident}. Bạn chỉnh độ dài tương đối; khi xác nhận, phần mềm giữ cảnh bạn sửa và bù chênh lệch vào các cảnh chưa dựng tiếp theo.')
         except Exception as exc:messagebox.showerror('Chưa mở được cảnh tự sửa',str(exc))
     def confirm_manual_scene(self):
         try:
             ident=self.manual_scene_id();self.engine.pause();self.engine.request_manual_review(ident)
             self.tree.selection_set(str(ident));self.tree.see(str(ident))
             if not self.engine.connection_status()['ready']:open_chrome(self.engine.state['target'])
-            self.notice.set(f'Đang kiểm tra cảnh {ident} bạn đã sửa trên Canva…')
+            self.notice.set(f'Đang giữ thời lượng cảnh {ident} và tính bù chênh lệch cho các cảnh dựng tiếp theo…')
         except Exception as exc:messagebox.showerror('Chưa xác nhận được cảnh tự sửa',str(exc))
     def edit_scene(self,event=None):
         if not self.plan or not self.tree.selection():return
@@ -305,7 +306,7 @@ class App:
             plan=json.loads(Path(p).read_text(encoding='utf8')); scenes=plan['scenes'];at=0
             if not scenes or len(scenes)>50:raise ValueError('Danh sách cần từ 1 đến 50 cảnh.')
             for i,s in enumerate(scenes,1):
-                if s['id']!=i or abs(s['start']-at)>.05 or not .1<=s['duration']<=5.05 or not s['queries']:raise ValueError('Danh sách cảnh không liên tục hoặc quá 5 giây.')
+                if s['id']!=i or abs(s['start']-at)>.05 or not .1<=s['duration']<=(600 if s.get('manual_timing_adjusted') else 5.05) or not s['queries']:raise ValueError('Danh sách cảnh không liên tục hoặc thời lượng không hợp lệ.')
                 at=s['start']+s['duration']
             self.plan=plan;self.prepared_voice='';self.engine.state.update(scenes=scenes,done=[],used=[],phase={},errors=[],voice_done=False,target='',voice='',mode='ready');self.engine.state.pop('manual_review',None);self.engine.state.pop('manual_review_error',None);self.engine.state.pop('manual_edit_scene',None);self.populate();self.engine.save();self.target.set('');self.notice.set('Đã nạp danh sách. Chọn đúng voice đã cắt theo độ dài danh sách này.')
         except Exception as e:messagebox.showerror('Không nạp được',str(e))
