@@ -97,6 +97,10 @@ assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'},{ac
 
 const bloodScene={duration:4,allow_all_media:true,subjects:['blood','artery'],actions:['flow'],positive:['blood','artery'],negative:[]};
 const broadBlood={...bloodScene,topic_only:true};
+for(const [subject,correct,wrong] of [['walnut','Walnut kernels on table','Cashew nuts on table'],['stomach','Human stomach anatomy','Human intestine anatomy'],['walking','Senior walking outdoors','Senior seated exercise'],['brain','Human brain illustration','Human heart illustration'],['juice','Fresh juice in glass','Fresh fruits on table']]){
+ const scene={duration:4,allow_all_media:true,topic_only:true,subjects:[subject],positive:[subject]};
+ assert.equal(adapter.eligibleCards([{id:'right',title:correct,duration:10},{id:'wrong',title:wrong,duration:10}],scene,[]).map(c=>c.id).join(','),'right','Match the named object, not a neighboring subject: '+subject);
+}
 assert.equal(adapter.eligibleCards([{id:'diagram',duration:10,title:'Blood cells anatomy'}],broadBlood,[]).length,1,'Broad topics accept related footage without exact action');
 assert.equal(adapter.eligibleCards([{id:'rainbow',duration:10,title:'Rainbow neon frame'}],broadBlood,[]).length,0,'Broad topics still reject unrelated footage');
 assert.equal(adapter.eligibleCards([{id:'diagram',duration:10,title:'Blood cells anatomy'}],broadBlood,['diagram']).length,0,'Prefer unused footage within a project');

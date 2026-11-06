@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.11.4
+
+- Bám đúng đối tượng lời đọc: bổ sung các loại hạt, rau củ, trái cây, não, da và tim; tách dạ dày khỏi đường ruột, đi bộ khỏi thể dục/dưỡng sinh.
+- Giữ từ khóa ngắn nhưng không dùng đối tượng khác thay thế (óc chó không thành hạt điều, nước ép không thành trái cây nguyên quả). Ưu tiên thực phẩm được nhắc trực tiếp trước câu mô tả lợi ích cho cơ quan.
+- Cảnh cắt giữa câu kế thừa đúng đối tượng trong câu; cập nhật cảnh tự động chưa dựng, giữ nguyên cảnh đã dựng và từ khóa tự sửa.
+
 ## 0.11.3
 
 - Rút gọn từ khóa theo chủ đề: mạch máu, đường huyết, người già thể dục… Chấp nhận tư liệu cùng chủ đề; hành động cụ thể chỉ được ưu tiên, không còn bắt buộc.

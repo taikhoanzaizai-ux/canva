@@ -73,7 +73,7 @@ def refine_queries(scenes,preserve_before=0):
             else:
                 phrase=' '.join(scene.get('text','').strip(' ,.!?').split()[:10])
                 scene.update(queries=[phrase,' '.join(phrase.split()[:5])],positive=phrase.split(),subjects=[],actions=[],review=False,requires_review=False,query_basis='từ khóa câu lời đọc')
-        # Media style is unrestricted; the explicitly spoken action is not.
+        # Keep action hints for ranking; object identity comes from the words spoken.
         for pattern,terms in [
             ('nhón gót|kiễng|nâng gót',['calf raise','heel raise','tiptoe','nhón gót','kiễng','nâng gót']),
             ('thức dậy|tỉnh giấc',['wake','waking','thức dậy','tỉnh giấc']),
@@ -84,7 +84,7 @@ def refine_queries(scenes,preserve_before=0):
             if any(w in scene.get('text','').casefold() for w in pattern.split('|')):
                 scene['actions']=terms;break
         scene.update(allow_all_media=True,real_people_only=False,negative=[])
-        broaden(scene)
+        broaden(scene,sentence_context(scenes,i))
     return scenes
 
 def headings(script):

@@ -3,6 +3,26 @@ from canva_studio.core import make_plan,describe,split_batches
 from canva_studio.editorial import headings,timed_headings,add_title_cards,refine_queries
 
 class EditorialTests(unittest.TestCase):
+    def test_named_objects_remain_distinct_from_other_foods_and_organs(self):
+        samples=[('Hạt điều tốt cho tim','hạt điều','cashew'),('Hạt óc chó tốt cho não','hạt óc chó','walnut'),('Củ lạc giàu chất béo','đậu phộng','peanut'),('não cần được bảo vệ','não bộ','brain'),('làn da khỏe mạnh','làn da','skin'),('tim hoạt động','tim','heart'),('gan chuyển hóa','gan','liver'),('dạ dày tiêu hóa thức ăn','dạ dày','stomach'),('ruột hấp thu','đường ruột','intestine'),('người già đi bộ để thể dục','người già đi bộ','walking'),('người già thể dục','người già thể dục','exercise'),('cà rốt tốt cho da','cà rốt','carrot'),('bông cải xanh tốt cho gan','bông cải xanh','broccoli'),('rau củ quả','rau củ quả','vegetable'),('nước ép','nước ép','juice')]
+        for text,query,subject in samples:
+            with self.subTest(text=text):
+                row=dict(id=1,text=text,**describe(text));refine_queries([row])
+                self.assertEqual(row['queries'][0],query);self.assertIn(subject,row['subjects'])
+                if subject=='juice':self.assertNotIn('fruit',row['subjects'])
+                if subject=='walking':self.assertNotIn('exercise',row['subjects'])
+
+    def test_food_identity_continues_through_a_comma_cut_without_stale_blood(self):
+        texts=['Mạch máu lưu thông.','Hạt óc chó,','giàu chất béo có lợi.','Đi bộ mỗi sáng.']
+        rows=[dict(id=i+1,text=t,**describe(t)) for i,t in enumerate(texts)]
+        refine_queries(rows)
+        self.assertEqual(rows[2]['queries'][0],'hạt óc chó')
+        self.assertEqual(rows[3]['queries'][0],'người già đi bộ')
+
+    def test_accents_do_not_turn_greetings_into_kidneys_or_past_tense_into_skin(self):
+        from canva_studio.broad_search import topic_for
+        self.assertIsNone(topic_for('Quý vị thân mến, chúng ta đã khỏe hơn.'))
+
     def test_short_topics_and_direct_food_override_blood_context(self):
         texts=['máu lưu thông trong mạch máu','đo đường huyết','người già thể dục','Nhưng khi cho 3–4 quả cam vào máy ép','Thứ chúng ta uống vào là nước ép']
         rows=[dict(id=i+1,text=t,**describe(t)) for i,t in enumerate(texts)]
