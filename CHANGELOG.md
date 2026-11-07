@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.13.1
+
+- Đưa nút khôi phục bản dựng và lối về Dựng video vào mục Từ khóa AI. Hướng dẫn khi chưa có cảnh và chỉ bật cập nhật từ khóa sau khi đã có danh sách cảnh.
+- Ghi rõ Gemini kết nối bằng khóa tạo trong Google AI Studio và thêm nút mở đúng trang lấy khóa.
+
 ## 0.13.0
 
 - Thêm Sign in with ChatGPT trong Từ khóa AI để tài khoản đủ điều kiện dùng lượt AI theo gói ChatGPT.

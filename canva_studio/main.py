@@ -45,6 +45,7 @@ class App:
         ttk.Label(outer,text='Voice của bạn → cảnh ngắn sát lời đọc → dựng trong kho Canva',foreground='#55657c').pack(anchor='w',pady=(2,8))
         tabs=ttk.Notebook(outer);tabs.pack(fill='both',expand=True)
         build=ttk.Frame(tabs,padding=14);settings=ttk.Frame(tabs,padding=18);help_tab=ttk.Frame(tabs,padding=18)
+        self.tabs=tabs;self.build_tab=build
         tabs.add(build,text='  Dựng video  ');tabs.add(settings,text='  Kết nối & công cụ  ');tabs.add(help_tab,text='  Hướng dẫn  ')
         keyword_tab=ttk.Frame(tabs,padding=18)
         tabs.insert(2,keyword_tab,text='  Từ khóa AI  ')
@@ -154,15 +155,24 @@ class App:
             key_row.pack(fill='x', pady=3)
             ttk.Label(key_row, text='Khóa API', width=12).pack(side='left')
             ttk.Entry(key_row, textvariable=self.keyword_keys[provider], show='*').pack(side='left', fill='x', expand=True)
-            ttk.Button(key_row, text='Lấy khóa API',
+            ttk.Button(key_row, text='Mở Google AI Studio để lấy khóa' if provider == GEMINI else 'Lấy khóa API',
                        command=lambda url=API_KEY_PAGES[provider]: webbrowser.open_new_tab(url)).pack(side='left', padx=(8, 0))
+            if provider == GEMINI:
+                ttk.Label(group,text='Đăng nhập Google trong AI Studio, tạo khóa Gemini API rồi dán vào ô trên.').pack(anchor='w')
         ttk.Label(panel, wraplength=900, text=(
             'Chọn model trong danh sách hoặc nhập mã model khác. '
             'Khi dùng AI trực tuyến, ứng dụng gửi văn bản từng cảnh và câu kề để phân tích. '
             'Voice vẫn xử lý trên máy. API có thể tính phí theo tài khoản. '
             'Khóa nhập ở đây chỉ dùng trong phiên này.')).pack(anchor='w', pady=10)
-        ttk.Button(panel, text='Cập nhật từ khóa cảnh chưa dựng ở phần hiện tại',
-                   command=self.reclassify_keywords).pack(anchor='w')
+        plan_actions = ttk.Frame(panel)
+        plan_actions.pack(fill='x')
+        self.keyword_update_button = ttk.Button(plan_actions, text='Cập nhật từ khóa cảnh chưa dựng',
+                                                command=self.reclassify_keywords)
+        self.keyword_update_button.pack(side='left')
+        ttk.Button(plan_actions, text='Về Dựng video', command=lambda: self.tabs.select(self.build_tab)).pack(side='left', padx=6)
+        ttk.Button(plan_actions, text='Khôi phục bản dựng gần nhất', command=self.restore_previous_project).pack(side='left')
+        self.keyword_plan_hint = tk.StringVar()
+        ttk.Label(panel, textvariable=self.keyword_plan_hint, wraplength=900).pack(anchor='w', pady=(8,0))
         self.keyword_notice = tk.StringVar()
         ttk.Label(panel, textvariable=self.keyword_notice, wraplength=900).pack(anchor='w', pady=8)
 
@@ -235,11 +245,11 @@ class App:
         if self.worker_busy:
             return
         try:
+            if not self.plan or not self.plan.get('scenes'):
+                raise ValueError('Về Dựng video để phân tích bài mới, hoặc khôi phục bản dựng gần nhất để tiếp tục bài cũ.')
             config = self.keyword_config()
             if not config:
                 raise ValueError('Chọn Gói ChatGPT, OpenAI hoặc Gemini để cập nhật từ khóa.')
-            if not self.plan:
-                raise ValueError('Phân tích voice hoặc nạp danh sách cảnh trước.')
             with self.engine.lock:
                 state = self.engine.state
                 if state['mode'] in ('running','opening','opening_resume') or self.engine.running:
@@ -661,6 +671,11 @@ class App:
                 if self.analyze_then_run:
                     self.analyze_then_run=False;self.root.after(0,self.run)
         self.engine.watchdog()
+        has_scenes=bool(self.plan and self.plan.get('scenes'))
+        self.keyword_update_button.configure(state='normal' if has_scenes and not self.worker_busy else 'disabled')
+        self.keyword_plan_hint.set(
+            'Cập nhật từ khóa cho các cảnh chưa dựng ở phần đang mở.' if has_scenes else
+            'Chưa có danh sách cảnh. Khôi phục bản dựng để tiếp tục bài cũ, hoặc về Dựng video để phân tích bài mới.')
         st=self.engine.state
         self.name_entry.configure(state='disabled' if st['mode'] in ('running','opening','opening_resume') else 'normal')
         self.name_hint.set('  Canva chưa nhận tên; vẫn tiếp tục dựng.' if st.get('rename_warning') else '  Ví dụ: Bài 1 → Bài 1.2 → Bài 1.3')
