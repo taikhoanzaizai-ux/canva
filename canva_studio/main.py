@@ -100,6 +100,7 @@ class App:
         ttk.Label(settings,text='Thư mục dữ liệu portable: '+str(DATA),wraplength=950).pack(anchor='w',pady=5)
         ttk.Button(settings,text='Mở thư mục dữ liệu',command=lambda:os.startfile(str(DATA))).pack(anchor='w',pady=3)
         ttk.Button(settings,text='Xem danh sách lỗi dựng',command=self.show_errors).pack(anchor='w',pady=3)
+        ttk.Button(settings,text='Khôi phục bản dựng gần nhất',command=self.restore_previous_project).pack(anchor='w',pady=3)
         ttk.Label(settings,text='Nhận diện voice trên máy bằng Whisper',font=('Segoe UI',13,'bold')).pack(anchor='w',pady=(20,8))
         self.python=tk.StringVar(value=self.settings.get('python',self.detect_python()));self.model=tk.StringVar(value=self.settings.get('model',self.detect_model()));self.ffmpeg=tk.StringVar(value=self.settings.get('ffmpeg',self.detect_ffmpeg()))
         for label,var in [('Python cũ (tùy chọn)',self.python),('Mô hình (tự tải máy mới)',self.model),('FFmpeg (.exe)',self.ffmpeg)]:
@@ -293,7 +294,12 @@ class App:
             self.notice.set(str(exc))
     def analyze(self):
         if self.worker_busy:return
-        if self.engine.state['mode']=='running':return messagebox.showinfo('Đang dựng','Hãy tạm dừng trước khi chia lại cảnh.')
+        if self.engine.state['mode'] in ('running','opening','opening_resume'):return messagebox.showinfo('Đang dựng','Hãy tạm dừng trước khi chia lại cảnh.')
+        state=self.engine.state
+        if state.get('manual_edit_scene') and state.get('scenes') and state.get('target'):
+            return messagebox.showinfo('Đang chờ xác nhận cảnh tự sửa',
+                'Sửa cảnh trên Canva rồi bấm Đã sửa trên Canva — tiếp tục. '
+                'Nếu muốn bắt đầu bài khác, chọn Dự án mới để lưu lại tiến độ trước.')
         try:
             config=self.keyword_config()
             if not Path(self.voice.get()).is_file():raise ValueError('Chọn tệp voice có sẵn trên máy.')
@@ -384,7 +390,9 @@ class App:
             status,_,reason=scene_status(scene,self.engine.state if self.engine.state.get('scenes')==self.plan['scenes'] else {})
             self.scene_detail.set(f'Cảnh {ident} • {scene["start"]:.3f}–{scene["start"]+scene["duration"]:.3f} giây • {status}'+(' • '+reason[:240] if reason else ''))
     def manual_scene_id(self):
-        if self.worker_busy or not self.plan or self.engine.state.get('scenes')!=self.plan['scenes']:raise ValueError('Chọn cảnh trong dự án đang dựng trước khi tự sửa trên Canva.')
+        if self.worker_busy:raise ValueError('Chờ tác vụ đang chạy hoàn tất trước khi sửa cảnh.')
+        if not self.plan or self.engine.state.get('scenes') is not self.plan['scenes']:
+            raise ValueError('Danh sách hiện tại chưa nối với bản dựng Canva. Vào Kết nối & công cụ → Khôi phục bản dựng gần nhất để quay lại dự án cũ.')
         try:ident=int(self.manual_scene.get())
         except ValueError:raise ValueError('Chọn cảnh trong bảng hoặc nhập số cảnh cần sửa.')
         if not any(s['id']==ident for s in self.engine.state.get('scenes',[])):raise ValueError('Số cảnh không có trong phần Canva hiện tại.')
@@ -513,8 +521,44 @@ class App:
         if st.get('target'):rows.append(f"Phần hiện tại {st.get('part_index',0)+1}\n{st['target']}")
         messagebox.showinfo('Các phần đã dựng','\n\n'.join(rows) or 'Chưa có phần nào.')
     def new_project(self):
-        if not messagebox.askyesno('Dự án mới','Xóa tiến độ dựng trong ứng dụng để chuẩn bị dự án mới? Thiết kế Canva hiện tại vẫn được giữ.'):return
-        self.engine.pause();self.engine.state.update(scenes=[],done=[],phase={},errors=[],used=[],usage={},last_asset='',project_name='',named_title='',target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.state.pop('manual_review',None);self.engine.state.pop('manual_review_error',None);self.engine.state.pop('manual_edit_scene',None);self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('');self.project_name.set('');self.manual_scene.set('');self.scene_detail.set('Chọn cảnh để xem lỗi hoặc tự sửa trên Canva.')
+        if self.worker_busy:return
+        if not messagebox.askyesno('Dự án mới','Lưu bản dựng hiện tại rồi bắt đầu dự án mới?'):return
+        try:
+            self.engine.pause()
+            self.engine.archive_project()
+        except OSError:
+            return messagebox.showerror('Chưa lưu được bản dựng','Kiểm tra quyền ghi trong thư mục dữ liệu rồi thử lại.')
+        self.engine.state.update(scenes=[],done=[],phase={},errors=[],used=[],usage={},last_asset='',project_name='',named_title='',target='',voice='',voice_done=False,export_done=False,mode='idle');self.engine.state.pop('manual_review',None);self.engine.state.pop('manual_review_error',None);self.engine.state.pop('manual_edit_scene',None);self.engine.running=None;self.engine.save();self.plan=None;self.tree.delete(*self.tree.get_children());self.target.set('');self.project_name.set('');self.manual_scene.set('');self.scene_detail.set('Chọn cảnh để xem lỗi hoặc tự sửa trên Canva.')
+
+    def restore_previous_project(self):
+        if self.worker_busy:return
+        try:
+            archived=self.engine.latest_linked_archive()
+            name=archived.get('project_name') or 'Dự án chưa đặt tên'
+            part=archived.get('part_index',0)+1
+            done=len(archived.get('done',[]))
+            if not messagebox.askyesno('Khôi phục bản dựng',
+                    f'Mở lại “{name}”, phần {part}, đã dựng {done}/{len(archived["scenes"])} cảnh?'):
+                return
+            self.engine.restore_linked_archive(archived)
+        except (OSError,ValueError) as error:
+            return messagebox.showerror('Chưa khôi phục được',str(error))
+        state=self.engine.state
+        self.plan=dict(scenes=state['scenes'],parts=state.get('parts',[]))
+        self.display_part=state.get('part_index',0)
+        self.prepared_voice=state['voice']
+        self.voice.set(state.get('original_voice') or self.prepared_voice)
+        self.project_name.set(state.get('project_name',''))
+        self.target.set(state['target'])
+        self.manual_scene.set('')
+        self.populate()
+        pending=state.get('manual_edit_scene')
+        if pending and self.tree.exists(str(pending)):
+            self.tree.selection_set(str(pending))
+            self.tree.see(str(pending))
+            self.manual_scene.set(str(pending))
+        self.notice.set(state['message'])
+
     def tick(self):
         while not self.tasks.empty():
             kind,value=self.tasks.get()
@@ -527,11 +571,16 @@ class App:
             if kind=='keyword_error':self.keyword_notice.set(value);self.notice.set(value);continue
             if kind=='error':self.analyze_then_run=False;self.notice.set('Phân tích chưa thành công.');messagebox.showerror('Chưa phân tích được',value)
             else:
-                if self.engine.state.get('scenes'):
-                    archive=DATA/'Projects'/'Previous';archive.mkdir(parents=True,exist_ok=True)
-                    atomic_json(archive/(uuid.uuid4().hex+'.json'),self.engine.state)
+                try:self.engine.archive_project()
+                except OSError:
+                    self.analyze_then_run=False
+                    messagebox.showerror('Chưa lưu được bản dựng','Kiểm tra quyền ghi thư mục dữ liệu trước khi thay danh sách cảnh.')
+                    continue
                 self.plan,clip=value;self.prepared_voice=clip;self.populate();self.target.set('')
-                self.engine.state.update(scenes=[],done=[],used=[],phase={},target='',voice='',voice_done=False,export_done=False,mode='ready');self.engine.save()
+                self.engine.state.update(scenes=[],done=[],used=[],phase={},target='',voice='',voice_done=False,export_done=False,mode='ready')
+                for key in ('manual_edit_scene','manual_review','manual_review_error'):self.engine.state.pop(key,None)
+                self.manual_scene.set('')
+                self.engine.save()
                 n=len(self.plan['scenes']);note=f'Đã chia {n} cảnh phần đầu; {self.plan.get("title_count",0)} tiêu đề nền đen. Nhấp đúp để sửa từ khóa.'
                 if self.plan.get('approximate'):note+=' Mốc từ được ước lượng từ phụ đề; nên duyệt phần mở đầu.'
                 if self.script.get('1.0','end').strip() and not self.plan.get('script_aligned'):note+=' Chưa khớp chắc chắn kịch bản: đang dùng lời nhận diện từ voice.'

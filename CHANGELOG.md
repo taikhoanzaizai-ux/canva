@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.12.5
+
+- Thêm nút khôi phục bản dựng Canva gần nhất trong Kết nối & công cụ, giữ phần đang dựng và cảnh chờ xác nhận.
+- Chặn phân tích lại khi đang chờ xác nhận cảnh tự sửa. Lưu tiến độ khi bắt đầu dự án mới và xóa số cảnh chờ cũ khi thay danh sách.
+
 ## 0.12.4
 
 - So khớp cụm chủ đề khi tiêu đề Canva đổi thứ tự từ, vẫn yêu cầu đủ từ của đối tượng.

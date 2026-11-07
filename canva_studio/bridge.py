@@ -41,6 +41,39 @@ class Engine:
             except (ValueError,OSError):pass
 
     def save(self): atomic_json(self.path,self.state)
+    def archive_project(self):
+        with self.lock:
+            if not self.state.get('scenes'):
+                return
+            folder=self.folder/'Projects'/'Previous'
+            folder.mkdir(parents=True,exist_ok=True)
+            atomic_json(folder/(secrets.token_hex(16)+'.json'),self.state)
+
+    def latest_linked_archive(self):
+        folder=self.folder/'Projects'/'Previous'
+        for path in sorted(folder.glob('*.json'),key=lambda p:p.stat().st_mtime_ns,reverse=True):
+            try:
+                state=json.loads(path.read_text(encoding='utf8'))
+                if (isinstance(state,dict) and isinstance(state.get('scenes'),list) and state['scenes']
+                        and state.get('voice_done') and state.get('voice') and isinstance(state.get('target'),str)
+                        and valid_canva(state['target'])):
+                    return state
+            except (OSError,ValueError,TypeError):
+                continue
+        raise ValueError('Chưa có bản lưu dự án đã liên kết với Canva.')
+
+    def restore_linked_archive(self,state):
+        with self.lock:
+            if self.running or self.state['mode'] in ('running','opening','opening_resume'):
+                raise ValueError('Tạm dừng và chờ thao tác Canva hiện tại kết thúc trước khi khôi phục.')
+            self.archive_project()
+            restored={**state,'mode':'paused','message':'Đã khôi phục bản dựng. Kiểm tra đúng thiết kế Canva trước khi tiếp tục.'}
+            restored.pop('manual_review',None)
+            atomic_json(self.path,restored)
+            self.state=restored
+            self.browser={}
+            self.running=None
+
     def log(self,text):
         with self.lock:
             self.events.append(time.strftime('%H:%M:%S')+'  '+text);self.events=self.events[-250:]
