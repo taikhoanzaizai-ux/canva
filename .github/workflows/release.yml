@@ -44,8 +44,14 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         shell: pwsh
         run: |
-          Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile "$env:RUNNER_TEMP/ffmpeg.zip"
-          Expand-Archive "$env:RUNNER_TEMP/ffmpeg.zip" "$env:RUNNER_TEMP/ffmpeg"
+          $archive = "$env:RUNNER_TEMP/ffmpeg.zip"
+          $url = 'https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip'
+          Invoke-WebRequest $url -OutFile $archive -MaximumRetryCount 2 -RetryIntervalSec 5
+          $expected = '60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba'
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) {
+            throw 'FFmpeg archive SHA-256 mismatch.'
+          }
+          Expand-Archive $archive "$env:RUNNER_TEMP/ffmpeg"
           $folder = Get-ChildItem "$env:RUNNER_TEMP/ffmpeg" -Directory | Select-Object -First 1
           "SKST_FFMPEG_DIR=$($folder.FullName)" >> $env:GITHUB_ENV
       - name: Build and smoke test EXE
