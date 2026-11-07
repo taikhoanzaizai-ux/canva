@@ -10,6 +10,14 @@ LOCAL = 'Trên máy'
 OPENAI = 'OpenAI (ChatGPT)'
 GEMINI = 'Google Gemini'
 DEFAULT_MODELS = {OPENAI: 'gpt-5.4-mini', GEMINI: 'gemini-3.5-flash'}
+MODEL_OPTIONS = {
+    OPENAI: ('gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-5.4-mini'),
+    GEMINI: ('gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'),
+}
+API_KEY_PAGES = {
+    OPENAI: 'https://platform.openai.com/api-keys',
+    GEMINI: 'https://aistudio.google.com/app/apikey',
+}
 BATCH_SIZE = 12
 FIELDS = ('evidence', 'subject_vi', 'subject_en', 'query_vi', 'query_en')
 SCHEMA = {
@@ -51,6 +59,8 @@ def request_keywords(provider, model, key, scenes):
             'max_output_tokens': 4096,
             'text': {'format': {'type': 'json_schema', 'name': 'scene_keywords', 'strict': True, 'schema': SCHEMA}},
         }
+        if model in ('gpt-6.1-sol', 'gpt-6.1-terra'):
+            body['reasoning'] = {'effort': 'low'}
     elif provider == GEMINI:
         url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
         headers['x-goog-api-key'] = key

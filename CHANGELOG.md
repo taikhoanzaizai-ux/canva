@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.12.1
+
+- Thêm danh sách chọn model trong Từ khóa AI, gồm GPT-6.1 Sol, GPT-6.1 Terra và nhiều lựa chọn Gemini. Có thể nhập mã model khác.
+- Thêm nút Lấy khóa API ngay cạnh ô nhập khóa cho từng nhà cung cấp.
+
 ## 0.12.0
 
 - Thêm mục Từ khóa AI với OpenAI (ChatGPT) và Google Gemini. Model đọc lời cảnh và câu kề, đề xuất đối tượng cụ thể và cụm tìm kiếm tiếng Việt, tiếng Anh.

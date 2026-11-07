@@ -18,7 +18,7 @@ from canva_studio.storage import application_dir
 from canva_studio.companion import companion_status
 from canva_studio.recognizer import paths as recognizer_paths,ensure_recognizer,command as recognition_command,convert_output
 from canva_studio.scene_status import scene_status
-from canva_studio.keyword_api import DEFAULT_MODELS, GEMINI, LOCAL, OPENAI, keyword_updates
+from canva_studio.keyword_api import API_KEY_PAGES, DEFAULT_MODELS, GEMINI, LOCAL, MODEL_OPTIONS, OPENAI, keyword_updates
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
 DATA=data_dir()
@@ -128,14 +128,20 @@ class App:
             group.pack(fill='x', pady=5)
             self.keyword_models[provider] = tk.StringVar(value=model)
             self.keyword_keys[provider] = tk.StringVar()
-            for label, value, mask in [('Model', self.keyword_models[provider], ''),
-                                       ('Khóa API', self.keyword_keys[provider], '*')]:
-                line = ttk.Frame(group)
-                line.pack(fill='x', pady=3)
-                ttk.Label(line, text=label, width=12).pack(side='left')
-                ttk.Entry(line, textvariable=value, show=mask).pack(side='left', fill='x', expand=True)
+            model_row = ttk.Frame(group)
+            model_row.pack(fill='x', pady=3)
+            ttk.Label(model_row, text='Model', width=12).pack(side='left')
+            ttk.Combobox(model_row, textvariable=self.keyword_models[provider],
+                         values=MODEL_OPTIONS[provider], state='normal').pack(side='left', fill='x', expand=True)
+            key_row = ttk.Frame(group)
+            key_row.pack(fill='x', pady=3)
+            ttk.Label(key_row, text='Khóa API', width=12).pack(side='left')
+            ttk.Entry(key_row, textvariable=self.keyword_keys[provider], show='*').pack(side='left', fill='x', expand=True)
+            ttk.Button(key_row, text='Lấy khóa API',
+                       command=lambda url=API_KEY_PAGES[provider]: webbrowser.open_new_tab(url)).pack(side='left', padx=(8, 0))
         ttk.Label(panel, wraplength=900, text=(
-            'Chọn OpenAI hoặc Gemini để gửi văn bản từng cảnh và câu kề đến nhà cung cấp khi phân tích. '
+            'Chọn model trong danh sách hoặc nhập mã model khác. '
+            'Khi chọn OpenAI hoặc Gemini, ứng dụng gửi văn bản từng cảnh và câu kề để phân tích. '
             'Voice vẫn xử lý trên máy. API có thể tính phí theo tài khoản. '
             'Khóa nhập ở đây chỉ dùng trong phiên này.')).pack(anchor='w', pady=10)
         ttk.Button(panel, text='Cập nhật từ khóa cảnh chưa dựng ở phần hiện tại',
