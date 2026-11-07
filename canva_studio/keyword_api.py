@@ -9,9 +9,10 @@ from .core import norm
 LOCAL = 'Trên máy'
 OPENAI = 'OpenAI (ChatGPT)'
 GEMINI = 'Google Gemini'
-DEFAULT_MODELS = {OPENAI: 'gpt-5.4-mini', GEMINI: 'gemini-3.5-flash'}
+LUNA = 'gpt-6-luna'
+DEFAULT_MODELS = {OPENAI: LUNA, GEMINI: 'gemini-3.5-flash'}
 MODEL_OPTIONS = {
-    OPENAI: ('gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-5.4-mini'),
+    OPENAI: (LUNA, 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-5.4-mini'),
     GEMINI: ('gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'),
 }
 API_KEY_PAGES = {
@@ -59,7 +60,7 @@ def request_keywords(provider, model, key, scenes):
             'max_output_tokens': 4096,
             'text': {'format': {'type': 'json_schema', 'name': 'scene_keywords', 'strict': True, 'schema': SCHEMA}},
         }
-        if model in ('gpt-6.1-sol', 'gpt-6.1-terra'):
+        if model in (LUNA, 'gpt-6.1-sol', 'gpt-6.1-terra'):
             body['reasoning'] = {'effort': 'low'}
     elif provider == GEMINI:
         url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
@@ -80,6 +81,18 @@ def request_keywords(provider, model, key, scenes):
         with build_opener(NoRedirect()).open(request, timeout=40) as response:
             raw = json.loads(response.read(512 * 1024))
     except HTTPError as error:
+        if provider == OPENAI and error.code == 429:
+            try:
+                detail = json.loads(error.read(16384))['error']
+                codes = (detail.get('code'), detail.get('type'))
+            except (ValueError, KeyError, TypeError, AttributeError, OSError):
+                codes = ()
+            if any(code in codes for code in ('insufficient_quota', 'credit_balance_exhausted',
+                                               'project_spend_limit_exceeded', 'organization_spend_limit_exceeded',
+                                               'organization_usage_limit_exceeded')):
+                raise ValueError('OpenAI HTTP 429: tài khoản API đã hết tín dụng hoặc chạm giới hạn chi tiêu/sử dụng.') from None
+            if 'rate_limit_exceeded' in codes:
+                raise ValueError('OpenAI HTTP 429: chạm giới hạn tốc độ. Đợi một lúc rồi thử lại.') from None
         hints = {400: 'kiểm tra tên model và cấu hình', 401: 'kiểm tra khóa API',
                  403: 'kiểm tra quyền của khóa API', 404: 'kiểm tra tên model',
                  429: 'kiểm tra hạn mức API'}

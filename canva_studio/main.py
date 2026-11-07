@@ -133,6 +133,8 @@ class App:
             ttk.Label(model_row, text='Model', width=12).pack(side='left')
             ttk.Combobox(model_row, textvariable=self.keyword_models[provider],
                          values=MODEL_OPTIONS[provider], state='normal').pack(side='left', fill='x', expand=True)
+            if provider == OPENAI:
+                ttk.Label(model_row, text='GPT‑6 Luna là lựa chọn tiết kiệm').pack(side='left', padx=(8, 0))
             key_row = ttk.Frame(group)
             key_row.pack(fill='x', pady=3)
             ttk.Label(key_row, text='Khóa API', width=12).pack(side='left')

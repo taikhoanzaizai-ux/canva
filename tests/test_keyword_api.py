@@ -31,6 +31,10 @@ class KeywordApiTests(unittest.TestCase):
                 self.assertEqual(request.host, host)
                 self.assertIn(auth, dict(request.header_items()))
                 self.assertNotIn('fixture-key', request.full_url + request.data.decode())
+                if provider == OPENAI:
+                    body = json.loads(request.data)
+                    self.assertEqual(body['model'], 'gpt-6-luna')
+                    self.assertEqual(body['reasoning'], {'effort': 'low'})
 
     def test_evidence_validation_preserves_manual_and_completed_rows(self):
         scenes = [
@@ -58,6 +62,17 @@ class KeywordApiTests(unittest.TestCase):
         self.assertIn('429', note)
         self.assertNotIn('private response', note)
         self.assertEqual(set(updates[1]), {'keyword_review'})
+
+    def test_openai_429_distinguishes_rate_from_quota(self):
+        for code, hint in [('rate_limit_exceeded', 'giới hạn tốc độ'),
+                           ('insufficient_quota', 'hết tín dụng')]:
+            with self.subTest(code=code), patch('canva_studio.keyword_api.build_opener') as opener:
+                body = json.dumps({'error': {'code': code, 'message': 'private response'}}).encode()
+                opener.return_value.open.side_effect = HTTPError(
+                    'https://api.openai.com', 429, '', {}, io.BytesIO(body))
+                with self.assertRaisesRegex(ValueError, hint) as error:
+                    request_keywords(OPENAI, DEFAULT_MODELS[OPENAI], 'fixture-key', [])
+                self.assertNotIn('private response', str(error.exception))
 
     def test_model_keywords_survive_configure_and_reopen(self):
         scene = {'id': 1, 'text': 'Ăn lạc luộc.', 'start': 0, 'duration': 3}

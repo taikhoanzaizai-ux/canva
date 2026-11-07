@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.12.1'
+VERSION = '0.12.2'
 
 def project_title(name,part_index=0):
     name=' '.join(str(name or '').split())

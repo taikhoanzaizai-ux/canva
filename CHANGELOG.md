@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.12.2
+
+- Thêm GPT-6 Luna (tiết kiệm) và đặt làm model mặc định khi chọn OpenAI cho từ khóa.
+- Báo rõ lỗi HTTP 429 của OpenAI khi phản hồi xác định được lỗi giới hạn tốc độ hoặc tín dụng/hạn mức API.
+
 ## 0.12.1
 
 - Thêm danh sách chọn model trong Từ khóa AI, gồm GPT-6.1 Sol, GPT-6.1 Terra và nhiều lựa chọn Gemini. Có thể nhập mã model khác.
