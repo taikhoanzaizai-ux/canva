@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.12.0
+
+- Thêm mục Từ khóa AI với OpenAI (ChatGPT) và Google Gemini. Model đọc lời cảnh và câu kề, đề xuất đối tượng cụ thể và cụm tìm kiếm tiếng Việt, tiếng Anh.
+- Dùng khi phân tích voice hoặc cập nhật cảnh chưa dựng ở phần hiện tại. Giữ mốc thời gian, cảnh đã dựng và từ khóa tự sửa. Nếu API không có kết quả hợp lệ, giữ từ khóa hiện có và đánh dấu để duyệt.
+- Chế độ trên máy là mặc định. Khi chọn API, chỉ gửi văn bản. Khóa nhập trong ứng dụng chỉ dùng trong phiên mở phần mềm.
+
 ## 0.11.4
 
 - Bám đúng đối tượng lời đọc: bổ sung các loại hạt, rau củ, trái cây, não, da và tim; tách dạ dày khỏi đường ruột, đi bộ khỏi thể dục/dưỡng sinh.

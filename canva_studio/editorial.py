@@ -54,7 +54,7 @@ def refine_queries(scenes,preserve_before=0):
         if scene['id']<=preserve_before or scene.get('kind')=='title':continue
         # Respect manually edited query lists; generated fallback is explicitly review=True.
         generated=scene.get('query_basis') or scene.get('queries')==describe(scene.get('text',''))['queries'] or any(scene.get('queries')==r[1] for r in RULES)
-        if scene.get('manual_queries') or (not scene.get('review') and not generated):continue
+        if scene.get('manual_queries') or scene.get('keyword_provider') or (not scene.get('review') and not generated):continue
         direct=rule_for(scene.get('text',''))
         context=scene.get('section_title','')+' '+sentence_context(scenes,i)
         rule=direct or rule_for(context)
@@ -228,7 +228,7 @@ def repair_scene_texts(state):
     pending=str(state.get('phase',{}).get('id',''));changed=0
     words=[w for seg in segments for w in seg.get('words',[])]
     for scene in state.get('scenes',[]):
-        if scene['id'] in state.get('done',[]) or str(scene['id'])==pending or scene.get('kind')=='title' or scene.get('manual_queries'):continue
+        if scene['id'] in state.get('done',[]) or str(scene['id'])==pending or scene.get('kind')=='title' or scene.get('manual_queries') or scene.get('keyword_provider'):continue
         generated=scene.get('review') or scene.get('query_basis') or scene.get('queries')==describe(scene.get('text',''))['queries']
         if not generated:continue
         a=scene.get('source_start',scene['start']);b=a+scene['duration']

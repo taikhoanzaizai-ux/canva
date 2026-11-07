@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, queue, uuid, shutil, subprocess, sys, tempfile, threading, time, webbrowser
+import copy, json, os, queue, uuid, shutil, subprocess, sys, tempfile, threading, time, webbrowser
 from pathlib import Path
 if getattr(sys,'frozen',False):
     # Tcl caches library directories when _tkinter is first imported.
@@ -18,6 +18,7 @@ from canva_studio.storage import application_dir
 from canva_studio.companion import companion_status
 from canva_studio.recognizer import paths as recognizer_paths,ensure_recognizer,command as recognition_command,convert_output
 from canva_studio.scene_status import scene_status
+from canva_studio.keyword_api import DEFAULT_MODELS, GEMINI, LOCAL, OPENAI, keyword_updates
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
 DATA=data_dir()
@@ -44,6 +45,9 @@ class App:
         tabs=ttk.Notebook(outer);tabs.pack(fill='both',expand=True)
         build=ttk.Frame(tabs,padding=14);settings=ttk.Frame(tabs,padding=18);help_tab=ttk.Frame(tabs,padding=18)
         tabs.add(build,text='  Dựng video  ');tabs.add(settings,text='  Kết nối & công cụ  ');tabs.add(help_tab,text='  Hướng dẫn  ')
+        keyword_tab=ttk.Frame(tabs,padding=18)
+        tabs.insert(2,keyword_tab,text='  Từ khóa AI  ')
+        self.build_keyword_settings(keyword_tab)
         self.project_name=tk.StringVar(value=self.engine.state.get('project_name',''))
         name_row=ttk.Frame(build);name_row.pack(fill='x',pady=3)
         ttk.Label(name_row,text='Tên dự án / tên trên Canva',width=29).pack(side='left')
@@ -111,6 +115,103 @@ class App:
         if imported:self.engine.log('Đã sao chép dữ liệu cũ vào '+str(DATA))
         if os.environ.get('SKST_UPDATE_HEALTH'):
             atomic_json(os.environ['SKST_UPDATE_HEALTH'],dict(version=VERSION,ready=True))
+
+    def build_keyword_settings(self, panel):
+        self.keyword_provider = tk.StringVar(value=LOCAL)
+        ttk.Label(panel, text='Tạo từ khóa theo nội dung từng cảnh', font=('Segoe UI',13,'bold')).pack(anchor='w')
+        ttk.Combobox(panel, textvariable=self.keyword_provider, values=(LOCAL, OPENAI, GEMINI),
+                     state='readonly', width=24).pack(anchor='w', pady=8)
+        self.keyword_models = {}
+        self.keyword_keys = {}
+        for provider, model in DEFAULT_MODELS.items():
+            group = ttk.LabelFrame(panel, text=provider, padding=10)
+            group.pack(fill='x', pady=5)
+            self.keyword_models[provider] = tk.StringVar(value=model)
+            self.keyword_keys[provider] = tk.StringVar()
+            for label, value, mask in [('Model', self.keyword_models[provider], ''),
+                                       ('Khóa API', self.keyword_keys[provider], '*')]:
+                line = ttk.Frame(group)
+                line.pack(fill='x', pady=3)
+                ttk.Label(line, text=label, width=12).pack(side='left')
+                ttk.Entry(line, textvariable=value, show=mask).pack(side='left', fill='x', expand=True)
+        ttk.Label(panel, wraplength=900, text=(
+            'Chọn OpenAI hoặc Gemini để gửi văn bản từng cảnh và câu kề đến nhà cung cấp khi phân tích. '
+            'Voice vẫn xử lý trên máy. API có thể tính phí theo tài khoản. '
+            'Khóa nhập ở đây chỉ dùng trong phiên này.')).pack(anchor='w', pady=10)
+        ttk.Button(panel, text='Cập nhật từ khóa cảnh chưa dựng ở phần hiện tại',
+                   command=self.reclassify_keywords).pack(anchor='w')
+        self.keyword_notice = tk.StringVar()
+        ttk.Label(panel, textvariable=self.keyword_notice, wraplength=900).pack(anchor='w', pady=8)
+
+    def keyword_config(self):
+        provider = self.keyword_provider.get()
+        if provider == LOCAL:
+            return None
+        env_key = 'OPENAI_API_KEY' if provider == OPENAI else 'GEMINI_API_KEY'
+        key = self.keyword_keys[provider].get().strip() or os.environ.get(env_key, '').strip()
+        model = self.keyword_models[provider].get().strip()
+        if not key or not model:
+            raise ValueError(f'Nhập model và khóa API của {provider} trong mục Từ khóa AI.')
+        return provider, model, key
+
+    def reclassify_keywords(self):
+        if self.worker_busy:
+            return
+        try:
+            config = self.keyword_config()
+            if not config:
+                raise ValueError('Chọn OpenAI hoặc Gemini để cập nhật từ khóa.')
+            if not self.plan:
+                raise ValueError('Phân tích voice hoặc nạp danh sách cảnh trước.')
+            with self.engine.lock:
+                state = self.engine.state
+                if state['mode'] in ('running','opening','opening_resume') or self.engine.running:
+                    raise ValueError('Tạm dừng Canva và chờ thao tác hiện tại kết thúc.')
+                plan = self.plan
+                scenes = copy.deepcopy(plan['scenes'])
+                managed = state['scenes'] is plan['scenes']
+                skip = set(state['done']) if managed else set()
+                active = str(state.get('phase', {}).get('id', ''))
+                if managed and active.isdecimal():
+                    skip.add(int(active))
+                if managed:
+                    skip.add(state.get('manual_edit_scene'))
+                part = state.get('part_index', 0)
+        except ValueError as error:
+            self.keyword_notice.set(str(error))
+            return
+        self.worker_busy = True
+        self.plan_button.configure(state='disabled')
+        self.keyword_notice.set('Đang chuẩn bị gửi văn bản để phân tích…')
+
+        def work():
+            try:
+                updates, note = keyword_updates(scenes, config, lambda msg: self.tasks.put(('keyword_progress',msg)), skip)
+                self.tasks.put(('keyword_result', (plan, scenes, part, managed, updates, note)))
+            except Exception:
+                self.tasks.put(('keyword_error', 'Chưa cập nhật được từ khóa AI.'))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def finish_keyword_update(self, result):
+        plan, snapshot, part, managed, updates, note = result
+        with self.engine.lock:
+            state = self.engine.state
+            if (self.plan is not plan or plan['scenes'] != snapshot or state.get('part_index', 0) != part
+                    or state['mode'] in ('running','opening','opening_resume') or self.engine.running
+                    or (managed and state['scenes'] is not plan['scenes'])):
+                self.keyword_notice.set('Dự án đã thay đổi trong lúc phân tích. Bấm cập nhật lại để dùng danh sách mới.')
+                return
+            for scene in plan['scenes']:
+                if managed and (scene['id'] in state['done'] or scene['id']==state.get('manual_edit_scene')
+                                or str(scene['id'])==str(state.get('phase', {}).get('id', ''))):
+                    continue
+                scene.update(updates.get(scene['id'], {}))
+            if managed:
+                self.engine.save()
+        self.refresh_scene_status()
+        self.keyword_notice.set(note)
+        self.notice.set(note)
     def check_update(self):
         if self.update_busy:return
         self.update_busy=True;self.update_button.configure(state='disabled',text='Đang kiểm tra…')
@@ -186,6 +287,7 @@ class App:
         if self.worker_busy:return
         if self.engine.state['mode']=='running':return messagebox.showinfo('Đang dựng','Hãy tạm dừng trước khi chia lại cảnh.')
         try:
+            config=self.keyword_config()
             if not Path(self.voice.get()).is_file():raise ValueError('Chọn tệp voice có sẵn trên máy.')
             if not Path(self.ffmpeg.get()).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ.')
             a=float(self.start.get());b=float(self.end.get()) if self.end.get().strip() else probe_duration(self.ffmpeg.get(),self.voice.get());o=float(self.opening.get())
@@ -198,7 +300,7 @@ class App:
                     self.script_path.set(str(nearby));self.script.insert('1.0',read_script(nearby))
         except Exception as e:return messagebox.showerror('Không đọc được kịch bản',str(e))
         self.save_settings();self.worker_busy=True;self.plan_button.configure(state='disabled');self.notice.set('Đang nhận diện voice trên máy. Có thể mất vài phút…')
-        inputs=dict(a=a,b=b,o=o,voice=self.voice.get(),ffmpeg=self.ffmpeg.get(),python=self.python.get(),model=self.model.get(),transcript=self.transcript.get(),script=self.script.get('1.0','end').strip())
+        inputs=dict(a=a,b=b,o=o,voice=self.voice.get(),ffmpeg=self.ffmpeg.get(),python=self.python.get(),model=self.model.get(),transcript=self.transcript.get(),script=self.script.get('1.0','end').strip(),keyword_config=config)
         threading.Thread(target=self.analyze_worker,args=(inputs,),daemon=True).start()
     def analyze_worker(self,c):
         try:
@@ -234,9 +336,14 @@ class App:
                 plan['source_start']=c['a']
                 for scene in plan['scenes']:scene['source_start']=round(scene['source_start']+c['a'],3)
             plan=add_title_cards(plan,seg,c['script'],timing_offset=0 if c['transcript'] else c['a'])
+            updates, keyword_note = keyword_updates(plan['scenes'], c.get('keyword_config'),
+                                                    lambda msg: self.tasks.put(('keyword_progress',msg)))
+            for scene in plan['scenes']:
+                scene.update(updates.get(scene['id'], {}))
             render_titles(plan,c['ffmpeg'],job)
             parts=prepare_parts(plan,c['voice'],c['ffmpeg'],job)
             plan={**parts[0], 'parts':parts,'original_voice':c['voice'],'script_aligned':aligned,'approximate':plan.get('approximate',False),'title_count':plan.get('title_count',0)}
+            plan['keyword_note']=keyword_note
             self.tasks.put(('plan',(plan,parts[0]['voice'])))
         except Exception as e:self.tasks.put(('error',str(e)))
     def populate(self):
@@ -406,7 +513,10 @@ class App:
             if kind.startswith('update_'):self.update_event(kind,value);continue
             if kind=='setup_progress':self.notice.set(value);continue
             if kind=='recognizer_ready':self.model.set(value);self.save_settings();continue
+            if kind=='keyword_progress':self.notice.set(value);self.keyword_notice.set(value);continue
             self.worker_busy=False;self.plan_button.configure(state='normal')
+            if kind=='keyword_result':self.finish_keyword_update(value);continue
+            if kind=='keyword_error':self.keyword_notice.set(value);self.notice.set(value);continue
             if kind=='error':self.analyze_then_run=False;self.notice.set('Phân tích chưa thành công.');messagebox.showerror('Chưa phân tích được',value)
             else:
                 if self.engine.state.get('scenes'):
@@ -418,6 +528,9 @@ class App:
                 if self.plan.get('approximate'):note+=' Mốc từ được ước lượng từ phụ đề; nên duyệt phần mở đầu.'
                 if self.script.get('1.0','end').strip() and not self.plan.get('script_aligned'):note+=' Chưa khớp chắc chắn kịch bản: đang dùng lời nhận diện từ voice.'
                 if self.plan.get('parts'):note+=f' Tổng {len(self.plan["parts"])} phần, tối đa 50 cảnh/phần; voice đã kiểm tra đủ thời lượng.'
+                if self.plan.get('keyword_note'):
+                    self.keyword_notice.set(self.plan['keyword_note'])
+                    note+=' '+self.plan['keyword_note']
                 self.notice.set(note)
                 if self.analyze_then_run:
                     self.analyze_then_run=False;self.root.after(0,self.run)

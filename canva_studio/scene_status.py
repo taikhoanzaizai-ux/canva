@@ -12,4 +12,8 @@ def scene_status(scene,state):
     if error:return ('Lỗi — đã chèn ảnh' if ident in state.get('done',[]) else 'Lỗi — cần sửa','error',error.get('message','Không có mô tả lỗi'))
     if ident in state.get('done',[]):return ('Đã dựng','done','')
     if state.get('phase',{}).get('id')==str(ident):return ('Đang dựng' if state.get('mode')=='running' else 'Đang dở','review','')
+    if scene.get('keyword_review') and not scene.get('manual_queries'):
+        return ('Duyệt từ khóa','review',scene['keyword_review'])
+    if scene.get('keyword_provider') and not scene.get('manual_queries'):
+        return ('Từ khóa AI','','Căn cứ: '+scene.get('keyword_evidence',''))
     return ('Chưa dựng','','')

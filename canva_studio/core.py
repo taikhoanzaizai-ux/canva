@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.11.4'
+VERSION = '0.12.0'
 
 def project_title(name,part_index=0):
     name=' '.join(str(name or '').split())
@@ -262,6 +262,7 @@ def repair_pending_keywords(state):
     active=str(state.get('phase',{}).get('id',''))
     for scene in state.get('scenes',[]):
         if scene['id'] in state.get('done',[]) or str(scene['id'])==active:continue
+        if scene.get('manual_queries') or scene.get('keyword_provider'):continue
         text=scene.get('text','');old=legacy_description(text);updated=describe(text)
         if scene.get('queries')==old['queries'] and updated['queries']!=old['queries']:
             scene.update(updated);changed+=1
