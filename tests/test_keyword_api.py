@@ -86,3 +86,14 @@ class KeywordApiTests(unittest.TestCase):
             self.assertEqual(restored['queries'][0], 'lạc luộc')
             self.assertEqual((restored['start'], restored['duration']), (0, 3))
             self.assertEqual(restored['keyword_provider'], OPENAI)
+
+    def test_visual_fallback_is_stored_separately_from_primary_subject(self):
+        scene = {'id': 1, 'text': 'Journal of Physiology cho thấy'}
+        response = dict(id=1, evidence='Journal of Physiology', subject_vi='Journal of Physiology',
+                        subject_en='Journal of Physiology', query_vi='tạp chí Journal of Physiology',
+                        query_en='Journal of Physiology', illustration_vi='bài báo khoa học',
+                        illustration_en='scientific paper')
+        with patch('canva_studio.keyword_api.request_keywords', return_value=[response]):
+            updates, _ = keyword_updates([scene], (OPENAI, 'model', 'fixture-key'))
+        self.assertEqual(updates[1]['illustration_queries'], ['bài báo khoa học', 'scientific paper'])
+        self.assertNotIn('scientific paper', updates[1]['subjects'])

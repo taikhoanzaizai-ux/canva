@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.12.4
+
+- So khớp cụm chủ đề khi tiêu đề Canva đổi thứ tự từ, vẫn yêu cầu đủ từ của đối tượng.
+- Tìm video và ảnh theo chủ đề chính trước. Với cảnh trích dẫn hoặc nội dung khó tìm trực tiếp, thử thêm từ khóa minh họa trước khi dùng thẻ chữ. AI có thể đề xuất từ khóa minh họa riêng khi phân tích.
+- Phân biệt thẻ chữ dự phòng với cảnh đã chèn tư liệu trong bảng cảnh.
+
 ## 0.12.3
 
 - Khi lời đọc nhắc đến nghiên cứu, chấp nhận tư liệu minh họa như nhà khoa học, phòng thí nghiệm, kính hiển vi hoặc bài báo khoa học dù tiêu đề Canva dùng cách gọi khác. Vẫn kiểm tra độ dài và tránh lặp tư liệu.

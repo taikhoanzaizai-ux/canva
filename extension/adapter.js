@@ -111,13 +111,35 @@
     const value=norm(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     return new RegExp('(^|[^a-z0-9])'+value+'(?:s|es)?($|[^a-z0-9])').test(norm(title));
   }
-  function researchIllustration(title,scene){
-    const researchTopic=/^(?:research(?: study)?|scientific research|nghien cuu(?: khoa hoc)?)$/;
-    if(!scene.topic_only||!scene.subjects?.length||!scene.subjects.every(term=>researchTopic.test(norm(term))))return false;
-    return /\b(?:research|researchers?|scientists?|laborator(?:y|ies)|microscopes?|clinical trials?|scientific (?:papers?|journals?)|nghien cuu|nha khoa hoc|phong thi nghiem|kinh hien vi|thu nghiem lam sang|tap chi khoa hoc)\b/.test(norm(title));
+  function subjectWordsMatch(title,term){
+    const words=norm(term).match(/[a-z0-9]+/g)||[];
+    return words.length>1&&words.every(word=>subjectMatch(title,word));
+  }
+  function illustrationScene(scene){
+    if(!scene.topic_only||scene.manual_queries)return null;
+    let queries=scene.illustration_queries;
+    if(!queries?.length){
+      // Older plans did not include a separate stock illustration for citations.
+      const subjects=scene.subjects||[];
+      if(subjects.length&&subjects.every(term=>/^(?:research(?: study)?|scientific research|nghien cuu(?: khoa hoc)?)$/.test(norm(term)))){
+        queries=['scientist in laboratory','bài báo khoa học'];
+      }else if(subjects.length&&subjects.every(term=>/^(?:(?:the )?journal of |tap chi )/.test(norm(term)))){
+        queries=['scientific journal','bài báo khoa học'];
+      }
+    }
+    if(!queries?.length)return null;
+    const subjects=[...queries];
+    if(subjects.includes('scientist in laboratory'))subjects.push('scientist','laboratory','researcher','microscope','nhà khoa học','phòng thí nghiệm');
+    if(subjects.includes('scientific journal')||subjects.includes('bài báo khoa học'))subjects.push('scientific paper','research paper','tạp chí khoa học');
+    return {...scene,queries,subjects,positive:subjects,actions:[],preferred:'',
+            _reuseVideoQueries:[],_reusePhotoQueries:[]};
+  }
+  function matchesSceneSubject(title,scene){
+    return !scene.subjects?.length||scene.subjects.some(term=>subjectMatch(title,term)||
+      (scene.topic_only&&subjectWordsMatch(title,term)));
   }
   function eligibleCards(items,scene,used){
-    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&(!scene.subjects?.length||scene.subjects.some(w=>subjectMatch(c.title,w))||researchIllustration(c.title,scene))&&(scene.topic_only||!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
+    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&matchesSceneSubject(c.title,scene)&&(scene.topic_only||!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
   }
   function relatedCards(items,scene,used){
     return eligibleCards(items,scene,used).filter(c=>c.duration>=scene.duration+.1);
@@ -137,8 +159,10 @@
   function score(card,scene){
     const text=norm(card.title);let n=0;
     for(const word of scene.positive||[])if(text.includes(norm(word)))n+=4;
-    for(const [index,word] of (scene.subjects||[]).entries())if(subjectMatch(text,word))n+=index<2?8:2;
-    if(researchIllustration(text,scene))n+=5;
+    for(const [index,word] of (scene.subjects||[]).entries()){
+      if(subjectMatch(text,word))n+=index<2?8:2;
+      else if(scene.topic_only&&subjectWordsMatch(text,word))n+=5;
+    }
     if(scene.topic_only&&scene.actions?.some(w=>text.includes(norm(w))))n+=3;
     for(const word of scene.negative||[])if(text.includes(norm(word)))n-=100;
     if(/elderly|senior|aged|older|middle aged/.test(text))n+=2;
@@ -329,6 +353,11 @@
           await prepare(s);selected=await trySearch(()=>choose(s,task.used||[],true));
         }
         if(!selected&&s._reusePhotoQueries?.length)selected=await trySearch(()=>choosePhoto(s,task.used||[],true));
+        const illustration=selected?null:illustrationScene(s);
+        if(illustration){
+          selected=await trySearch(async()=>{await prepare(illustration);return choose(illustration,task.used||[]);});
+          if(!selected)selected=await trySearch(()=>choosePhoto(illustration,task.used||[]));
+        }
         if(!selected){
           const generatedTask={...task,scene:{...s,title_text:s.text}};
           return await titleTask(generatedTask,checkpoint,fallbackAsset);
@@ -606,7 +635,7 @@
     }
     throw Error('MP4 chưa tải xong sau 10 phút. Giữ tab để Tiếp tục kiểm tra; không tự xuất trùng.');
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,eligibleCards,reuseEligibleCards,relatedCards,searchReady,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,searchReady,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{

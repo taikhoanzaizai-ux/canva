@@ -104,9 +104,23 @@ const researchCards=[
  {id:'school',title:'Student studying for exams',duration:20},
  {id:'short',title:'Scientist working',duration:2}
 ];
-assert.equal(adapter.eligibleCards(researchCards,researchScene,[]).map(c=>c.id).join(','),'exact,lab','Stock can illustrate research with different captions');
-assert.equal(adapter.eligibleCards(researchCards,researchScene,['lab','exact']).length,0,'Research fallback preserves duration and repeat checks');
+assert.equal(adapter.eligibleCards(researchCards,researchScene,[]).map(c=>c.id).join(','),'exact','Direct stock is searched first');
+const researchFallback=adapter.illustrationScene(researchScene);
+assert.equal(adapter.eligibleCards(researchCards,researchFallback,[]).map(c=>c.id).join(','),'lab','Illustration admits laboratory footage after exact search');
+assert.equal(adapter.eligibleCards(researchCards,researchFallback,['lab']).length,0,'Research fallback preserves duration and repeat checks');
 assert.equal(adapter.eligibleCards(researchCards,broadBlood,[]).length,0,'Research captions must not stand in for other subjects');
+const journalScene={...researchScene,subjects:['Journal of Physiology'],queries:['Journal of Physiology']};
+const journalFallback=adapter.illustrationScene(journalScene);
+assert.ok(journalFallback.queries.includes('scientific journal'),'Older citations get stock fallback queries');
+const journalCards=[{id:'paper',title:'Scientist reading a research paper',duration:9},{id:'school',title:'Student writing in her journal',duration:10}];
+assert.equal(adapter.eligibleCards(journalCards,journalFallback,[]).map(c=>c.id).join(','),'paper','Personal diaries do not stand in for research papers');
+const concreteScene={...researchScene,subjects:['green apple'],positive:['green apple'],queries:['green apple']};
+const fruitCards=[{id:'right',title:'Apples with green peel',duration:9},{id:'wrong',title:'Green pears',duration:9}];
+assert.equal(adapter.eligibleCards(fruitCards,concreteScene,[]).map(c=>c.id).join(','),'right','Reordered words must still include the concrete subject');
+assert.equal(adapter.illustrationScene(concreteScene),null);
+const customIllustration={...journalScene,illustration_queries:['printed scientific article']};
+assert.equal(adapter.illustrationScene(customIllustration).queries[0],'printed scientific article');
+assert.equal(adapter.illustrationScene({...customIllustration,manual_queries:true}),null);
 for(const [subject,correct,wrong] of [['walnut','Walnut kernels on table','Cashew nuts on table'],['stomach','Human stomach anatomy','Human intestine anatomy'],['walking','Senior walking outdoors','Senior seated exercise'],['brain','Human brain illustration','Human heart illustration'],['juice','Fresh juice in glass','Fresh fruits on table']]){
  const scene={duration:4,allow_all_media:true,topic_only:true,subjects:[subject],positive:[subject]};
  assert.equal(adapter.eligibleCards([{id:'right',title:correct,duration:10},{id:'wrong',title:wrong,duration:10}],scene,[]).map(c=>c.id).join(','),'right','Match the named object, not a neighboring subject: '+subject);
