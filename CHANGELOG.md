@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.0
+
+- Thêm Gemini qua đăng nhập Google bằng Antigravity CLI. Dùng model và hạn mức của tài khoản đã đăng nhập trong công cụ Google.
+- Chỉ gửi lời đọc khi CLI xác nhận chế độ quyền Strict. Kiểm tra kết quả từ khóa như các nguồn AI khác.
+
 ## 0.13.1
 
 - Đưa nút khôi phục bản dựng và lối về Dựng video vào mục Từ khóa AI. Hướng dẫn khi chưa có cảnh và chỉ bật cập nhật từ khóa sau khi đã có danh sách cảnh.

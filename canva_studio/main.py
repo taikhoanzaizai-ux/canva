@@ -18,8 +18,9 @@ from canva_studio.storage import application_dir
 from canva_studio.companion import companion_status
 from canva_studio.recognizer import paths as recognizer_paths,ensure_recognizer,command as recognition_command,convert_output
 from canva_studio.scene_status import scene_status
-from canva_studio.keyword_api import API_KEY_PAGES, CHATGPT_PLAN, DEFAULT_MODELS, GEMINI, LOCAL, MODEL_OPTIONS, OPENAI, keyword_updates
+from canva_studio.keyword_api import API_KEY_PAGES, CHATGPT_PLAN, DEFAULT_MODELS, GEMINI, GEMINI_SIGNIN, LOCAL, MODEL_OPTIONS, OPENAI, keyword_updates
 from canva_studio.chatgpt_signin import sign_in
+from canva_studio.gemini_signin import INSTALL_URL, cli_executable, open_sign_in
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
 DATA=data_dir()
@@ -122,8 +123,8 @@ class App:
     def build_keyword_settings(self, panel):
         self.keyword_provider = tk.StringVar(value=LOCAL)
         ttk.Label(panel, text='Tạo từ khóa theo nội dung từng cảnh', font=('Segoe UI',13,'bold')).pack(anchor='w')
-        ttk.Combobox(panel, textvariable=self.keyword_provider, values=(LOCAL, CHATGPT_PLAN, OPENAI, GEMINI),
-                     state='readonly', width=24).pack(anchor='w', pady=8)
+        ttk.Combobox(panel, textvariable=self.keyword_provider, values=(LOCAL, CHATGPT_PLAN, GEMINI_SIGNIN, OPENAI, GEMINI),
+                     state='readonly', width=30).pack(anchor='w', pady=8)
         self.chatgpt_session = None
         self.chatgpt_attempt = None
         chatgpt = ttk.LabelFrame(panel, text='Dùng lượt AI theo gói ChatGPT', padding=10)
@@ -158,7 +159,7 @@ class App:
             ttk.Button(key_row, text='Mở Google AI Studio để lấy khóa' if provider == GEMINI else 'Lấy khóa API',
                        command=lambda url=API_KEY_PAGES[provider]: webbrowser.open_new_tab(url)).pack(side='left', padx=(8, 0))
             if provider == GEMINI:
-                ttk.Label(group,text='Đăng nhập Google trong AI Studio, tạo khóa Gemini API rồi dán vào ô trên.').pack(anchor='w')
+                self.build_gemini_signin(group)
         ttk.Label(panel, wraplength=900, text=(
             'Chọn model trong danh sách hoặc nhập mã model khác. '
             'Khi dùng AI trực tuyến, ứng dụng gửi văn bản từng cảnh và câu kề để phân tích. '
@@ -175,6 +176,41 @@ class App:
         ttk.Label(panel, textvariable=self.keyword_plan_hint, wraplength=900).pack(anchor='w', pady=(8,0))
         self.keyword_notice = tk.StringVar()
         ttk.Label(panel, textvariable=self.keyword_notice, wraplength=900).pack(anchor='w', pady=8)
+
+    def build_gemini_signin(self, group):
+        self.antigravity_path = tk.StringVar(value=self.settings.get('antigravity_path',''))
+        controls = ttk.Frame(group)
+        controls.pack(fill='x', pady=(6,0))
+        ttk.Button(controls,text='Đăng nhập Google',command=self.connect_gemini).pack(side='left')
+        ttk.Button(controls,text='Cài Antigravity CLI',command=lambda: webbrowser.open_new_tab(INSTALL_URL)).pack(side='left',padx=6)
+        ttk.Button(controls,text='Chọn agy.exe',command=self.choose_antigravity).pack(side='left')
+        self.gemini_signin_status = tk.StringVar(value=(
+            'Để dùng Gemini bằng tài khoản Google, đăng nhập trong Antigravity rồi đặt /config → Tool Permission → Strict. '
+            'SKST dùng model đã chọn trong Antigravity.'))
+        ttk.Label(group,textvariable=self.gemini_signin_status,wraplength=900).pack(anchor='w',pady=(4,0))
+
+    def choose_antigravity(self):
+        selected = filedialog.askopenfilename(title='Chọn Antigravity CLI',filetypes=[('Antigravity CLI','agy.exe')])
+        if not selected:
+            return
+        try:
+            self.antigravity_path.set(str(cli_executable(selected)))
+            self.gemini_signin_status.set('Đã chọn Antigravity CLI. Bấm Đăng nhập Google để mở phiên.')
+        except ValueError as error:
+            self.gemini_signin_status.set(str(error))
+
+    def connect_gemini(self):
+        if self.worker_busy:
+            return
+        try:
+            executable = cli_executable(self.antigravity_path.get())
+            open_sign_in(executable, DATA/'Temp'/'Antigravity')
+        except (OSError,ValueError) as error:
+            self.gemini_signin_status.set(str(error))
+            return
+        self.keyword_provider.set(GEMINI_SIGNIN)
+        self.gemini_signin_status.set(
+            'Hoàn tất đăng nhập Google trong Antigravity. Đặt /config → Tool Permission → Strict, rồi quay lại SKST.')
 
     def connect_chatgpt(self):
         if self.chatgpt_attempt is not None or self.worker_busy:
@@ -227,6 +263,9 @@ class App:
         provider = self.keyword_provider.get()
         if provider == LOCAL:
             return None
+        if provider == GEMINI_SIGNIN:
+            executable = cli_executable(self.antigravity_path.get())
+            return provider, '', (executable, DATA/'Temp'/'Antigravity')
         if provider == CHATGPT_PLAN:
             index = self.chatgpt_model.current()
             session = self.chatgpt_session
@@ -249,7 +288,7 @@ class App:
                 raise ValueError('Về Dựng video để phân tích bài mới, hoặc khôi phục bản dựng gần nhất để tiếp tục bài cũ.')
             config = self.keyword_config()
             if not config:
-                raise ValueError('Chọn Gói ChatGPT, OpenAI hoặc Gemini để cập nhật từ khóa.')
+                raise ValueError('Chọn nguồn AI trực tuyến để cập nhật từ khóa.')
             with self.engine.lock:
                 state = self.engine.state
                 if state['mode'] in ('running','opening','opening_resume') or self.engine.running:
@@ -364,7 +403,7 @@ class App:
         p=filedialog.askopenfilename(filetypes=[('Mốc lời đọc','*.json *.srt *.vtt')]);
         if p:self.transcript.set(p)
     def save_settings(self):
-        self.settings={k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript)]};atomic_json(DATA/'settings.json',self.settings)
+        self.settings={k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript),('antigravity_path',self.antigravity_path)]};atomic_json(DATA/'settings.json',self.settings)
     def save_project_name(self,event=None):
         try:self.engine.set_project_name(self.project_name.get())
         except ValueError as exc:

@@ -6,11 +6,13 @@ from urllib.request import Request, build_opener
 
 from .core import norm
 from .chatgpt_signin import NoRedirect, RESOURCE
+from .gemini_signin import request_keywords as antigravity_keywords
 
 LOCAL = 'Trên máy'
 OPENAI = 'OpenAI (ChatGPT)'
 CHATGPT_PLAN = 'Gói ChatGPT'
 GEMINI = 'Google Gemini'
+GEMINI_SIGNIN = 'Gemini qua đăng nhập Google'
 LUNA = 'gpt-6-luna'
 DEFAULT_MODELS = {OPENAI: LUNA, GEMINI: 'gemini-3.5-flash'}
 MODEL_OPTIONS = {
@@ -83,6 +85,9 @@ def chatgpt_response(stream):
 
 def request_keywords(provider, model, key, scenes):
     context = json.dumps(scenes, ensure_ascii=False)
+    if provider == GEMINI_SIGNIN:
+        executable, folder = key
+        return antigravity_keywords(executable, folder, model, INSTRUCTIONS+'\n\n'+context, SCHEMA)
     headers = {'Content-Type': 'application/json'}
     if provider in (OPENAI, CHATGPT_PLAN):
         url = RESOURCE + '/responses'
