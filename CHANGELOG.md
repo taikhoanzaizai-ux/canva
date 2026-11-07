@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.13.0
+
+- Thêm Sign in with ChatGPT trong Từ khóa AI để tài khoản đủ điều kiện dùng lượt AI theo gói ChatGPT.
+- Tải danh sách model từ tài khoản sau khi cấp quyền. Phiên đăng nhập giữ trong lần mở SKST hiện tại và có thể ngắt trong ứng dụng.
+
 ## 0.12.5
 
 - Thêm nút khôi phục bản dựng Canva gần nhất trong Kết nối & công cụ, giữ phần đang dựng và cảnh chờ xác nhận.

@@ -18,7 +18,8 @@ from canva_studio.storage import application_dir
 from canva_studio.companion import companion_status
 from canva_studio.recognizer import paths as recognizer_paths,ensure_recognizer,command as recognition_command,convert_output
 from canva_studio.scene_status import scene_status
-from canva_studio.keyword_api import API_KEY_PAGES, DEFAULT_MODELS, GEMINI, LOCAL, MODEL_OPTIONS, OPENAI, keyword_updates
+from canva_studio.keyword_api import API_KEY_PAGES, CHATGPT_PLAN, DEFAULT_MODELS, GEMINI, LOCAL, MODEL_OPTIONS, OPENAI, keyword_updates
+from canva_studio.chatgpt_signin import sign_in
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
 DATA=data_dir()
@@ -120,8 +121,21 @@ class App:
     def build_keyword_settings(self, panel):
         self.keyword_provider = tk.StringVar(value=LOCAL)
         ttk.Label(panel, text='Tạo từ khóa theo nội dung từng cảnh', font=('Segoe UI',13,'bold')).pack(anchor='w')
-        ttk.Combobox(panel, textvariable=self.keyword_provider, values=(LOCAL, OPENAI, GEMINI),
+        ttk.Combobox(panel, textvariable=self.keyword_provider, values=(LOCAL, CHATGPT_PLAN, OPENAI, GEMINI),
                      state='readonly', width=24).pack(anchor='w', pady=8)
+        self.chatgpt_session = None
+        self.chatgpt_attempt = None
+        chatgpt = ttk.LabelFrame(panel, text='Dùng lượt AI theo gói ChatGPT', padding=10)
+        chatgpt.pack(fill='x', pady=5)
+        actions = ttk.Frame(chatgpt)
+        actions.pack(fill='x')
+        self.chatgpt_signin_button = ttk.Button(actions, text='Sign in with ChatGPT', command=self.connect_chatgpt)
+        self.chatgpt_signin_button.pack(side='left')
+        ttk.Button(actions, text='Ngắt / Hủy đăng nhập', command=self.disconnect_chatgpt).pack(side='left', padx=6)
+        self.chatgpt_model = ttk.Combobox(actions, state='readonly', width=30)
+        self.chatgpt_model.pack(side='left', fill='x', expand=True)
+        self.chatgpt_status = tk.StringVar(value='Dành cho tài khoản ChatGPT đủ điều kiện. Phiên dùng trong lần mở SKST này.')
+        ttk.Label(chatgpt, textvariable=self.chatgpt_status, wraplength=900).pack(anchor='w', pady=(6,0))
         self.keyword_models = {}
         self.keyword_keys = {}
         for provider, model in DEFAULT_MODELS.items():
@@ -144,7 +158,7 @@ class App:
                        command=lambda url=API_KEY_PAGES[provider]: webbrowser.open_new_tab(url)).pack(side='left', padx=(8, 0))
         ttk.Label(panel, wraplength=900, text=(
             'Chọn model trong danh sách hoặc nhập mã model khác. '
-            'Khi chọn OpenAI hoặc Gemini, ứng dụng gửi văn bản từng cảnh và câu kề để phân tích. '
+            'Khi dùng AI trực tuyến, ứng dụng gửi văn bản từng cảnh và câu kề để phân tích. '
             'Voice vẫn xử lý trên máy. API có thể tính phí theo tài khoản. '
             'Khóa nhập ở đây chỉ dùng trong phiên này.')).pack(anchor='w', pady=10)
         ttk.Button(panel, text='Cập nhật từ khóa cảnh chưa dựng ở phần hiện tại',
@@ -152,10 +166,64 @@ class App:
         self.keyword_notice = tk.StringVar()
         ttk.Label(panel, textvariable=self.keyword_notice, wraplength=900).pack(anchor='w', pady=8)
 
+    def connect_chatgpt(self):
+        if self.chatgpt_attempt is not None or self.worker_busy:
+            return
+        cancelled = threading.Event()
+        self.chatgpt_attempt = cancelled
+        self.chatgpt_signin_button.configure(state='disabled')
+        self.chatgpt_status.set('Hoàn tất đăng nhập và cấp quyền trong trình duyệt.')
+
+        def work():
+            try:
+                session = sign_in(DATA, cancelled)
+                self.tasks.put(('chatgpt_signin', (cancelled, session, 'Đang dùng lượt AI theo gói ChatGPT.')))
+            except ValueError as error:
+                self.tasks.put(('chatgpt_signin', (cancelled, None, str(error))))
+            except Exception:
+                self.tasks.put(('chatgpt_signin', (cancelled, None, 'Chưa đăng nhập được ChatGPT. Hãy thử lại.')))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def disconnect_chatgpt(self):
+        if self.worker_busy:
+            self.chatgpt_status.set('Chờ phân tích từ khóa hoàn tất trước khi ngắt kết nối.')
+            return
+        if self.chatgpt_attempt is not None:
+            self.chatgpt_attempt.set()
+        self.chatgpt_session = None
+        self.chatgpt_model.set('')
+        self.chatgpt_model.configure(values=())
+        self.chatgpt_status.set('Đã ngắt phiên ChatGPT trong SKST.')
+        if self.keyword_provider.get() == CHATGPT_PLAN:
+            self.keyword_provider.set(LOCAL)
+
+    def finish_chatgpt_signin(self, result):
+        attempt, session, message = result
+        if self.chatgpt_attempt is not attempt:
+            return
+        self.chatgpt_attempt = None
+        self.chatgpt_signin_button.configure(state='normal')
+        if attempt.is_set():
+            return
+        self.chatgpt_status.set(message)
+        if session:
+            self.chatgpt_session = session
+            self.chatgpt_model.configure(values=[f'{name} ({slug})' for slug,name in session.models])
+            self.chatgpt_model.current(0)
+            self.keyword_provider.set(CHATGPT_PLAN)
+
     def keyword_config(self):
         provider = self.keyword_provider.get()
         if provider == LOCAL:
             return None
+        if provider == CHATGPT_PLAN:
+            index = self.chatgpt_model.current()
+            session = self.chatgpt_session
+            if session is None or not 0 <= index < len(session.models):
+                raise ValueError('Bấm Sign in with ChatGPT trong Từ khóa AI, rồi chọn model.')
+            session.access_token()
+            return provider, session.models[index][0], session
         env_key = 'OPENAI_API_KEY' if provider == OPENAI else 'GEMINI_API_KEY'
         key = self.keyword_keys[provider].get().strip() or os.environ.get(env_key, '').strip()
         model = self.keyword_models[provider].get().strip()
@@ -169,7 +237,7 @@ class App:
         try:
             config = self.keyword_config()
             if not config:
-                raise ValueError('Chọn OpenAI hoặc Gemini để cập nhật từ khóa.')
+                raise ValueError('Chọn Gói ChatGPT, OpenAI hoặc Gemini để cập nhật từ khóa.')
             if not self.plan:
                 raise ValueError('Phân tích voice hoặc nạp danh sách cảnh trước.')
             with self.engine.lock:
@@ -566,6 +634,7 @@ class App:
             if kind=='setup_progress':self.notice.set(value);continue
             if kind=='recognizer_ready':self.model.set(value);self.save_settings();continue
             if kind=='keyword_progress':self.notice.set(value);self.keyword_notice.set(value);continue
+            if kind=='chatgpt_signin':self.finish_chatgpt_signin(value);continue
             self.worker_busy=False;self.plan_button.configure(state='normal')
             if kind=='keyword_result':self.finish_keyword_update(value);continue
             if kind=='keyword_error':self.keyword_notice.set(value);self.notice.set(value);continue
@@ -605,6 +674,8 @@ class App:
         self.connection.set(self.engine.connection_status()['message'])
         self.root.after(500,self.tick)
     def close(self):
+        if self.chatgpt_attempt is not None:
+            self.chatgpt_attempt.set()
         self.engine.pause()
         try:self.save_project_name()
         except ValueError:pass
