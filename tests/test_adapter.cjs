@@ -97,6 +97,16 @@ assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'},{ac
 
 const bloodScene={duration:4,allow_all_media:true,subjects:['blood','artery'],actions:['flow'],positive:['blood','artery'],negative:[]};
 const broadBlood={...bloodScene,topic_only:true};
+const researchScene={...broadBlood,subjects:['research study','nghiên cứu'],positive:['research study','nghiên cứu'],actions:[]};
+const researchCards=[
+ {id:'lab',title:'Scientists working with a microscope in a laboratory',duration:19},
+ {id:'exact',title:'Clinical research study',duration:8},
+ {id:'school',title:'Student studying for exams',duration:20},
+ {id:'short',title:'Scientist working',duration:2}
+];
+assert.equal(adapter.eligibleCards(researchCards,researchScene,[]).map(c=>c.id).join(','),'exact,lab','Stock can illustrate research with different captions');
+assert.equal(adapter.eligibleCards(researchCards,researchScene,['lab','exact']).length,0,'Research fallback preserves duration and repeat checks');
+assert.equal(adapter.eligibleCards(researchCards,broadBlood,[]).length,0,'Research captions must not stand in for other subjects');
 for(const [subject,correct,wrong] of [['walnut','Walnut kernels on table','Cashew nuts on table'],['stomach','Human stomach anatomy','Human intestine anatomy'],['walking','Senior walking outdoors','Senior seated exercise'],['brain','Human brain illustration','Human heart illustration'],['juice','Fresh juice in glass','Fresh fruits on table']]){
  const scene={duration:4,allow_all_media:true,topic_only:true,subjects:[subject],positive:[subject]};
  assert.equal(adapter.eligibleCards([{id:'right',title:correct,duration:10},{id:'wrong',title:wrong,duration:10}],scene,[]).map(c=>c.id).join(','),'right','Match the named object, not a neighboring subject: '+subject);

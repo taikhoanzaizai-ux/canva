@@ -1,5 +1,9 @@
 # Các bản cập nhật
 
+## 0.12.3
+
+- Khi lời đọc nhắc đến nghiên cứu, chấp nhận tư liệu minh họa như nhà khoa học, phòng thí nghiệm, kính hiển vi hoặc bài báo khoa học dù tiêu đề Canva dùng cách gọi khác. Vẫn kiểm tra độ dài và tránh lặp tư liệu.
+
 ## 0.12.2
 
 - Thêm GPT-6 Luna (tiết kiệm) và đặt làm model mặc định khi chọn OpenAI cho từ khóa.

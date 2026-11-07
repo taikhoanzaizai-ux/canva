@@ -111,8 +111,13 @@
     const value=norm(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     return new RegExp('(^|[^a-z0-9])'+value+'(?:s|es)?($|[^a-z0-9])').test(norm(title));
   }
+  function researchIllustration(title,scene){
+    const researchTopic=/^(?:research(?: study)?|scientific research|nghien cuu(?: khoa hoc)?)$/;
+    if(!scene.topic_only||!scene.subjects?.length||!scene.subjects.every(term=>researchTopic.test(norm(term))))return false;
+    return /\b(?:research|researchers?|scientists?|laborator(?:y|ies)|microscopes?|clinical trials?|scientific (?:papers?|journals?)|nghien cuu|nha khoa hoc|phong thi nghiem|kinh hien vi|thu nghiem lam sang|tap chi khoa hoc)\b/.test(norm(title));
+  }
   function eligibleCards(items,scene,used){
-    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&(!scene.subjects?.length||scene.subjects.some(w=>subjectMatch(c.title,w)))&&(scene.topic_only||!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
+    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&(!scene.subjects?.length||scene.subjects.some(w=>subjectMatch(c.title,w))||researchIllustration(c.title,scene))&&(scene.topic_only||!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
   }
   function relatedCards(items,scene,used){
     return eligibleCards(items,scene,used).filter(c=>c.duration>=scene.duration+.1);
@@ -133,6 +138,7 @@
     const text=norm(card.title);let n=0;
     for(const word of scene.positive||[])if(text.includes(norm(word)))n+=4;
     for(const [index,word] of (scene.subjects||[]).entries())if(subjectMatch(text,word))n+=index<2?8:2;
+    if(researchIllustration(text,scene))n+=5;
     if(scene.topic_only&&scene.actions?.some(w=>text.includes(norm(w))))n+=3;
     for(const word of scene.negative||[])if(text.includes(norm(word)))n-=100;
     if(/elderly|senior|aged|older|middle aged/.test(text))n+=2;
