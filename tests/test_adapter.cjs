@@ -118,6 +118,21 @@ const concreteScene={...researchScene,subjects:['green apple'],positive:['green 
 const fruitCards=[{id:'right',title:'Apples with green peel',duration:9},{id:'wrong',title:'Green pears',duration:9}];
 assert.equal(adapter.eligibleCards(fruitCards,concreteScene,[]).map(c=>c.id).join(','),'right','Reordered words must still include the concrete subject');
 assert.equal(adapter.illustrationScene(concreteScene),null);
+const vesselCards=[
+ {id:'vessel',title:'3D atherosclerosis inside a human artery',duration:5},
+ {id:'road',title:'Aerial view of a highway interchange',duration:23},
+ {id:'short',title:'Artery with plaque',duration:2},
+ {id:'teeth',title:'Dentist shows plaque on teeth',duration:8},
+];
+for(const subjects of [['blood vessel walls','thành mạch'],['blood vessel lumen','lòng mạch'],
+                       ['arterial stiffness','độ cứng thành mạch']]){
+ const scene={...researchScene,duration:4.7,subjects,positive:subjects};
+ assert.equal(adapter.eligibleCards(vesselCards,scene,[]).length,0,'Source captions omit the precise description');
+ const fallback=adapter.illustrationScene(scene);
+ assert.ok(fallback.queries.includes('mạch máu'));
+ assert.equal(adapter.eligibleCards(vesselCards,fallback,[]).map(c=>c.id).join(','),'vessel');
+ assert.equal(adapter.eligibleCards(vesselCards,fallback,['vessel']).length,0);
+}
 const customIllustration={...journalScene,illustration_queries:['printed scientific article']};
 assert.equal(adapter.illustrationScene(customIllustration).queries[0],'printed scientific article');
 assert.equal(adapter.illustrationScene({...customIllustration,manual_queries:true}),null);

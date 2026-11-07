@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.1
+
+- Trước khi chèn thẻ chữ, tìm thêm tư liệu theo đối tượng chính và các tên gọi Canva thường dùng. Ví dụ độ cứng thành mạch có thể dùng mô phỏng động mạch, lòng mạch hoặc xơ vữa.
+- Áp dụng cho cảnh chờ trong dự án cũ, kể cả khi AI chưa tạo từ khóa minh họa. Giữ điều kiện đủ thời lượng và tránh lặp.
+
 ## 0.14.0
 
 - Thêm Gemini qua đăng nhập Google bằng Antigravity CLI. Dùng model và hạn mức của tài khoản đã đăng nhập trong công cụ Google.

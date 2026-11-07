@@ -115,6 +115,27 @@
     const words=norm(term).match(/[a-z0-9]+/g)||[];
     return words.length>1&&words.every(word=>subjectMatch(title,word));
   }
+  const VISUAL_FAMILIES=[
+    {search:['mạch máu','blood vessel anatomy'], names:[
+      'blood vessel','blood vessels','vascular','artery','arteries','arterial','vein','veins',
+      'capillary','capillaries','atherosclerosis','mạch máu','thành mạch','lòng mạch',
+      'động mạch','tĩnh mạch','mao mạch','xơ vữa mạch','mảng xơ vữa',
+    ]},
+    {search:['não bộ','human brain'],names:['brain','cerebral','não bộ','bộ não']},
+    {search:['dạ dày','human stomach'],names:['stomach','dạ dày']},
+    {search:['lá gan','human liver'],names:['liver','lá gan']},
+    {search:['quả thận','human kidney'],names:['kidney','renal','quả thận']},
+    {search:['đường ruột','human intestine'],names:['intestine','intestinal','đường ruột','ruột non','ruột già']},
+    {search:['đi bộ','walking'],names:['walking','walk','đi bộ']},
+    {search:['kéo giãn chân','leg stretch'],names:['leg stretch','leg stretching','kéo giãn chân','kéo giãn cơ chân']},
+  ];
+  function visualFamily(scene){
+    const subjects=scene.subjects||[];
+    if(!subjects.length)return null;
+    // Infer from the subject, never from the whole narration or Canva query.
+    return VISUAL_FAMILIES.find(family=>subjects.every(term=>
+      family.names.some(name=>subjectMatch(term,name))))||null;
+  }
   function illustrationScene(scene){
     if(!scene.topic_only||scene.manual_queries)return null;
     let queries=scene.illustration_queries;
@@ -127,8 +148,10 @@
         queries=['scientific journal','bài báo khoa học'];
       }
     }
-    if(!queries?.length)return null;
-    const subjects=[...queries];
+    const family=visualFamily(scene);
+    if(!queries?.length&&!family)return null;
+    queries=[...new Set([...(queries||[]),...(family?.search||[])])];
+    const subjects=[...queries,...(family?.names||[])];
     if(subjects.includes('scientist in laboratory'))subjects.push('scientist','laboratory','researcher','microscope','nhà khoa học','phòng thí nghiệm');
     if(subjects.includes('scientific journal')||subjects.includes('bài báo khoa học'))subjects.push('scientific paper','research paper','tạp chí khoa học');
     return {...scene,queries,subjects,positive:subjects,actions:[],preferred:'',
@@ -357,6 +380,12 @@
         if(illustration){
           selected=await trySearch(async()=>{await prepare(illustration);return choose(illustration,task.used||[]);});
           if(!selected)selected=await trySearch(()=>choosePhoto(illustration,task.used||[]));
+          if(!selected&&illustration._reuseVideoQueries.length){
+            selected=await trySearch(async()=>{await prepare(illustration);return choose(illustration,task.used||[],true);});
+          }
+          if(!selected&&illustration._reusePhotoQueries.length){
+            selected=await trySearch(()=>choosePhoto(illustration,task.used||[],true));
+          }
         }
         if(!selected){
           const generatedTask={...task,scene:{...s,title_text:s.text}};
