@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.18'
+MIN_EXTENSION_VERSION='0.14.19'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -511,6 +511,11 @@ class Engine:
             else:
                 i=int(key)
                 completed=next((s for s in self.state['scenes'] if s['id']==i),{})
+                if body.get('overlay_unverified'):
+                    completed['overlay_pending']=str(body['overlay_unverified'])[:500]
+                    self.state['mode']='attention';self.running=None
+                    self.log(f'Cảnh {i}: '+completed['overlay_pending']+' Hãy kiểm tra dòng chữ trên timeline rồi bấm Tiếp tục.')
+                    return dict(ok=True)
                 if body.get('missing_stock'):
                     completed['missing_stock']=str(body['missing_stock'])[:600]
                     self.state['mode']='attention';self.running=None
@@ -527,6 +532,7 @@ class Engine:
                     for item,update in zip(self.state['scenes'],updates):item.update(update)
                 if i not in self.state['done']:self.state['done'].append(i)
                 completed.pop('missing_stock',None)
+                completed.pop('overlay_pending',None)
                 if body.get('fallback_warning'):
                     completed['fallback_warning']=str(body['fallback_warning'])[:200]
                     completed['overlay_error']=str(body.get('overlay_error') or '')[:500]
