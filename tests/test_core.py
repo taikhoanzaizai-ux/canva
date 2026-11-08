@@ -141,7 +141,7 @@ class EngineTests(unittest.TestCase):
         self.e.state['parts']=[dict(source_start=0,duration=4)]+[dict(source_start=i*4,duration=4,voice=f'part{i+1}.wav',scenes=[dict(id=1,start=0,duration=4,text='test',queries=['test'])]) for i in (1,2)]
         client=dict(self.client)
         for index in (1,2):
-            self.e.state.update(voice_done=True,done=[1],audit_done=True)
+            self.e.state.update(voice_done=True,done=[1],audit_done=True,export_done=True,download_verified={'path':f'part{index}.mp4'})
             self.assertEqual(self.e.next_task(client)['task']['id'],'next_design')
             client['url']=f'https://www.canva.com/design/part{index+1}/token/edit'
             self.e.result(dict(id='next_design',client='A',new_target=client['url']))
