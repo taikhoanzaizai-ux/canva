@@ -28,6 +28,26 @@ def save_part(download,folder,index):
         staging.replace(path)
     return {**download,'path':str(path.resolve())}
 
+def warning_filters(scenes,frames):
+    """Display whole frames contained inside each verified replacement clip."""
+    filters=[]
+    previous=0
+    for scene in scenes:
+        if not scene.get('warning_output') or scene.get('manual_verified'):continue
+        start=max(previous,math.ceil(float(scene['warning_start'])*30-1e-6))
+        end=min(frames,math.floor(float(scene['warning_end'])*30+1e-6))
+        if end<=start:continue
+        if not filters:
+            font=Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts/arialbd.ttf'
+            if not font.is_file():raise ValueError('Thiếu phông Arial Bold để ghi nhãn video thay thế.')
+            escaped=font.resolve().as_posix().replace(':',r'\:')
+        caption=f'LỖI CẢNH {int(scene["id"])} • Video thay thế'
+        filters.append(f"drawtext=fontfile='{escaped}':text='{caption}':expansion=none:fontsize=34:"
+                       f"fontcolor=white:box=1:boxcolor=black@0.8:boxborderw=14:x=48:y=h-th-64:"
+                       f"enable='gte(n,{start})*lt(n,{end})'")
+        previous=end
+    return ''.join(','+item for item in filters)
+
 def merge_parts(parts,voice,ffmpeg,folder):
     """Join the picture tracks against the original voice clock."""
     folder=Path(folder)
@@ -45,7 +65,8 @@ def merge_parts(parts,voice,ffmpeg,folder):
         inputs.extend(['-i',path])
         frames=round((start+duration-offset)*30)-round((end-offset)*30)
         if frames<1:raise ValueError('Một phần quá ngắn để ghép.')
-        filters.append(f'[{i}:v]fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,tpad=stop_mode=clone:stop_duration=0.6,trim=end_frame={frames},setpts=PTS-STARTPTS[v{i}]')
+        warnings=warning_filters(part.get('scenes',[]),frames)
+        filters.append(f'[{i}:v]fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,tpad=stop_mode=clone:stop_duration=0.6,trim=end_frame={frames},setpts=PTS-STARTPTS{warnings}[v{i}]')
         end=start+duration
     duration=end-offset
     filters.append(''.join(f'[v{i}]' for i in range(len(parts)))+f'concat=n={len(parts)}:v=1:a=0[v]')
