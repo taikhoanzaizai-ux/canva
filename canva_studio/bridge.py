@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.17'
+MIN_EXTENSION_VERSION='0.14.18'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -511,6 +511,11 @@ class Engine:
             else:
                 i=int(key)
                 completed=next((s for s in self.state['scenes'] if s['id']==i),{})
+                if body.get('missing_stock'):
+                    completed['missing_stock']=str(body['missing_stock'])[:600]
+                    self.state['mode']='attention';self.running=None
+                    self.log(f'Cảnh {i}: '+completed['missing_stock']+'. Sửa từ khóa hoặc thêm tư liệu rồi tiếp tục.')
+                    return dict(ok=True)
                 frames=body.get('card_frames')
                 if frames is not None:
                     phase=self.state['phase']
@@ -521,6 +526,10 @@ class Engine:
                     if abs(updates[i-1]['start']-completed['start'])>.12:raise ValueError('Thẻ chữ lệch vị trí trên timeline.')
                     for item,update in zip(self.state['scenes'],updates):item.update(update)
                 if i not in self.state['done']:self.state['done'].append(i)
+                completed.pop('missing_stock',None)
+                if body.get('fallback_warning'):
+                    completed['fallback_warning']=str(body['fallback_warning'])[:200]
+                    completed['overlay_error']=str(body.get('overlay_error') or '')[:500]
                 asset=body.get('asset') or completed.get('fallback_source',{}).get('id')
                 if completed.get('fallback_source'):
                     sources=self.state.setdefault('sources',[])
