@@ -46,6 +46,19 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_missing_stock_does_not_schedule_a_text_card(self):
+        self.e.state['voice_done']=True
+        self.e.next_task(self.client)
+        self.e.result(dict(id='1',client='A',missing_stock='Canva không có kết quả'))
+        self.assertEqual(self.e.state['done'],[])
+        self.assertNotIn('error_card',self.e.state['scenes'][0])
+        self.e.start()
+        self.e.next_task(self.client)
+        self.e.result(dict(id='1',client='A',asset='lower-stock',fallback_warning='Video thay thế'))
+        self.assertEqual(self.e.state['used'],['lower-stock'])
+        self.assertNotIn('missing_stock',self.e.state['scenes'][0])
+        self.assertEqual(self.e.state['scenes'][0]['fallback_warning'],'Video thay thế')
+
     def test_manual_final_cut_uses_voice_anchor_and_tolerance(self):
         self.prepare_manual(done=[1])
         self.e.state['scenes'][-1]['voice_end']=8
