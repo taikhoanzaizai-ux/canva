@@ -5,8 +5,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
+from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.7'
+MIN_EXTENSION_VERSION='0.14.8'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -255,7 +256,7 @@ class Engine:
             elif not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
-                if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,used=self.state['used'],usage=self.state.get('usage',{}),last_asset=self.state.get('last_asset',''),previous_scene=next((s for s in self.state['scenes'] if s['id']==scene['id']-1),None))
+                if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,related_topic=related_topic(scene),used=self.state['used'],usage=self.state.get('usage',{}),last_asset=self.state.get('last_asset',''),previous_scene=next((s for s in self.state['scenes'] if s['id']==scene['id']-1),None))
                 elif not self.state.get('audit_done'):
                     name=self.state.get('voice_name','')
                     if not name and Path(self.state['voice']).is_file():
