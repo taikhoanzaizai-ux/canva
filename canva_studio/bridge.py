@@ -166,6 +166,9 @@ class Engine:
         index=self.state.get('export_history_index')
         return self.state['history'][index]['target'] if index is not None else self.state['target']
 
+    def has_more_voice_parts(self):
+        return self.state.get('part_index',0)+1<len(self.state.get('parts',[]))
+
     def export_folder(self):
         if not self.state.get('export_dir'):
             self.state['export_dir']=str((self.folder/'Exports'/secrets.token_hex(8)).resolve())
@@ -312,13 +315,21 @@ class Engine:
                         with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
                         self.state['voice_name']=name;self.save()
                     task=dict(id='audit',kind='audit',voice_name=name,count=len(self.state['scenes']),duration=round(self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'],3))
+                elif self.has_more_voice_parts():
+                    phase=self.state['phase']
+                    if phase.get('id')=='export' and phase.get('stage')=='export_clicked':
+                        self.state['deferred_export_phase']=phase
+                        self.save()
+                    task=dict(id='next_design',kind='next_design')
                 elif not self.state['export_done']:task=dict(id='export',kind='export')
-                elif self.state.get('part_index',0)+1<len(self.state.get('parts',[])):task=dict(id='next_design',kind='next_design')
                 else:
                     target,message=self.finish_exports()
                     self.log(message)
                     return dict(task=None,mode=self.state['mode'],export_target=target)
             task['phase']=self.state['phase'] if self.state['phase'].get('id')==task['id'] else {}
+            history_index=self.state.get('export_history_index')
+            if task['kind']=='export' and history_index is not None and not task['phase']:
+                task['phase']=self.state['history'][history_index].get('export_phase',{})
             self.running=dict(id=task['id'],client=body.get('client'))
             self.last_activity=now
             return dict(task=task,mode='running')
@@ -420,8 +431,12 @@ class Engine:
                 if not self.state.get('audit_done'):raise ValueError('Chưa kiểm tra xong phần hiện tại.')
                 index=self.state.get('part_index',0)+1
                 if index>=len(self.state.get('parts',[])):raise ValueError('Không còn voice tiếp theo.')
-                if not self.state['export_done']:raise ValueError('Chưa tải MP4 phần hiện tại.')
-                self.state.setdefault('history',[]).append(dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration'],download_verified=self.state.pop('download_verified')))
+                record=dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration'])
+                if self.state.get('export_done') and self.state.get('download_verified'):
+                    record['download_verified']=self.state.pop('download_verified')
+                if self.state.get('deferred_export_phase'):
+                    record['export_phase']=self.state.pop('deferred_export_phase')
+                self.state.setdefault('history',[]).append(record)
                 part=self.state['parts'][index]
                 refine_queries(part['scenes'])
                 self.state.update(part_index=index,target=target,voice=part['voice'],voice_name='',named_title='',scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
@@ -431,6 +446,7 @@ class Engine:
             elif key=='voice':
                 self.state['voice_done']=True;self.state['voice_name']=body.get('voice_name','');msg='Đã đặt voice trên timeline.'
             elif key=='export':
+                if self.has_more_voice_parts():raise ValueError('Còn phần voice chưa dựng. Hoàn tất các phần rồi mới tải MP4.')
                 if body.get('download_complete') is not True or type(body.get('download_id')) is not int or body['download_id']<0:raise ValueError('Chưa xác nhận MP4 tải xuống hoàn tất.')
                 history_index=self.state.get('export_history_index')
                 index=self.state.get('part_index',0) if history_index is None else history_index
@@ -439,9 +455,10 @@ class Engine:
                 download=verify_download(body.get('download_path',''),self.export_tool(),expected)
                 if len(parts)>1:download=save_part(download,self.export_folder(),index)
                 if history_index is None:self.state.update(download_verified=download,export_done=True,download_id=body['download_id'])
-                else:self.state['history'][index]['download_verified']=download
-                if self.state.get('part_index',0)+1<len(parts):msg=f'Đã lưu MP4 phần {index+1}. Đang chuẩn bị phần tiếp theo.'
-                else:export_target,msg=self.finish_exports()
+                else:
+                    self.state['history'][index]['download_verified']=download
+                    self.state['history'][index].pop('export_phase',None)
+                export_target,msg=self.finish_exports()
             else:
                 i=int(key)
                 completed=next((s for s in self.state['scenes'] if s['id']==i),{})
