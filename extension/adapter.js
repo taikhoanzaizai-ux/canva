@@ -71,14 +71,52 @@
     const background=[...e.querySelectorAll('[style]')].map(n=>n.style.backgroundImage||'').find(s=>s.startsWith('url('))||'';
     const hasStart=sliders.some(s=>label(s).includes('biên bắt đầu'));
     const start=hasStart?val('biên bắt đầu'):previousEnd,end=val('biên kết thúc');previousEnd=end;
-    return {start,end,image:image?.src||background,element:e};
+    return {start,end,hasStart,image:image?.src||background,element:e};
   });};
   function timelineScroller(root=document){
-    let el=root.querySelector('[data-role="timeline-scene"]');
+    let el=root.querySelector?.('[data-role="timeline-scene"]')||root.querySelectorAll?.('[data-role="timeline-scene"]')[0];
     for(let i=0;el&&i<30;i++,el=el.parentElement){
       if(el.scrollWidth>el.clientWidth+20&&/auto|scroll/.test(getComputedStyle(el).overflowX))return el;
     }
     return null;
+  }
+  async function readTimeline(){
+    const scroller=timelineScroller();
+    if(!scroller)return timeline();
+    const origin=scroller.scrollLeft;
+    const step=Math.max(1,Math.floor(scroller.clientWidth/2));
+    const limit=Math.max(0,scroller.scrollWidth-scroller.clientWidth);
+    const rows=new Map();
+    try{
+      for(let position=0;;position=Math.min(limit,position+step)){
+        await guard();
+        scroller.scrollLeft=position;
+        await sleep(300);
+        for(const row of timeline()){
+          if(!Number.isFinite(row.end)||row.end<=0)continue;
+          const previous=rows.get(row.end);
+          if(previous?.hasStart&&row.hasStart&&previous.start!==row.start)throw Error('Timeline có mốc cảnh trùng nhau; chưa xác nhận được số cảnh.');
+          if(!previous||(!previous.hasStart&&row.hasStart))rows.set(row.end,row);
+          else if(!previous.image&&row.image)previous.image=row.image;
+        }
+        if(position===limit)break;
+      }
+    }finally{
+      scroller.scrollLeft=origin;
+      await sleep(300);
+    }
+    let previousEnd=0;
+    return [...rows.values()].sort((a,b)=>a.end-b.end).map(row=>{
+      const start=row.hasStart?row.start:previousEnd;
+      if(!Number.isFinite(start)||Math.abs(start-previousEnd)>.12||row.end<=start)throw Error('Chưa đọc liền mạch các cảnh trên timeline Canva.');
+      previousEnd=row.end;
+      return {...row,start};
+    });
+  }
+  async function countTimeline(expected){
+    const visibleRows=timeline();
+    return expected.includes(visibleRows.length)&&Math.abs(visibleRows[0]?.start||0)<=.12
+      ?visibleRows.length:(await readTimeline()).length;
   }
   const tail=async()=>{
     const end=await wait(endButton,'Không tìm thấy timeline video mới của Canva');
@@ -375,12 +413,12 @@
     const s=task.scene;s._usage=task.usage||{};s._lastAsset=task.last_asset||'';let asset=task.phase?.asset,title=task.phase?.title||'';
     if(s.timing_original_duration<.1&&task.previous_scene&&['inserted','trimmed','muted'].includes(task.phase?.stage)){
       const last=await tail(),prev=task.previous_scene;
-      if(sceneCount()===s.id-1&&last.end-last.start<.1&&Math.abs(last.start-prev.start)<=.12){
+      if(last.end-last.start<.1&&Math.abs(last.start-prev.start)<=.12&&await countTimeline([s.id-1])===s.id-1){
         await selectClip(last);await trim(s.start-last.start);
         const restored=await tail();if(Math.abs(restored.end-s.start)>.12)throw Error('Chưa phục hồi đủ thời lượng cảnh trước.');
       }
       const ready=await tail();
-      if(sceneCount()===s.id-1&&Math.abs(ready.end-s.start)<=.12)await checkpoint('ready_after_repair');
+      if(Math.abs(ready.end-s.start)<=.12&&await countTimeline([s.id-1])===s.id-1)await checkpoint('ready_after_repair');
     }
     if(task.phase?.stage==='insert_intent')throw Error('Lần trước dừng ngay lúc chèn cảnh. Kiểm tra Canva và dùng Xử lý cảnh bị dở trong ứng dụng.');
     if(!['inserted','trimmed','muted'].includes(task.phase?.stage)){
@@ -413,7 +451,8 @@
       await checkpoint('insert_intent',{asset,title,media_kind:task.media_kind});await click(selected.el);
       await wait(()=>task.media_kind==='image'?find(/giây, sửa thời gian$/):find(/^Xén video dài/),'Nội dung chưa được đưa vào timeline');
       await tail();
-      if(sceneCount()!==s.id)throw Error(`Canva có ${sceneCount()} cảnh, đang chèn cảnh ${s.id}. Chưa xác nhận chèn thành công; kiểm tra cảnh dở để tránh chèn trùng.`);
+      const count=await countTimeline([s.id]);
+      if(count!==s.id)throw Error(`Canva có ${count} cảnh, đang chèn cảnh ${s.id}. Chưa xác nhận chèn thành công; kiểm tra cảnh dở để tránh chèn trùng.`);
       await checkpoint('inserted',{asset,title,media_kind:task.media_kind});
     } else {
       const last=await tail();
@@ -421,8 +460,10 @@
       task.media_kind=task.phase.media_kind||'video';
       await wait(()=>task.media_kind==='image'?find(/giây, sửa thời gian$/):find(/^Xén video dài/),'Hãy chọn cảnh cuối timeline để tiếp tục');
     }
-    const selectedTail=await tail();
-    if(sceneCount()!==s.id||Math.abs(selectedTail.start-s.start)>.12)throw Error('Cảnh cuối chưa đúng vị trí, chưa cắt để tránh sửa nhầm cảnh trước.');
+    await tail();
+    const count=await countTimeline([s.id]);
+    const selectedTail=timeline().at(-1);
+    if(count!==s.id||!selectedTail||Math.abs(selectedTail.start-s.start)>.12)throw Error('Cảnh cuối chưa đúng vị trí, chưa cắt để tránh sửa nhầm cảnh trước.');
     await selectClip(selectedTail);await ensureBackground();
     if(task.media_kind==='image'){
       const current=await tail();
@@ -437,17 +478,19 @@
   }
   async function rollbackScene(task,checkpoint){
     const s=task.scene;await closeMenu();
-    let last=await tail();
-    if(sceneCount()===s.id-1&&Math.abs(last.end-s.start)<=.12){await checkpoint('rollback_done');return;}
-    if(sceneCount()!==s.id||Math.abs(last.start-s.start)>.12||!last.element)throw Error('Không xác định được riêng cảnh cuối để thay thẻ lỗi.');
+    const before=await tail();
+    const count=await countTimeline([s.id-1,s.id]);
+    if(count===s.id-1&&Math.abs(before.end-s.start)<=.12){await checkpoint('rollback_done');return;}
+    const last=await tail();
+    if(count!==s.id||Math.abs(last.start-s.start)>.12||!last.element)throw Error('Không xác định được riêng cảnh cuối để thay thẻ lỗi.');
     await selectClip(last);
     const pageMenu=()=>last.element.querySelector('button[aria-label="Tùy chọn về trang"],[role="button"][aria-label="Tùy chọn về trang"]');
     await click(await wait(pageMenu,'Không thấy menu của cảnh cuối cần thay'));
     const remove=await wait(()=>find(/^Xóa(?:\s|$)/,'[role="menuitem"]'),'Không thấy Xóa trong menu cảnh cuối');
     await checkpoint('rollback_intent',{reason:task.failure});await click(remove);
-    await wait(()=>sceneCount()===s.id-1||(s.id===1&&sceneCount()===1&&!timeline().at(-1)?.image),'Canva chưa gỡ cảnh lỗi khỏi timeline');
-    last=await tail();
-    if(s.id>1&&Math.abs(last.end-s.start)>.12)throw Error('Sau khi gỡ cảnh lỗi, cuối hình chưa khớp mốc voice.');
+    const after=await tail();
+    if(!(s.id===1&&sceneCount()===1&&!after.image)&&
+       (Math.abs(after.end-s.start)>.12||await countTimeline([s.id-1])!==s.id-1))throw Error('Sau khi gỡ cảnh lỗi, timeline chưa khớp mốc voice.');
     await checkpoint('rollback_done');
   }
   async function errorCardTask(task,checkpoint,assetData){
@@ -455,7 +498,7 @@
     // Reconcile the failed insert once; never repeat the original media search.
     // A confirmed final scene is removed before the single error image is added.
     if(!['inserted','trimmed','muted'].includes(task.phase?.stage)){
-      const last=await tail(),count=sceneCount();
+      const last=await tail(),count=await countTimeline([s.id-1,s.id]);
       const placement=errorPlacement(count,last,s);
       if(placement==='replace'){
         await rollbackScene(task,checkpoint);
@@ -464,8 +507,8 @@
     }
     if(['inserted','trimmed','muted'].includes(task.phase?.stage)){
       const last=await tail();if(!last.element)throw Error('Không thấy thẻ lỗi vừa chèn để đặt thời lượng');
-      if(sceneCount()!==s.id||Math.abs(last.start-s.start)>.12)throw Error('Thẻ lỗi chưa đúng cảnh cần xử lý.');
-      await selectClip(last);
+      if(await countTimeline([s.id])!==s.id||Math.abs(last.start-s.start)>.12)throw Error('Thẻ lỗi chưa đúng cảnh cần xử lý.');
+      await selectClip(await tail());
     }else{
       if(task.phase?.stage==='insert_intent')throw Error('Thẻ lỗi đang chèn dở; chưa tự chèn lại.');
       let raw=await assetData();
@@ -491,7 +534,8 @@
       if(imageTab())await click(imageTab());
       const imageCard=await wait(uploaded,'Không thấy ảnh báo lỗi vừa tải');
       await checkpoint('insert_intent',{asset:raw.name,media_kind:'image'});await click(imageCard);
-      await wait(()=>sceneCount()===s.id,'Chưa xác nhận được ảnh báo lỗi trên timeline');
+      await tail();
+      if(await countTimeline([s.id])!==s.id)throw Error('Chưa xác nhận được ảnh báo lỗi trên timeline');
       await checkpoint('inserted',{asset:raw.name,media_kind:'image'});
     }
     await ensureBackground();const before=await tail();
@@ -555,7 +599,7 @@
       const card=await wait(()=>find(new RegExp(titleName)),'Không thấy video tiêu đề vừa tải');
       await checkpoint('insert_intent',{asset:raw.name,title:s.title_text});await click(card);
       await wait(()=>find(/^Xén video dài/),'Chưa chèn được video tiêu đề');
-      await tail();if(sceneCount()!==s.id)throw Error('Số cảnh sau khi chèn tiêu đề chưa khớp. Kiểm tra cảnh dở, không chèn lại.');
+      await tail();if(await countTimeline([s.id])!==s.id)throw Error('Số cảnh sau khi chèn tiêu đề chưa khớp. Kiểm tra cảnh dở, không chèn lại.');
       await checkpoint('inserted',{asset:raw.name,title:s.title_text});
     }else{const last=await tail();if(last.element)await selectClip(last);}
     await ensureBackground();await trim(s.duration);await checkpoint('trimmed',{title:s.title_text});
@@ -591,20 +635,22 @@
   }
   async function manualReviewTask(task){
     await closeMenu();await tail();
-    const count=sceneCount(),scene=task.scene;let row=timeline()[scene.id-1];
+    const rows=await readTimeline();
+    const count=rows.length,scene=task.scene,row=rows[scene.id-1];
     if(!task.allowed_counts.includes(count))throw Error(`Canva có ${count} cảnh, cần ${task.allowed_counts.join(' hoặc ')} cảnh. Hãy thay cảnh tại chỗ, không thêm thừa hay xóa cảnh khác.`);
     if(!row||!row.image)throw Error(`Cảnh ${scene.id} chưa có ảnh/video trên timeline.`);
     if(!Number.isFinite(row.start)||!Number.isFinite(row.end))throw Error('Chưa đọc được mốc thời gian cảnh tự sửa.');
     const voice=verifyVoice(task.voice_name,task.voice_duration);
-    const frames=timeline().map(r=>({start:r.start,end:r.end}));
+    const frames=rows.map(r=>({start:r.start,end:r.end}));
     return {manual_verified:true,review_token:task.review_token,verified_count:count,verified_start:row.start,verified_end:row.end,frames,asset:row.image,...voice};
   }
   async function auditTask(task){
-    await closeMenu();const last=await tail();
-    if(sceneCount()!==task.count)throw Error(`Canva có ${sceneCount()} cảnh, cần ${task.count} cảnh. Không chuyển phần khi số cảnh chưa khớp.`);
+    await closeMenu();await tail();
+    const rows=await readTimeline(),last=rows.at(-1);
+    if(rows.length!==task.count)throw Error(`Canva có ${rows.length} cảnh, cần ${task.count} cảnh. Không chuyển phần khi số cảnh chưa khớp.`);
     if(Math.abs(last.end-task.duration)>.12)throw Error(`Hình kết thúc ở ${last.end.toFixed(3)} giây nhưng voice phần này dài ${task.duration.toFixed(3)} giây. Cần sửa cảnh cuối trước khi chuyển phần.`);
     verifyVoice(task.voice_name,task.duration);
-    return {verified_duration:last.end,verified_count:sceneCount()};
+    return {verified_duration:last.end,verified_count:rows.length};
   }
   function designTitleInput(root=document){
     return [...root.querySelectorAll('input,textarea,[contenteditable="true"][role="textbox"]')].find(e=>visible(e)&&/tên(?: cho)? thiết kế|tiêu đề thiết kế|design title|design name|thiết kế không tên|untitled design/i.test((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('placeholder')||'')));
