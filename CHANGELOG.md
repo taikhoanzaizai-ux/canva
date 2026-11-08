@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.16
+
+- Tự thử căn cảnh cuối theo điểm kết thúc voice khi xác nhận cảnh đã sửa và khi kiểm tra cả phần. Giữ mốc voice gốc khi đối chiếu.
+- Đồng nhất dung sai của cảnh cuối với bước kiểm tra timeline để tránh chặn chuyển phần vì chênh lệch nhỏ.
+
 ## 0.14.15
 
 - Dựng hết các phần voice trước khi tải MP4. Sau phần cuối, mở lại các thiết kế còn thiếu tệp xuất rồi ghép video hoàn chỉnh.
