@@ -45,6 +45,12 @@ assert(adapter.searchReady(queryField,'người cao tuổi nấu ăn',[{id:'new'
 assert(!adapter.searchReady(queryField,'đau đầu gối',[{id:'new'}],'old',5000),'Reject results when input is for another query');
 assert(!adapter.searchReady(queryField,queryField.value,[{id:'old'}],'old',200),'Wait for unchanged stale cards');
 assert(adapter.searchReady(queryField,queryField.value,[{id:'old'}],'old',3500),'Same query can legitimately return the same results');
+const emptyNotice={offsetWidth:10,textContent:'Rất tiếc, chúng tôi không tìm thấy video nào cho “microvessels”. Hãy thử tìm kiếm nội dung liên quan.'};
+const emptyPanel={querySelectorAll:()=>[emptyNotice]};
+const microField={value:'microvessels',getAttribute:()=>null};
+assert(adapter.emptyVideoResult(microField,'microvessels',emptyPanel));
+assert(!adapter.emptyVideoResult({...microField,value:'mạch máu'},'mạch máu',emptyPanel),'An old empty result must not skip a new search');
+assert(!adapter.emptyVideoResult({...microField,getAttribute:()=> 'true'},'microvessels',emptyPanel),'A loading result is not final');
 assert.equal(adapter.uploadInput({querySelectorAll:()=>[{accept:'video/mp4'}]},'video').accept,'video/mp4');
 assert.equal(adapter.eligibleCards([{id:'x',title:'Senior man smiling at home',duration:8}],{duration:3,positive:['senior'],subjects:['papaya']},[]).length,0,'Reject generic elderly footage for an explicit food subject');
 
@@ -139,6 +145,9 @@ for(const [subjects,near,wrong] of [
   [['arterial plaque','thành mạch xơ vữa'],'Red blood cells in motion','Dental plaque removal'],
   [['blood vessel'],'Red blood cells in motion','Blood glucose meter'],
   [['elastin fibers','sợi elastin'],'Elastic connective tissue animation','Fabric threads'],
+  [['microvessels','vi mạch'],'Red blood cells flowing in an artery','Highway interchange'],
+  [['glomerulus','cầu thận'],'Human kidney anatomy','Human stomach anatomy'],
+  [['brain microvessels','vi mạch trong não'],'Human brain animation','Office desk'],
   [['measuring blood glucose','đo đường huyết'],'Insulin vial and syringe','Traffic on a highway'],
 ]){
  const scene={...researchScene,subjects,positive:subjects};
