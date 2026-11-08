@@ -27,6 +27,7 @@ def compensate(scenes,done,frames,minimum=.1):
             a=cursor;b=min(max(anchors[i],a+minimum),total-(len(scenes)-i-1)*minimum)
             if b-a<minimum-.001:raise ValueError('Không đủ thời lượng voice để chia các cảnh còn lại.')
         update=dict(start=round(a,6),duration=round(b-a,6),voice_end=anchors[i],manual_timing_adjusted=True)
+        if scene.get('warning_output'):update.update(warning_start=a,warning_end=b)
         if 'source_start' in scene:update['source_start']=round(scene['source_start']-scene['start']+a,6)
         updates.append(update)
         cursor=b
