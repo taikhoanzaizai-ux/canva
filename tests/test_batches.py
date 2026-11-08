@@ -40,6 +40,9 @@ class BatchTests(unittest.TestCase):
             with self.assertRaises(ValueError):engine.result(dict(id='audit',client='A',verified_duration=1))
             with self.assertRaises(ValueError):engine.result(dict(id='audit',client='A',verified_duration=parts[0]['duration'],verified_count=49))
             engine.result(dict(id='audit',client='A',verified_duration=parts[0]['duration'],verified_count=50))
+            self.assertEqual(engine.next_task(client)['task']['kind'],'export')
+            with patch('canva_studio.bridge.verify_download',return_value={'path':'download.mp4'}),patch('canva_studio.bridge.save_part',return_value={'path':'part-1.mp4'}):
+                engine.result(dict(id='export',client='A',download_complete=True,download_id=10))
             self.assertEqual(engine.next_task(client)['task']['kind'],'next_design')
             engine.result(dict(id='next_design',client='A',new_target='https://www.canva.com/design/two/token/edit'))
             self.assertEqual(engine.state['part_index'],1);self.assertEqual(engine.state['used'],['never-repeat'])
@@ -48,3 +51,25 @@ class BatchTests(unittest.TestCase):
             client.update(url=engine.state['target'])
             self.assertEqual(engine.next_task(client)['task']['kind'],'voice')
             resumed=Engine(d);self.assertEqual(resumed.state['part_index'],1);self.assertEqual(len(resumed.state['history']),1)
+
+    def test_legacy_export_returns_to_missing_history_before_merge(self):
+        with tempfile.TemporaryDirectory() as d:
+            engine=Engine(d);parts=split_batches(self.plan(51))
+            last='https://www.canva.com/design/two/token/edit'
+            first='https://www.canva.com/design/one/token/edit'
+            engine.configure(dict(**parts[1],parts=parts),last,'part.wav')
+            engine.state.update(part_index=1,done=[1],voice_done=True,audit_done=True,history=[{**parts[0],'target':first}])
+            engine.start()
+            client=dict(client='A',url=last,extension_version=MIN_EXTENSION_VERSION)
+            download=dict(id='export',client='A',download_complete=True,download_id=10)
+            with patch('canva_studio.bridge.verify_download',return_value={'path':'download.mp4'}),patch('canva_studio.bridge.save_part',side_effect=[{'path':'part-2.mp4'},{'path':'part-1.mp4'}]),patch('canva_studio.bridge.threading.Thread') as worker:
+                self.assertEqual(engine.next_task(client)['task']['kind'],'export')
+                self.assertEqual(engine.result(download)['export_target'],first)
+                self.assertEqual(engine.state['target'],last)
+                self.assertIsNone(engine.next_task(client)['task'])
+                self.assertEqual(engine.next_task({**client,'url':first})['task']['kind'],'export')
+                engine.result({**download,'download_id':11})
+                self.assertEqual(engine.state['history'][0]['download_verified']['path'],'part-1.mp4')
+                self.assertEqual(engine.state['download_verified']['path'],'part-2.mp4')
+                self.assertEqual(engine.state['mode'],'merging')
+                worker.return_value.start.assert_called_once()
