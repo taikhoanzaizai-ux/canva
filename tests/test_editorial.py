@@ -23,6 +23,13 @@ class EditorialTests(unittest.TestCase):
         from canva_studio.broad_search import topic_for
         self.assertIsNone(topic_for('Quý vị thân mến, chúng ta đã khỏe hơn.'))
 
+    def test_related_topic_uses_current_subject_or_manual_query(self):
+        from canva_studio.broad_search import related_topic
+        self.assertIn('carrot', related_topic({'subjects': ['sliced carrots']})['subjects'])
+        scene = {'manual_queries': True, 'queries': ['người rang hạt óc chó'], 'subjects': ['carrot']}
+        self.assertIn('walnut', related_topic(scene)['subjects'])
+        self.assertIsNone(related_topic({'subjects': ['blood red paint']}))
+
     def test_short_topics_and_direct_food_override_blood_context(self):
         texts=['máu lưu thông trong mạch máu','đo đường huyết','người già thể dục','Nhưng khi cho 3–4 quả cam vào máy ép','Thứ chúng ta uống vào là nước ép']
         rows=[dict(id=i+1,text=t,**describe(t)) for i,t in enumerate(texts)]
