@@ -273,6 +273,13 @@ class EngineTests(unittest.TestCase):
     def test_connection_watchdog_preserves_progress(self):
         self.e.state['done']=[1];self.e.watchdog(now=self.e.last_activity+26)
         self.assertEqual(self.e.state['mode'],'attention');self.assertEqual(self.e.state['done'],[1])
+    def test_connection_watchdog_allows_throttled_active_task(self):
+        self.e.next_task(self.client)
+        last=self.e.last_activity
+        self.e.watchdog(now=last+61)
+        self.assertEqual(self.e.state['mode'],'running')
+        self.e.watchdog(now=last+91)
+        self.assertEqual(self.e.state['mode'],'attention')
     def test_wrong_design_is_explained(self):
         self.e.next_task({**self.client,'url':'https://www.canva.com/design/other/design/edit'})
         self.assertEqual(self.e.connection_status()['code'],'wrong_design')
