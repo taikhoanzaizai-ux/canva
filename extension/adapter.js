@@ -719,23 +719,41 @@
     if(!ends.length||!ends.every(Number.isFinite)||Math.abs(Math.max(...ends)-duration)>.12)throw Error('Voice trên Canva chưa đủ thời lượng phần này. Không xuất hoặc chuyển phần.');
     return {verified_voice_start:Math.min(...starts),verified_voice_end:Math.max(...ends),voice_name:name};
   }
+  async function fitFinalScene(rows,voiceEnd){
+    const expected=rows.at(-1);
+    if(Math.abs(expected.end-voiceEnd)<=.12)return rows;
+    const last=await tail();
+    if(!last.element||!last.image||Math.abs(last.start-expected.start)>.02||Math.abs(last.end-expected.end)>.02||voiceEnd-last.start<.1)
+      throw Error('Chưa xác nhận được cảnh cuối để tự căn điểm hết voice.');
+    await selectClip(last);
+    const kind=await wait(()=>find(/^Xén video dài/)?'video':find(/giây, sửa thời gian$/)?'image':null,'Không thấy công cụ căn thời lượng cảnh cuối');
+    if(kind==='video')await trim(voiceEnd-last.start);
+    else await timePhoto(voiceEnd-last.start,true);
+    const checked=await readTimeline(),tailRow=checked.at(-1);
+    if(checked.length!==rows.length||!tailRow?.image||Math.abs(tailRow.start-expected.start)>.02||Math.abs(tailRow.end-voiceEnd)>.12)
+      throw Error(`Canva chưa căn được cảnh cuối về ${voiceEnd.toFixed(2)} giây. Hãy chỉnh cảnh cuối gần mốc này rồi xác nhận lại.`);
+    return checked;
+  }
   async function manualReviewTask(task){
     await closeMenu();await tail();
-    const rows=await readTimeline();
-    const count=rows.length,scene=task.scene,row=rows[scene.id-1];
+    let rows=await readTimeline();
+    const count=rows.length,scene=task.scene;
     if(!task.allowed_counts.includes(count))throw Error(`Canva có ${count} cảnh, cần ${task.allowed_counts.join(' hoặc ')} cảnh. Hãy thay cảnh tại chỗ, không thêm thừa hay xóa cảnh khác.`);
-    if(!row||!row.image)throw Error(`Cảnh ${scene.id} chưa có ảnh/video trên timeline.`);
-    if(!Number.isFinite(row.start)||!Number.isFinite(row.end))throw Error('Chưa đọc được mốc thời gian cảnh tự sửa.');
+    if(!rows[scene.id-1]?.image)throw Error(`Cảnh ${scene.id} chưa có ảnh/video trên timeline.`);
     const voice=verifyVoice(task.voice_name,task.voice_duration);
+    if(task.fit_final&&scene.id===count)rows=await fitFinalScene(rows,voice.verified_voice_end);
+    const row=rows[scene.id-1];
+    if(!Number.isFinite(row.start)||!Number.isFinite(row.end))throw Error('Chưa đọc được mốc thời gian cảnh tự sửa.');
     const frames=rows.map(r=>({start:r.start,end:r.end}));
     return {manual_verified:true,review_token:task.review_token,verified_count:count,verified_start:row.start,verified_end:row.end,frames,asset:row.image,...voice};
   }
   async function auditTask(task){
     await closeMenu();await tail();
-    const rows=await readTimeline(),last=rows.at(-1);
+    let rows=await readTimeline();
     if(rows.length!==task.count)throw Error(`Canva có ${rows.length} cảnh, cần ${task.count} cảnh. Không chuyển phần khi số cảnh chưa khớp.`);
-    if(Math.abs(last.end-task.duration)>.12)throw Error(`Hình kết thúc ở ${last.end.toFixed(3)} giây nhưng voice phần này dài ${task.duration.toFixed(3)} giây. Cần sửa cảnh cuối trước khi chuyển phần.`);
-    verifyVoice(task.voice_name,task.duration);
+    const voice=verifyVoice(task.voice_name,task.duration);
+    rows=await fitFinalScene(rows,voice.verified_voice_end);
+    const last=rows.at(-1);
     return {verified_duration:last.end,verified_count:rows.length};
   }
   function designTitleInput(root=document){
