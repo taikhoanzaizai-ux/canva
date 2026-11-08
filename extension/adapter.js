@@ -183,6 +183,9 @@
     {search:['dạ dày','human stomach'],names:['stomach','dạ dày']},
     {search:['lá gan','human liver'],names:['liver','lá gan']},
     {search:['quả thận','human kidney'],names:['kidney','renal','quả thận','cầu thận','glomerulus','glomeruli','glomerular','nephron']},
+    {search:['đau lưng','vùng lưng','cột sống','lower back','back pain'],
+     triggers:['lưng','cột sống','thoát vị đĩa đệm','back pain','back muscles','human back','lower back','spine','lumbar','herniated disc'],
+     names:['lưng','cột sống','đĩa đệm','human back','lower back','upper back','back pain','back muscle','back anatomy','back stretching','holding his back','holding her back','spine','spinal','lumbar','herniated disc']},
     {search:['đường ruột','human intestine'],names:['intestine','intestinal','đường ruột','ruột non','ruột già']},
     {search:['đi bộ','walking'],names:['walking','walk','đi bộ']},
     {search:['kéo giãn chân','leg stretch'],names:['leg stretch','leg stretching','kéo giãn chân','kéo giãn cơ chân']},
@@ -382,17 +385,29 @@
     // Resizing can change which rows Canva mounts, so match the final start.
     if(applied()&&!visible(durationInput()))return;
     const owner=()=>find(/giây, sửa thời gian$/);
-    if(!visible(durationInput()))await click(await wait(owner,'Không thấy thời lượng ảnh'));
-    const field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không thấy ô đặt thời gian ảnh');
-    // Canva truncates extra decimal digits. Round explicitly before input;
-    // otherwise 1.195 becomes 1.1 and fails the absolute-end verification.
-    field.focus();fill(field,String(photoDuration(duration)));
-    // Do not send Enter in the same React turn as input. Moving focus to the
-    // owning toolbar button commits the current value without applying to all.
-    await sleep(350);
-    const button=await wait(owner,'Không thấy nút đóng thời lượng ảnh');button.focus();
-    await sleep(350);
-    if(visible(durationInput()))await click(await wait(owner,'Không đóng được thời lượng ảnh'));
+    for(const confirmWithEnter of [false,true]){
+      await guard();
+      const last=timeline().at(-1);
+      if(!last||Math.abs(last.start-before.start)>.02)throw Error('Cảnh cuối đã thay đổi trong lúc đặt thời lượng ảnh.');
+      if(!visible(durationInput()))await click(await wait(owner,'Không thấy thời lượng ảnh'));
+      const field=await wait(()=>{const e=durationInput();return visible(e)?e:null;},'Không thấy ô đặt thời gian ảnh');
+      // Canva truncates extra decimal digits. Round before sending the value.
+      field.focus();fill(field,String(photoDuration(duration)));await sleep(350);
+      await guard();
+      // Try committing by blur first. Some editors need Enter after the input
+      // state has settled. Never use the global apply-to-all button.
+      if(confirmWithEnter&&visible(field))key(field,'Enter');
+      if(visible(durationInput())){
+        const button=await wait(owner,'Không thấy nút đóng thời lượng ảnh');button.focus();
+        await sleep(350);
+        if(visible(durationInput()))await click(await wait(owner,'Không đóng được thời lượng ảnh'));
+      }
+      for(let poll=0;poll<6;poll++){
+        await guard();
+        if(applied())return;
+        await sleep(250);
+      }
+    }
     await wait(applied,'Mốc bắt đầu/kết thúc ảnh chưa khớp sau khi lưu thời lượng',8000);
   };
   const trim=async(duration)=>{
