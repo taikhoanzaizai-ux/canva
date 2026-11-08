@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.9'
+MIN_EXTENSION_VERSION='0.14.10'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -166,7 +166,7 @@ class Engine:
             if self.state['mode'] in ('opening','opening_resume') and now>self.state.get('bootstrap_deadline',0):
                 self.state['mode']='attention'
                 self.log('Chưa nhận được tab mới. Kiểm tra Chrome đã đăng nhập Canva, tiện ích đã bật và ghép nối. Giữ tab mới để thử lại bằng link; không tự tạo thêm tab.')
-            if self.state['mode']=='running' and now-self.last_activity>25:
+            if self.state['mode']=='running' and now-self.last_activity>(90 if self.running else 25):
                 self.state['mode']='attention'
                 self.log('Mất tín hiệu từ tiện ích Canva. Bấm Kết nối Canva trên tiện ích rồi Bắt đầu/Tiếp tục; tiến độ đã được giữ.')
     def recover(self, action):
@@ -287,6 +287,7 @@ class Engine:
         with self.lock:
             if not self.running or self.running['id']!=str(body.get('id')) or self.running['client']!=body.get('client'):raise ValueError('Kết quả không thuộc phiên đang chạy.')
             if str(body.get('id')).startswith('manual:') and body.get('review_token')!=self.state.get('manual_review',{}).get('token'):raise ValueError('Yêu cầu kiểm tra tự sửa đã được thay thế.')
+            self.last_activity=time.time()
             if body.get('error'):
                 if str(body['id']).startswith('manual:'):
                     detail=str(body['error'])[:600];self.state.update(mode='attention',manual_review_error=detail);self.running=None
@@ -429,6 +430,9 @@ def serve(engine,port=8766):
                     with engine.lock:status=begin_fallback(engine,scene,retry=body.get('retry') is True)
                     if status.get('error'):raise ValueError(status['error'])
                     if status.get('pending'):v=dict(pending=True)
+                    elif scene['fallback_source']['kind']=='text_card':
+                        source=scene['fallback_source']
+                        v=dict(card_text=source['title'],name=f"SKST_text_{source['id'].split(':')[-1]}.png",asset_id=source['id'])
                     else:
                         path=Path(scene['fallback_path']).resolve()
                         if not path.is_relative_to((engine.folder/'Projects').resolve()) or path.suffix not in ('.mp4','.png') or path.stat().st_size>30*1024*1024:raise ValueError('Tệp tư liệu không hợp lệ.')
@@ -437,9 +441,9 @@ def serve(engine,port=8766):
                     engine.check(body)
                     scene=next((s for s in engine.state['scenes'] if str(s['id'])==str(body.get('id'))),None)
                     if engine.state['mode']!='running' or not scene or scene.get('kind')!='title':raise ValueError('Không có lệnh tải tiêu đề.')
-                    path=Path(scene['title_path']).resolve();root=(engine.folder/'Projects').resolve()
-                    if not path.is_relative_to(root) or path.suffix.lower()!='.mp4' or path.stat().st_size>12*1024*1024:raise ValueError('Tệp tiêu đề không hợp lệ.')
-                    payload=path.read_bytes();v=dict(name=path.name,mime='video/mp4',data=base64.b64encode(payload).decode())
+                    caption=scene['title_text']
+                    key=hashlib.sha256(caption.encode()).hexdigest()[:16]
+                    v=dict(card_text=caption,name=f'SKST_title_{key}.png')
                 elif self.path=='/voice':
                     engine.check(body)
                     if not engine.running or engine.running['id']!='voice' or engine.state['mode']!='running':raise ValueError('Không có lệnh tải voice.')
