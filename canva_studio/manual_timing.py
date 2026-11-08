@@ -17,7 +17,7 @@ def compensate(scenes,done,frames,minimum=.1):
     anchors=[s.get('voice_end',s['start']+s['duration']) for s in scenes]
     total=anchors[-1];cursor=float(frames[prefix-1]['end']) if prefix else 0.
     remaining=len(scenes)-prefix
-    if cursor+remaining*minimum>total+.06:raise ValueError('Các cảnh đã sửa dài quá phần voice còn lại để bù. Rút ngắn một cảnh đã sửa rồi xác nhận lại; không cần căn từng phần trăm giây.')
+    if remaining and cursor+remaining*minimum>total+.06:raise ValueError('Các cảnh đã sửa dài quá phần voice còn lại để bù. Rút ngắn một cảnh đã sửa rồi xác nhận lại; không cần căn từng phần trăm giây.')
     if not remaining and abs(cursor-total)>.12:raise ValueError('Đây là cảnh cuối, không còn cảnh sau để bù. Hãy đặt đoạn cuối gần điểm hết voice rồi xác nhận lại.')
     updates=[]
     for i,scene in enumerate(scenes):
