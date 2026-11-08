@@ -157,12 +157,13 @@ async function exportDownload(action,sender){
   }
   if(action!=='status')throw Error('Lệnh tải xuống không hợp lệ');
   const session=(await chrome.storage.local.get([key]))[key];if(!session)return {tracking:false};
-  const items=await chrome.downloads.search(session.id?{id:session.id}:{startedAfter:new Date(session.started).toISOString(),limit:100,orderBy:['-startTime']});
-  const matching=session.id?items.filter(i=>i.id===session.id):items.filter(i=>canvaDownload(i,session));
+  const bound=Number.isInteger(session.id);
+  const items=await chrome.downloads.search(bound?{id:session.id}:{startedAfter:new Date(session.started).toISOString(),limit:100,orderBy:['-startTime']});
+  const matching=bound?items.filter(i=>i.id===session.id):items.filter(i=>canvaDownload(i,session));
   if(matching.length>1)throw Error('Có nhiều MP4 Canva tải cùng lúc, chưa xác định được tệp của dự án. Chỉ xuất một dự án mỗi lần.');
   const item=matching[0];
   if(!item)return {tracking:true};
-  if(!session.id){session.id=item.id;await chrome.storage.local.set({[key]:session});}
+  if(!bound){session.id=item.id;await chrome.storage.local.set({[key]:session});}
   if(item.state==='interrupted')throw Error('Tải MP4 bị gián đoạn: '+(item.error||'Chrome chưa tải xong')+'. Tiếp tục tải trong Chrome rồi bấm Tiếp tục.');
   if(item.state==='complete'&&item.exists===false)throw Error('MP4 đã tải nhưng tệp không còn trên máy.');
   return {tracking:true,id:item.id,filename:item.filename,complete:item.state==='complete'&&item.exists===true};
