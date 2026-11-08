@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.3
+
+- Khi xác nhận cảnh tự sửa hoặc hoàn tất một phần, cuộn đọc toàn bộ timeline Canva để đếm cả những cảnh ngoài màn hình. Khắc phục tình trạng cảnh 50 đã có nhưng bị báo thiếu cảnh, chặn mở phần voice tiếp theo.
+- Áp dụng cách đếm bổ sung khi chèn và phục hồi cảnh. Chỉ chuyển phần sau khi xác nhận đủ cảnh và đúng mốc voice.
+
 ## 0.14.2
 
 - Chấp nhận tư liệu Canva gần nghĩa ngay trong kết quả tìm kiếm. Ví dụ nước ép cam có thể dùng quả cam, xơ vữa có thể dùng mạch máu hoặc hồng cầu, elastin có thể dùng mô phỏng sợi đàn hồi.
