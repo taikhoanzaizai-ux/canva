@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.18
+
+- Khi thiếu video khớp chủ đề, tìm lại từ khóa đầu và chọn ngẫu nhiên clip đủ dài ở các hàng dưới, ưu tiên clip chưa dùng.
+- Thêm chữ báo cảnh dùng video thay thế và ghi trạng thái trong SKST. Nếu tìm thiếu tư liệu, báo để duyệt cảnh thay vì tạo thẻ chữ dự phòng.
+
 ## 0.14.17
 
 - Thêm nút Dựng phần tiếp theo khi cảnh cuối đang kẹt và còn phần voice khác. Giữ thiết kế cũ và quay lại xác nhận cảnh cuối trước khi tải MP4.
