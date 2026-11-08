@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.19'
+MIN_EXTENSION_VERSION='0.14.20'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -328,13 +328,17 @@ class Engine:
                 phase=self.state.get('phase',{})
                 if str(phase.get('id','')).isdigit() and phase.get('stage') in ('insert_intent','inserted','trimmed','muted'):
                     counts.add(max(max(counts),int(phase['id'])))
+                overlay_scene=None
+                if phase.get('stage')=='overlay_intent' and str(phase.get('id'))==str(max(counts)+1):
+                    overlay_scene=max(counts)+1
+                    counts={overlay_scene}
                 name=self.state.get('voice_name','')
                 if not name and Path(self.state['voice']).is_file():
                     with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
-                manual.update(allowed_counts=sorted(counts),voice_name=name)
+                manual.update(allowed_counts=sorted(counts),voice_name=name,overlay_scene=overlay_scene)
                 last=self.state['scenes'][-1]
                 fit_final=scene['id']==last['id'] and (set(self.state['done'])|{scene['id']})=={s['id'] for s in self.state['scenes']}
-                task=dict(id=f'manual:{scene["id"]}',kind='manual_review',review_token=manual['token'],scene=scene,allowed_counts=sorted(counts),voice_name=name,voice_duration=last.get('voice_end',last['start']+last['duration']),fit_final=fit_final)
+                task=dict(id=f'manual:{scene["id"]}',kind='manual_review',review_token=manual['token'],scene=scene,allowed_counts=sorted(counts),voice_name=name,voice_duration=last.get('voice_end',last['start']+last['duration']),fit_final=fit_final,overlay_scene=overlay_scene)
             elif title and self.state.get('named_title')!=title and (self.state.get('rename_failed_title')!=title or self.state.get('audit_done') and self.state.get('rename_final_title')!=title):task=dict(id='rename',kind='rename',design_name=title)
             elif not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
@@ -430,7 +434,13 @@ class Engine:
                 selected=frames[scene['id']-1]
                 if abs(float(selected['start'])-values[0])>.001 or abs(float(selected['end'])-values[1])>.001:raise ValueError('Mốc cảnh tự sửa không thống nhất; hãy xác nhận lại.')
                 completed=set(self.state['done'])|{scene['id']}
-                updates=compensate(self.state['scenes'],completed,frames)
+                overlay_scene=review.get('overlay_scene')
+                if overlay_scene is not None and body.get('verified_overlay_scene')!=overlay_scene:
+                    raise ValueError('Chưa xác nhận được video đã chèn của cảnh đang chờ căn chữ.')
+                # Keep the already-inserted clip on its observed bounds while
+                # leaving its overlay checkpoint pending for the next task.
+                timing_basis=completed|{overlay_scene} if overlay_scene is not None else completed
+                updates=compensate(self.state['scenes'],timing_basis,frames)
                 for item,update in zip(self.state['scenes'],updates):item.update(update)
                 scene['manual_verified']=True;scene['manual_asset']=str(body.get('asset','manual:'+str(scene['id'])));scene['manual_actual_start']=values[0];scene['manual_actual_end']=values[1]
                 if scene['id'] not in self.state['done']:self.state['done'].append(scene['id']);self.state['done'].sort()
