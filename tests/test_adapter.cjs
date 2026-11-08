@@ -2,6 +2,35 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const context={globalThis:{},document:{},getComputedStyle:e=>({overflowX:e.overflowX}),setTimeout,Promise,console};vm.createContext(context);
 vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),context);
 const adapter=context.globalThis.SKSTAdapter;
+assert(adapter.warningBounds({start:10,end:13},{start:10,end:13}));
+assert(!adapter.warningBounds({start:10,end:13},{start:10,end:15}),'Do not let a default five-second caption spill into the next clip');
+assert(!adapter.warningBounds({start:10,end:13},{start:9,end:12}),'Reject a caption shifted into the preceding clip');
+(async()=>{
+ const message='LỖI CẢNH 14 • Video thay thế';
+ const range={start:16,end:21};
+ const handle=(name,read,update)=>{
+   let x=0;
+   return {getAttribute:k=>k==='aria-label'?name:k==='aria-valuenow'?String(Math.round(read()*1e6)):null,
+    getBoundingClientRect:()=>({left:100,top:40,width:4,height:4}),
+    dispatchEvent:e=>{if(e.type==='pointerdown')x=e.clientX;if(e.type==='pointerup')update((e.clientX-x)/20);}};
+ };
+ const sliders=(read,write)=>[
+   handle('biên bắt đầu',()=>read.start,delta=>{write.start+=delta}),
+   handle('biên kết thúc',()=>read.end,delta=>{write.end+=delta}),
+ ];
+ const picture={start:10,end:13};
+ const mediaHandles=sliders(picture,picture);
+ const clip={parentElement:{querySelector:()=>mediaHandles[0],querySelectorAll:()=>mediaHandles},
+   querySelector:()=>null,querySelectorAll:()=>[],getBoundingClientRect:()=>({width:60})};
+ const trackHandles=sliders(range,range);
+ const text={getAttribute:k=>k==='aria-label'?message:null,closest:()=>null,querySelectorAll:()=>trackHandles,querySelector:()=>null};
+ const document={querySelectorAll:s=>s==='[data-role="timeline-scene"]'?[clip]:[text]};
+ const env={globalThis:{},document,PointerEvent:class{constructor(type,opts){Object.assign(this,opts,{type})}},setTimeout:f=>f()};
+ vm.runInNewContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ await env.globalThis.SKSTAdapter.fitWarningTrack({...picture,element:clip},message);
+ assert(adapter.warningBounds(picture,range));
+ assert.deepEqual(picture,{start:10,end:13},'Adjust only text handles');
+})().catch(e=>{console.error(e);process.exitCode=1;});
 const stock=[{id:'top',duration:8},{id:'short',duration:2},{id:'used',duration:8},{id:'fresh',duration:8}];
 assert.equal(adapter.randomFallbackCard(stock,{duration:4},['used'],new Set(['top'])).id,'fresh');
 assert.equal(adapter.randomFallbackCard(stock,{duration:4,_lastAsset:'used'},['used','fresh'],new Set(['top']),true).id,'fresh');
