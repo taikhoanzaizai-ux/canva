@@ -511,8 +511,6 @@
     const r=canvasVideo.getBoundingClientRect();canvasVideo.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2,button:2}));
     await click(await wait(()=>find('Đặt video làm nền','[role="menuitem"],button,[role="button"]'),'Không đặt được video làm nền'));
   };
-  const warningBounds=(row,overlay)=>overlay&&Number.isFinite(overlay.start)&&Number.isFinite(overlay.end)&&
-    overlay.start>=row.start-.001&&overlay.end<=row.end+.001&&overlay.end>overlay.start;
   function warningNodes(message){
     const marker=message.split(' • ')[0]+' •';
     return [...document.querySelectorAll('[role="button"],button,[aria-label],[title],span')].filter(element=>{
@@ -541,144 +539,6 @@
     if(outer.length!==1)return null;
     const element=outer[0],box=element.getBoundingClientRect();
     return {element,box,scale,start:row.start+(box.left-clip.left)/scale,end:row.start+(box.right-clip.left)/scale};
-  }
-  function warningTrack(message,row){
-    const matches=warningNodes(message);
-    const tracks=new Map();
-    for(const element of matches){
-      for(let node=element,i=0;node&&i<4;node=node.parentElement,i++){
-        const handles=[...node.querySelectorAll('[role="slider"]')];
-        const start=handles.find(h=>label(h).includes('biên bắt đầu'));
-        const end=handles.find(h=>label(h).includes('biên kết thúc'));
-        if(handles.length!==2||!start||!end||node.querySelector('[data-role="timeline-scene"]'))continue;
-        const value=handle=>Number(handle.getAttribute('aria-valuenow')??NaN)/1e6;
-        tracks.set(start,{element,start:value(start),end:value(end),startHandle:start,endHandle:end});
-        break;
-      }
-    }
-    if(tracks.size===1)return tracks.values().next().value;
-    return !tracks.size&&row?warningGeometry(row,matches):null;
-  }
-  function timelineRuler(row){
-    const clip=row.element.getBoundingClientRect();
-    const x=clip.left+clip.width/2;
-    for(let y=clip.top-8;y>=clip.top-90;y-=4){
-      const hit=document.elementFromPoint(x,y);
-      for(let node=hit,i=0;node&&i<5;node=node.parentElement,i++){
-        const name=norm((node.getAttribute('data-role')||'')+' '+(node.getAttribute('aria-label')||''));
-        if(/ruler|time.?scale|thuoc (?:do|thoi gian)/.test(name))return {node:hit,x,y};
-      }
-    }
-    return null;
-  }
-  async function seekWarningScene(row){
-    const ruler=timelineRuler(row);
-    if(!ruler)throw Error('Chưa tìm thấy thước timeline để đặt chữ đúng cảnh.');
-    await guard();
-    const point={bubbles:true,cancelable:true,clientX:ruler.x,clientY:ruler.y,button:0};
-    ruler.node.dispatchEvent(new PointerEvent('pointerdown',{...point,pointerId:1,pointerType:'mouse',isPrimary:true,buttons:1}));
-    ruler.node.dispatchEvent(new PointerEvent('pointerup',{...point,pointerId:1,pointerType:'mouse',isPrimary:true,buttons:0}));
-    ruler.node.dispatchEvent(new MouseEvent('click',point));
-    await sleep(350);
-  }
-  async function dragWarningEdge(handle,delta,point=null){
-    await guard();
-    const rect=handle.getBoundingClientRect(),x=point?.x??rect.left+rect.width/2,y=point?.y??rect.top+rect.height/2;
-    if(!rect.width||!Number.isFinite(delta))throw Error('Không đọc được tay nắm thời lượng chữ.');
-    const send=(target,type,clientX,buttons)=>target.dispatchEvent(new PointerEvent(type,{
-      bubbles:true,cancelable:true,pointerId:1,pointerType:'mouse',isPrimary:true,clientX,clientY:y,button:0,buttons,
-    }));
-    send(handle,'pointerdown',x,1);
-    send(handle,'pointermove',x+Math.sign(delta)*Math.min(Math.abs(delta),6),1);
-    send(handle,'pointermove',x+delta,1);
-    send(handle,'pointerup',x+delta,0);
-    await sleep(350);
-  }
-  async function fitWarningTrack(row,message){
-    const live=timeline().find(clip=>Math.abs(clip.start-row.start)<.01&&Math.abs(clip.end-row.end)<.01);
-    if(!live)throw Error('Clip thay thế không còn ở vị trí đã xác nhận.');
-    const locate=()=>warningTrack(message,live);
-    let track=await wait(locate,'Chưa đọc được mốc bắt đầu/kết thúc của chữ',4500);
-    if(warningBounds(row,track))return;
-    const pixels=(live?.element.getBoundingClientRect().width||0)/(row.end-row.start);
-    if(!Number.isFinite(pixels)||pixels<=0||row.end-row.start<.16)throw Error('Clip quá ngắn để căn chữ an toàn.');
-    const inset=track.box?Math.max(.06,1.5/pixels):.04;
-    const start=row.start+inset,end=row.end-inset;
-    if(end<=start)throw Error('Clip quá ngắn để căn chữ ở mức thu phóng hiện tại.');
-    if(track.box){
-      const x=track.box.left+track.box.width/2,y=track.box.top+track.box.height/2;
-      await dragWarningEdge(track.element,(start-track.start)*pixels,{x,y});
-      track=locate();
-      if(!track)throw Error('Chưa đọc được vị trí chữ sau khi di chuyển.');
-    }
-    // Open room on the right first when moving a text clip forward.
-    const edges=track.end<=start?['end','start','end']:['start','end'];
-    for(const edge of edges){
-      track=locate();
-      if(!track)throw Error('Canva chưa hiển thị riêng dòng chữ cần căn.');
-      const target=edge==='start'?start:end;
-      if(Math.abs(track[edge]-target)<=.02)continue;
-      const handle=track[edge+'Handle'];
-      if(handle)await dragWarningEdge(handle,(target-track[edge])*pixels);
-      else if(track.box){
-        const x=edge==='start'?track.box.left+1:track.box.right-1,y=track.box.top+track.box.height/2;
-        const hit=document.elementFromPoint(x,y);
-        if(hit!==track.element&&!track.element.contains(hit))throw Error('Chưa thấy mép của dòng chữ để cắt.');
-        await dragWarningEdge(hit,(target-track[edge])*pixels,{x,y});
-      }
-    }
-    if(!warningBounds(row,locate()))throw Error('Chữ vượt khỏi thời lượng clip thay thế.');
-  }
-  async function settleWarning(row,message){
-    try{await fitWarningTrack(row,message);}
-    catch(error){
-      if(/đã tạm dừng|Phiên thao tác|đã ngắt|mã kết nối/i.test(error.message))throw error;
-      const track=warningTrack(message,row);
-      if(track&&!warningBounds(row,track)){
-        await click(track.element);
-        if(document.activeElement===track.element&&track.element.getAttribute('aria-selected')==='true'){
-          await guard();
-          track.element.dispatchEvent(new KeyboardEvent('keydown',{key:'Delete',code:'Delete',keyCode:46,bubbles:true}));
-          await sleep(350);
-          if(!warningNodes(message).length)throw Error('Đã gỡ dòng chữ vượt khỏi clip. Video thay thế được giữ lại.');
-        }
-      }
-      error.overlayUnverified=true;
-      throw error;
-    }
-  }
-  async function addFallbackWarning(row,message){
-    if(warningNodes(message).length){
-      await settleWarning(row,message);
-      return;
-    }
-    await selectClip(row);
-    await seekWarningScene(row);
-    await click(await wait(()=>find('Văn bản','[role="tab"]'),'Không thấy mục Văn bản',4500));
-    const heading=await wait(()=>find(/^(Thêm ô văn bản|Thêm văn bản|Thêm hộp văn bản)$/i)||find('Thêm tiêu đề'),'Không thấy nút thêm văn bản',4500);
-    await click(heading);
-    try{
-    const editor=await wait(()=>{
-      const element=document.activeElement;
-      return element?.isContentEditable&&!element.closest('[role="tablist"],[role="menu"],[role="dialog"]')?element:null;
-    },'Canva chưa mở ô nhập chữ trên khung vẽ',4500);
-    await guard();
-    const range=document.createRange(),selection=window.getSelection();
-    range.selectNodeContents(editor);
-    if(selection){selection.removeAllRanges();selection.addRange(range);}
-    const caption=message.split(':')[0];
-    const transfer=new DataTransfer();transfer.setData('text/plain',caption);
-    editor.dispatchEvent(new ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true}));
-    await sleep(350);await guard();
-    if(document.activeElement===editor&&!editor.textContent.includes(caption)&&document.execCommand)
-      document.execCommand('insertText',false,caption);
-    await wait(()=>editor.textContent.includes(caption),'Canva chưa xác nhận chữ báo tư liệu thay thế',4500);
-    key(editor,'Escape');
-    }catch(error){
-      error.overlayUnverified=true;
-      throw error;
-    }
-    await settleWarning(row,message);
   }
   async function sceneTask(task,checkpoint){
     const s=task.scene;s._usage=task.usage||{};s._lastAsset=task.last_asset||'';let asset=task.phase?.asset,title=task.phase?.title||'';
@@ -762,23 +622,10 @@
     const last=await tail();
     if(Math.abs(last.start-s.start)>.12||Math.abs(last.end-(s.start+s.duration))>.12)throw Error('Độ dài/vị trí cảnh chưa khớp lời đọc. Kiểm tra cảnh cuối timeline, không thêm lại video.');
     if(!warning)return {asset,title};
-    let overlayError='';
-    if(!warningAlreadyAttempted){
-      await checkpoint('overlay_intent',mediaPhase);
+    if(warningAlreadyAttempted&&warningNodes(warning).length){
+      return {overlay_unverified:'Dòng chữ cũ còn trên Canva. Gỡ riêng thanh chữ sai rồi bấm Tiếp tục; giữ clip thay thế.'};
     }
-    try{
-      if(!warningAlreadyAttempted)await addFallbackWarning(last,warning);
-      else if(warningNodes(warning).length)await settleWarning(last,warning);
-      else overlayError='Cần kiểm tra chữ của clip thay thế sau lần gián đoạn.';
-    }catch(error){
-      if(/đã tạm dừng|Phiên thao tác|đã ngắt|mã kết nối/i.test(error.message))throw error;
-      if(error.overlayUnverified)return {overlay_unverified:error.message};
-      overlayError=error.message;
-    }
-    const verified=await tail();
-    if(Math.abs(verified.start-s.start)>.12||Math.abs(verified.end-s.start-s.duration)>.12||await countTimeline([s.id])!==s.id)
-      throw Error('Timeline đã thay đổi khi thêm chữ lên video thay thế.');
-    return {asset,title,fallback_warning:warning,overlay_error:overlayError};
+    return {asset,title,fallback_warning:warning,warning_output:true,warning_start:last.start,warning_end:last.end};
   }
   async function rollbackScene(task,checkpoint){
     const s=task.scene;await closeMenu();
@@ -1076,7 +923,7 @@
     }
     throw Error('MP4 chưa tải xong sau 10 phút. Giữ tab để Tiếp tục kiểm tra; không tự xuất trùng.');
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,randomFallbackCard,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,warningBounds,fitWarningTrack,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,randomFallbackCard,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{
