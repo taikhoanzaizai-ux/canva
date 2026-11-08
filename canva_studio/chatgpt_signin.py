@@ -3,6 +3,7 @@ import base64
 import ctypes as ct
 import hashlib
 import json
+import os
 import re
 import secrets
 import struct
@@ -16,6 +17,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 
 from .core import atomic_json
+from . import credentials
 
 ISSUER = 'https://auth.openai.com'
 RESOURCE = 'https://api.openai.com/v1'
@@ -30,6 +32,10 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+class RefreshRejected(ValueError):
+    pass
+
+
 def api_json(url, form=None, token=None):
     headers = {'Accept': 'application/json'}
     if form:
@@ -41,6 +47,15 @@ def api_json(url, form=None, token=None):
         with build_opener(NoRedirect()).open(request, timeout=20) as response:
             value = json.loads(response.read(1024 * 1024))
     except HTTPError as error:
+        if form and form.get('grant_type') == 'refresh_token':
+            try:
+                reason = json.loads(error.read(8192)).get('error')
+                if isinstance(reason,dict):reason = reason.get('code')
+            except (OSError,ValueError,AttributeError):
+                reason = None
+            if reason in ('invalid_grant','invalid_refresh_token','token_expired','refresh_token_expired',
+                          'refresh_token_invalidated','refresh_token_reused'):
+                raise RefreshRejected('Phiên ChatGPT đã hết hiệu lực. Hãy đăng nhập lại.') from None
         if error.code == 403:
             raise ValueError('Tài khoản hoặc workspace chưa được cấp quyền dùng gói ChatGPT trong SKST.') from None
         raise ValueError(f'Đăng nhập ChatGPT chưa hoàn tất (HTTP {error.code}). Thử đăng nhập lại.') from None
@@ -154,16 +169,92 @@ class CallbackHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-@dataclass(frozen=True)
+@dataclass
 class Session:
     token: str = field(repr=False)
     expires_at: float
     models: tuple
+    refresh: str = field(default='', repr=False)
+    client_id: str = ''
+    account: str = ''
+    folder: object = field(default=None, repr=False)
 
     def access_token(self):
         if self.expires_at <= time.time() + 5:
-            raise ValueError('Phiên ChatGPT đã hết hạn. Chọn Sign in with ChatGPT để kết nối lại.')
+            resumed = restore_session(self.folder) if self.folder else None
+            if resumed is None:
+                raise ValueError('Phiên ChatGPT đã hết hạn. Chọn Sign in with ChatGPT để kết nối lại.')
+            self.token, self.expires_at, self.refresh = resumed.token, resumed.expires_at, resumed.refresh
         return self.token
+
+
+def remember_session(folder, session):
+    if not session.refresh:
+        return False
+    credentials.save(folder/'chatgpt-session.json', {
+        'token': session.token, 'expires_at': session.expires_at, 'models': session.models,
+        'refresh': session.refresh, 'client_id': session.client_id, 'account': session.account,
+    })
+    session.folder = folder
+    return True
+
+
+def forget_session(folder):
+    credentials.save(folder/'chatgpt-session.json', {})
+
+
+def restore_session(folder, cancelled=None):
+    path = folder/'chatgpt-session.json'
+    if not path.is_file():
+        return None
+    # Windows releases the lock on process exit, even after an interrupted update.
+    with (folder/'chatgpt-session.lock').open('a+b') as lock:
+        if os.name == 'nt':
+            import msvcrt
+            lock.seek(0)
+            try:
+                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                raise ValueError('Một cửa sổ SKST khác đang khôi phục ChatGPT. Thử lại sau.') from None
+        saved = credentials.load(path)
+        if not saved or (cancelled and cancelled.is_set()):
+            return None
+        try:
+            session = Session(**saved, folder=folder)
+            if not CLIENT_ID.fullmatch(session.client_id) or not session.refresh or not session.models:
+                raise ValueError
+            if session.token and session.expires_at > time.time() + 5:
+                return session
+        except (TypeError, ValueError):
+            raise ValueError('Không đọc được phiên ChatGPT đã lưu. Hãy đăng nhập lại.') from None
+        try:
+            token = api_json(ISSUER + '/api/accounts/oauth/token', form={
+                'grant_type': 'refresh_token', 'client_id': session.client_id,
+                'refresh_token': session.refresh, 'resource': RESOURCE,
+            })
+        except RefreshRejected:
+            forget_session(folder)
+            raise
+        access, expires = token_access(token)
+        refresh = token.get('refresh_token')
+        if not isinstance(refresh, str) or not refresh:
+            raise ValueError('ChatGPT chưa trả mã gia hạn mới. Hãy đăng nhập lại.')
+        if cancelled and cancelled.is_set():
+            return None
+        session.token, session.expires_at, session.refresh = access, expires, refresh
+        remember_session(folder, session)
+        return session
+
+
+def token_access(token):
+    scopes = token.get('scope')
+    access = token.get('access_token')
+    expires = token.get('expires_in')
+    if (not isinstance(scopes, str) or not {USAGE_SCOPE, 'resource.invoke'}.issubset(scopes.split())
+            or not isinstance(access, str) or not access or str(token.get('token_type','')).lower() != 'bearer'
+            or type(expires) is not int or expires <= 5):
+        raise ValueError('Chưa cấp quyền dùng lượt AI theo gói ChatGPT. Kiểm tra gói và quyền đã chọn.')
+    return access, time.time() + expires
 
 
 def sign_in(folder, cancelled):
@@ -220,20 +311,16 @@ def sign_in(folder, cancelled):
         raise ValueError('Tài khoản ChatGPT không khớp bản đăng ký SKST.')
     if cancelled.is_set():
         raise ValueError('Đăng nhập ChatGPT đã hủy.')
-    # Keep registration metadata. Bearer tokens stay in memory for this session.
+    # Keep registration metadata separate from protected credentials.
     atomic_json(registration_path, {'host': str(host), 'client_id': client_id, 'subject': claims['sub']})
-    scopes = token.get('scope')
-    access = token.get('access_token')
-    expires = token.get('expires_in')
-    if (not isinstance(scopes, str) or not {USAGE_SCOPE, 'resource.invoke'}.issubset(scopes.split())
-            or not isinstance(access, str) or not access or token.get('token_type', '').lower() != 'bearer'
-            or type(expires) is not int or expires <= 5):
-        raise ValueError('Chưa cấp quyền dùng lượt AI theo gói ChatGPT. Kiểm tra gói và quyền đã chọn.')
-    expires_at = time.time() + expires
+    access, expires_at = token_access(token)
     catalog = api_json(RESOURCE + '/models', token=access).get('models')
     models = tuple((m['slug'], m['display_name']) for m in (catalog if isinstance(catalog,list) else [])
                    if isinstance(m,dict) and m.get('visibility')=='list' and isinstance(m.get('slug'),str)
                    and m['slug'] and isinstance(m.get('display_name'),str) and m['display_name'])
     if not models:
         raise ValueError('Tài khoản ChatGPT này chưa có model khả dụng cho SKST.')
-    return Session(access, expires_at, models)
+    refresh = token.get('refresh_token')
+    account = claims.get('email') or claims.get('name') or ''
+    return Session(access, expires_at, models, refresh if isinstance(refresh,str) else '', client_id,
+                   account if isinstance(account,str) else '')
