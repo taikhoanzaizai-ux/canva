@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.14.2
+
+- Chấp nhận tư liệu Canva gần nghĩa ngay trong kết quả tìm kiếm. Ví dụ nước ép cam có thể dùng quả cam, xơ vữa có thể dùng mạch máu hoặc hồng cầu, elastin có thể dùng mô phỏng sợi đàn hồi.
+- Cho phép lặp từ khóa giữa các cảnh. Ưu tiên video rồi ảnh chưa dùng, phân biệt tư liệu theo mã Canva và chỉ dùng lại khi thiếu lựa chọn phù hợp.
+- Đọc cả thời lượng hiển thị dạng phút:giây trên thẻ video.
+
 ## 0.14.1
 
 - Trước khi chèn thẻ chữ, tìm thêm tư liệu theo đối tượng chính và các tên gọi Canva thường dùng. Ví dụ độ cứng thành mạch có thể dùng mô phỏng động mạch, lòng mạch hoặc xơ vữa.
