@@ -73,3 +73,29 @@ class BatchTests(unittest.TestCase):
                 self.assertEqual(engine.state['download_verified']['path'],'part-2.mp4')
                 self.assertEqual(engine.state['mode'],'merging')
                 worker.return_value.start.assert_called_once()
+
+    def test_deferred_final_scene_is_rechecked_before_any_export(self):
+        with tempfile.TemporaryDirectory() as d:
+            engine=Engine(d);parts=split_batches(self.plan(51))
+            for p in parts:p['voice']='part.wav'
+            first='https://www.canva.com/design/one/token/edit'
+            last='https://www.canva.com/design/two/token/edit'
+            engine.configure(dict(**parts[0],parts=parts),first,'part.wav')
+            engine.state.update(mode='attention',done=list(range(1,49)),voice_done=True,voice_name='voice.wav')
+            with self.assertRaises(ValueError):engine.defer_final_scene()
+            engine.state.update(done=list(range(1,50)),manual_edit_scene=50)
+            engine.defer_final_scene();engine.start()
+            client=dict(client='A',url=first,extension_version=MIN_EXTENSION_VERSION)
+            self.assertEqual(engine.next_task(client)['task']['kind'],'next_design')
+            engine.result(dict(id='next_design',client='A',new_target=last))
+            self.assertTrue(engine.state['history'][0]['audit_pending'])
+            self.assertNotIn('manual_edit_scene',engine.state)
+            engine.state.update(voice_done=True,done=[1],audit_done=True)
+            self.assertEqual(engine.next_task({**client,'url':last})['export_target'],first)
+            task=engine.next_task(client)['task']
+            self.assertEqual(task['id'],'audit_history')
+            self.assertTrue(task['require_last_media'])
+            result=dict(id='audit_history',client='A',verified_duration=parts[0]['duration'],verified_count=50)
+            with self.assertRaises(ValueError):engine.result({**result,'verified_count':49})
+            self.assertEqual(engine.result(result)['export_target'],last)
+            self.assertEqual(engine.next_task({**client,'url':last})['task']['kind'],'export')
