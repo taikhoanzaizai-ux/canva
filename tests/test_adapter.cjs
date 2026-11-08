@@ -341,6 +341,26 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
  assert(enters>0);assert.equal(applyAll,0);
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
+(async()=>{
+ let end=5,open=false,value='5.0';
+ class Input{get value(){return value;}set value(v){value=v;}get offsetWidth(){return open?10:0;}
+  getClientRects(){return open?[{}]:[];}getAttribute(k){return k==='placeholder'?'--':null;}focus(){}dispatchEvent(){}}
+ const field=new Input();
+ const element=(name,handlers={})=>({offsetWidth:10,getAttribute:k=>k==='aria-label'?name:null,scrollIntoView(){},...handlers});
+ const timing=element('5.0 giây, sửa thời gian',{click:()=>{open=!open},focus:()=>{end=Number(value)}});
+ const plus=element('Thêm nội dung đa phương tiện/cảnh trống');
+ const slider=(name,read)=>({getAttribute:k=>k==='aria-label'?name:k==='aria-valuenow'?String(read()*1e6):null});
+ const sliders=[slider('biên bắt đầu',()=>0),slider('biên kết thúc',()=>end)];
+ const row=element('scene',{click(){},parentElement:{querySelector:()=>sliders[0],querySelectorAll:()=>sliders},
+  querySelector:s=>s==='img'?{src:'card.png'}:null,querySelectorAll:()=>[]});
+ const audio=element('voice.wav đoạn âm thanh',{querySelectorAll:()=>[slider('biên bắt đầu',()=>0),slider('biên kết thúc',()=>3.36)]});
+ const document={querySelectorAll:s=>s==='[data-role="timeline-scene"]'?[row]:s==='input'?[field]:s.includes('[role="menu"]')?[]:[timing,plus,audio]};
+ const env={globalThis:{},document,HTMLInputElement:Input,HTMLTextAreaElement:class{},Event:class{},getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f()};
+ vm.runInNewContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const result=await env.globalThis.SKSTAdapter.run({kind:'manual_review',fit_final:true,scene:{id:1},allowed_counts:[1],voice_name:'voice.wav',voice_duration:3.36},async()=>{});
+ assert.equal(result.verified_end,3.4,'Fit the final 5-second card to the verified 3.36-second voice');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
 // Canva only mounts a window of a long timeline. A manual confirmation at
 // scene 50 and the final audit must read the same complete picture track.
 (async()=>{
