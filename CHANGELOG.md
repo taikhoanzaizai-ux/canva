@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.21
+
+- Các cảnh chưa có lời nhận diện dùng tư liệu theo ngữ cảnh hoặc cảnh nối trung tính. Giữ nguyên voice và mốc thời gian.
+- Nếu clip đang chờ căn chữ đã bị gỡ, kiểm tra timeline trước khi tìm lại. Tìm thêm nhà kho cho từ khóa ngắn “kho”.
+
 ## 0.14.20
 
 - Khi xác nhận cảnh đã tự sửa, nhận diện video của cảnh kế tiếp đã chèn và đang chờ căn chữ. Giữ clip đó trên timeline và tiếp tục từ bước còn dở.
