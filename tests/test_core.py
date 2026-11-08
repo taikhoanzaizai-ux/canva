@@ -325,6 +325,19 @@ class EngineTests(unittest.TestCase):
         resumed.start();task=resumed.next_task(self.client)['task']
         self.assertIn('error_card',task['scene']);self.assertEqual(task['phase'],{})
         self.assertEqual(resumed.state['done'],[])
+    def test_continue_reconciles_interrupted_voice(self):
+        for stage in ('upload_intent','voice_insert_intent'):
+            with self.subTest(stage=stage):
+                self.e.start()
+                self.e.next_task(self.client)
+                self.e.check(dict(id='voice',client='A',stage=stage,asset='SKST_voice_example.wav'))
+                self.e.result(dict(id='voice',client='A',error='Canva chưa hiện voice'))
+                self.assertIn('Voice phần 1',self.e.state['message'])
+                resumed=Engine(self.tmp.name)
+                resumed.start()
+                task=resumed.next_task(self.client)['task']
+                self.assertEqual((task['kind'],task['duration'],task['phase']['stage']),('voice',4,stage))
+                self.assertFalse(resumed.state['voice_done'])
     def test_only_target_and_single_client(self):
         self.assertIsNone(self.e.next_task(dict(client='X',url='https://wrong.test'))['task'])
         self.assertEqual(self.e.next_task(self.client)['task']['kind'],'voice')
