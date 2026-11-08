@@ -6,7 +6,7 @@ from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.5'
+MIN_EXTENSION_VERSION='0.14.6'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
