@@ -793,18 +793,32 @@
       const r=await chrome.runtime.sendMessage({type:'export_download',action});
       if(!r||r.error)throw Error(r?.error||'Chưa xác nhận được trạng thái tải MP4');return r;
     };
-    if(task.phase?.stage==='export_intent'){
+    const confirm=()=>{
+      const buttons=[...document.querySelectorAll('button,[role="button"]')];
+      return buttons.find(button=>{
+        if(!visible(button)||label(button)!=='Tải xuống'||button.disabled||button.getAttribute('aria-disabled')==='true')return false;
+        for(let panel=button.parentElement,i=0;panel&&i<7&&panel!==document.body;i++,panel=panel.parentElement){
+          if(panel.textContent.includes('Video MP4')&&/Loại tệp|Chất lượng/.test(panel.textContent))return true;
+        }
+        return false;
+      });
+    };
+    if(['export_intent','export_clicked'].includes(task.phase?.stage)){
       const prior=await request('status');
       if(prior.complete)return {download_complete:true,download_id:prior.id,download_path:prior.filename};
-      if(!prior.tracking)throw Error('Không có phiên tải đã lưu; chưa xuất lại để tránh tệp trùng.');
+      if(prior.id===undefined&&task.phase.stage==='export_intent'&&confirm()){
+        if(!prior.tracking)await request('arm');
+        await click(confirm());
+        await checkpoint('export_clicked');
+      }else if(!prior.tracking)throw Error('Không có phiên tải đã lưu; chưa xuất lại để tránh tệp trùng.');
     }else{
-    await request('arm');
-    await closeMenu();await click(await wait(()=>find('Chia sẻ','button,[role="button"],[role="menuitem"]'),'Không thấy Chia sẻ'));
-    await click(await wait(()=>find('Tải xuống'),'Không thấy Tải xuống'));
-    const mp4=()=>[...document.querySelectorAll('body')][0].textContent.includes('Video MP4');
-    if(!mp4())throw Error('Chọn định dạng Video MP4 trong bảng tải xuống, rồi tiếp tục.');
-    await checkpoint('export_intent');
-    await click(await wait(()=>[...document.querySelectorAll('button')].filter(e=>visible(e)&&label(e)==='Tải xuống'&&!e.disabled).at(-1),'Nút tải xuống chưa sẵn sàng'));
+      if(!confirm()){
+        await closeMenu();await click(await wait(()=>find('Chia sẻ','button,[role="button"],[role="menuitem"]'),'Không thấy Chia sẻ'));
+        await click(await wait(()=>find('Tải xuống'),'Không thấy Tải xuống'));
+      }
+      const button=await wait(confirm,'Chưa thấy nút xác nhận tải Video MP4 trong Canva');
+      await request('arm');await checkpoint('export_intent');
+      await click(button);await checkpoint('export_clicked');
     }
     for(let i=0;i<600;i++){
       await guard();const r=await request('status');
