@@ -33,11 +33,18 @@
     close.addEventListener('click',event=>{event.stopPropagation();dismissedWarning=message;panel.remove();});
     panel.append(text,close);document.body.appendChild(panel);
   }
+  function openExportTarget(target){
+    const url=new URL(target);
+    if(url.origin!=='https://www.canva.com'||!/^\/design\/[^/]+\/[^/]+\/edit\/?$/.test(url.pathname))throw Error('Link phần cần xuất không hợp lệ.');
+    window.location.assign(url.href);
+  }
   async function cycle(){
     if(busy||!active())return;busy=true;let task,advance=false;
     try{
       const blank_video=!!document.querySelector('button[aria-label="Thêm nội dung đa phương tiện/cảnh trống"]')&&!document.querySelector('[data-role="timeline-scene"] img')&&![...document.querySelectorAll('button,[role="button"]')].some(e=>(e.getAttribute('aria-label')||'').includes('đoạn âm thanh'));
-      const result=await api('next',{blank_video});showStatus(result);task=result.task;if(!task)return;
+      const result=await api('next',{blank_video});showStatus(result);
+      if(result.export_target){openExportTarget(result.export_target);return;}
+      task=result.task;if(!task)return;
       const check=async(stage,extra={})=>{
         const state=await api('checkpoint',{id:task.id,review_token:task.review_token,...(stage?{stage,...extra}:{})});
         if(!state.continue_)throw Error('Đã tạm dừng theo yêu cầu.');
@@ -54,7 +61,10 @@
         output=await chrome.runtime.sendMessage({type:'open_next',body:{id:task.id,client,phase:task.phase,create_url:output.create_url}});
         if(!output||output.error)throw Error(output?.error||'Chưa mở được thiết kế tiếp theo.');
       }
-      await api('result',{id:task.id,...output});
+      const outcome=await api('result',{id:task.id,...output});
+      if(outcome.export_target){
+        openExportTarget(outcome.export_target);return;
+      }
       advance=true;
     }catch(e){
       if(task){
