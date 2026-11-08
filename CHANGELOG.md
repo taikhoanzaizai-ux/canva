@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.15
+
+- Dựng hết các phần voice trước khi tải MP4. Sau phần cuối, mở lại các thiết kế còn thiếu tệp xuất rồi ghép video hoàn chỉnh.
+- Dự án đang dừng ở tải MP4 giữa chừng có thể chuyển sang phần dựng tiếp theo và giữ những tệp đã tải.
+
 ## 0.14.14
 
 - Ghi nhớ lựa chọn AI, model và đường dẫn Antigravity. Khôi phục phiên ChatGPT đã lưu và tự gia hạn khi cần.
