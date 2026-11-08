@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SKST Canva Studio — Kết nối dựng video",
-  "version": "0.14.2",
+  "version": "0.14.3",
   "description": "Dựng cảnh từ ứng dụng SKST trong thiết kế Canva do bạn chọn. Chỉ làm việc trên Canva và máy của bạn.",
   "permissions": ["storage", "scripting"],
   "optional_permissions": ["downloads"],
