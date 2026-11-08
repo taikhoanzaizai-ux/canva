@@ -416,7 +416,7 @@
     return null;
   };
   const photoDuration=duration=>Math.max(.1,Math.round((duration+Number.EPSILON)*10)/10);
-  const timePhoto=async(duration)=>{
+  const timePhoto=async(duration,allowExisting=false)=>{
     const before=timeline().at(-1);
     if(!before||!Number.isFinite(duration)||duration<=0)throw Error('Không xác định được cảnh ảnh/thời lượng cần đặt.');
     const expected=before.start+duration;
@@ -451,6 +451,7 @@
         await sleep(250);
       }
     }
+    if(allowExisting&&!visible(durationInput()))return;
     await wait(applied,'Mốc bắt đầu/kết thúc ảnh chưa khớp sau khi lưu thời lượng',8000);
   };
   const trim=async(duration)=>{
@@ -616,11 +617,18 @@
     const before=await tail();
     if(!before.element||Math.abs(before.start-s.start)>.12)throw Error('Thẻ chữ không nằm đúng mốc voice');
     await selectClip(before);await ensureBackground();
-    await timePhoto(s.start+s.duration-before.start);
+    await timePhoto(s.start+s.duration-before.start,true);
     const last=await tail();
-    if(Math.abs(last.end-s.start-s.duration)>.12)throw Error('Thẻ lỗi chưa đủ thời lượng voice');
+    let cardFrames;
+    if(Math.abs(last.end-s.start-s.duration)>.12){
+      const rows=await readTimeline(),card=rows.at(-1);
+      if(rows.length!==s.id||!card?.image||Math.abs(card.start-s.start)>.12||
+         !Number.isFinite(card.end)||card.end<=card.start)throw Error('Chưa xác nhận được vị trí thẻ chữ đã chèn.');
+      cardFrames=rows.map(({start,end})=>({start,end}));
+    }
     await checkpoint('trimmed',cardPhase);
-    return {asset:task.fallback_id||(isError?'error:'+s.id:undefined),title:isError?'LỖI CẢNH '+task.id:s.title_text||s.text};
+    return {asset:task.fallback_id||(isError?'error:'+s.id:undefined),title:isError?'LỖI CẢNH '+task.id:s.title_text||s.text,
+            card_frames:cardFrames};
   }
   function errorPlacement(count,last,scene){
     if(scene.id===1&&count===1&&!last.image)return 'append';
