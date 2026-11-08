@@ -4,10 +4,10 @@ from urllib.parse import urlsplit,parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from .editorial import refine_queries,repair_scene_texts
-from .downloads import verify_download
+from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.11'
+MIN_EXTENSION_VERSION='0.14.13'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -82,7 +82,7 @@ class Engine:
     def configure(self, plan, target, voice,allow_empty=False):
         with self.lock:
             name=project_title(plan.get('project_name',''))
-            if self.state['mode']=='running':raise ValueError('Hãy tạm dừng trước khi đổi dự án.')
+            if self.state['mode'] in ('running','merging'):raise ValueError('Hãy chờ ghép xong hoặc tạm dừng dựng trước khi đổi dự án.')
             if not valid_canva(target) and not (allow_empty and target==''):raise ValueError('Dán đường dẫn chỉnh sửa Canva hợp lệ.')
             self.state=dict(mode='ready',message='Đã sẵn sàng. Mở thiết kế video ngang trống trong Canva.',scenes=plan['scenes'],done=[],phase={},used=[],usage={},last_asset='',target=target,voice=str(voice),voice_done=False,export_done=False)
             self.state['parts']=plan.get('parts',[]);self.state['part_index']=0;self.state['history']=[];self.state['audit_done']=False
@@ -129,12 +129,13 @@ class Engine:
         with self.lock:
             if self.state.get('bootstrap_nonce') and not self.state['target'] and self.state['mode']=='attention':
                 self.wait_for_created_tab()
-            return dict(ok=True,target=self.state['target'],mode=self.state['mode'],**self.editor_status())
+            return dict(ok=True,target=self.canva_target(),mode=self.state['mode'],**self.editor_status())
 
     def pause(self):
         with self.lock:self.state.pop('extension_resume_mode',None);self.state['mode']='paused';self.log('Đã tạm dừng. Thao tác đang thực hiện sẽ dừng ở điểm kiểm tra tiếp theo.')
     def start(self):
         with self.lock:
+            if self.state['mode']=='merging':return
             if not self.state['scenes']:raise ValueError('Chưa có danh sách cảnh.')
             if len(self.state['scenes'])>50:raise ValueError('Bản thử hỗ trợ tối đa 50 cảnh mỗi dự án. Hãy chọn đoạn ngắn hơn.')
             if self.state.get('manual_edit_scene'):
@@ -153,13 +154,60 @@ class Engine:
     def connection_status(self,target=None):
         with self.lock:
             now=time.time();fresh=[p for p in self.peers.values() if now-p.get('seen',0)<12]
-            url=canonical_url(target or self.state['target'])
+            url=canonical_url(target or self.canva_target())
             matching=[p for p in fresh if not url or canonical_url(p.get('url'))==url]
             ready=next((p for p in sorted(matching,key=lambda p:p['seen'],reverse=True) if compatible_extension(p.get('extension_version'))),None)
             if ready:return dict(ready=True,code='ready',message='Đã kết nối tab Canva • '+ready.get('title',''),peer=ready)
             if matching:return dict(ready=False,code='outdated',message='Tiện ích đang cũ. Bấm Cập nhật tiện ích để nạp SKST '+MIN_EXTENSION_VERSION+' rồi kết nối lại.')
             if fresh:return dict(ready=False,code='wrong_design',message='Tiện ích đang ở thiết kế khác. Mở đúng link trong ứng dụng rồi bấm Kết nối Canva trên tiện ích.')
             return dict(ready=False,code='disconnected',message='Chưa có tín hiệu từ tab Canva. Mở tiện ích SKST trên tab Canva, dán mã của phiên này và bấm Kết nối Canva.')
+
+    def canva_target(self):
+        index=self.state.get('export_history_index')
+        return self.state['history'][index]['target'] if index is not None else self.state['target']
+
+    def export_folder(self):
+        if not self.state.get('export_dir'):
+            self.state['export_dir']=str((self.folder/'Exports'/secrets.token_hex(8)).resolve())
+        return self.state['export_dir']
+
+    def export_tool(self):
+        from .storage import application_dir
+        try:settings=json.loads((self.folder/'settings.json').read_text(encoding='utf8'))
+        except (OSError,ValueError):settings={}
+        return settings.get('ffmpeg') or application_dir()/'CongCu/ffmpeg.exe'
+
+    def finish_exports(self):
+        state=self.state
+        if state.get('final_video') and Path(state['final_video']).is_file():
+            state['mode']='complete'
+            return None,'Đã ghép video hoàn chỉnh: '+state['final_video']
+        history=state.get('history',[])
+        missing=next((i for i,p in enumerate(history) if not p.get('download_verified')),None)
+        if missing is not None:
+            state['export_history_index']=missing
+            self.browser={}
+            return self.canva_target(),f'Đang mở lại phần {missing+1} để tải MP4.'
+        state.pop('export_history_index',None)
+        if not history:
+            state['mode']='complete'
+            return None,'Đã xác nhận MP4 tải xuống hoàn tất.'
+        parts=[*history,{**state['parts'][state['part_index']],'download_verified':state['download_verified']}]
+        folder=self.export_folder()
+        state['mode']='merging'
+        def work():
+            try:output=merge_parts(parts,state['original_voice'],self.export_tool(),folder)
+            except (OSError,ValueError,KeyError) as exc:
+                with self.lock:
+                    if self.state is state:
+                        state['mode']='attention';self.log(str(exc))
+                return
+            with self.lock:
+                if self.state is state:
+                    state.update(mode='complete',final_video=output)
+                    self.log('Đã ghép video hoàn chỉnh: '+output)
+        threading.Thread(target=work,daemon=True).start()
+        return None,'Đang ghép các phần và voice gốc…'
     def watchdog(self,now=None):
         with self.lock:
             now=time.time() if now is None else now
@@ -210,7 +258,7 @@ class Engine:
             marker=parse_qs(urlsplit(body.get('url','')).fragment).get('skst_start',[''])[0]
             pending=self.state.get('extension_resume_mode')
             opening=self.state['mode'] in ('opening','opening_resume')
-            exact=(bool(marker) and marker==self.state.get('bootstrap_nonce')) if (self.state['mode']=='opening' or pending=='opening') else bool(self.state['target']) and canonical_url(body.get('url'))==canonical_url(self.state['target'])
+            exact=(bool(marker) and marker==self.state.get('bootstrap_nonce')) if (self.state['mode']=='opening' or pending=='opening') else bool(self.canva_target()) and canonical_url(body.get('url'))==canonical_url(self.canva_target())
             if opening and exact and not compatible_extension(body.get('extension_version')):
                 self.state['extension_resume_mode']=self.state['mode']
                 self.state['mode']='attention'
@@ -226,7 +274,7 @@ class Engine:
                 if not body.get('blank_video') or not valid_canva(canonical_url(body.get('url'))):return dict(task=None,mode='waiting_empty_video')
                 self.state.update(target=canonical_url(body['url']),mode='running',bootstrap_nonce='')
                 self.last_activity=now;self.log('Đã nhận Video khổ ngang mới. Bắt đầu tải voice và dựng cảnh.')
-            if canonical_url(body.get('url'))!=canonical_url(self.state['target']):return dict(task=None,mode='wrong_design')
+            if canonical_url(body.get('url'))!=canonical_url(self.canva_target()):return dict(task=None,mode='wrong_design')
             if not compatible_extension(body.get('extension_version')):
                 message='Cần cài tiện ích SKST '+MIN_EXTENSION_VERSION+' từ thư mục TienIch_Canva cạnh ứng dụng, rồi kết nối lại trên tab Canva.'
                 if self.state['mode']=='running' and self.state['message']!=message:self.log(message)
@@ -241,7 +289,8 @@ class Engine:
             if self.running and self.running['client']!=body.get('client'):return dict(task=None,mode='busy')
             title=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
             manual=self.state.get('manual_review')
-            if manual:
+            if self.state.get('export_history_index') is not None:task=dict(id='export',kind='export')
+            elif manual:
                 scene=next(s for s in self.state['scenes'] if s['id']==manual['scene_id'])
                 counts={max([scene['id'],*self.state['done']])}
                 phase=self.state.get('phase',{})
@@ -263,9 +312,12 @@ class Engine:
                         with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
                         self.state['voice_name']=name;self.save()
                     task=dict(id='audit',kind='audit',voice_name=name,count=len(self.state['scenes']),duration=round(self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'],3))
-                elif self.state.get('part_index',0)+1<len(self.state.get('parts',[])):task=dict(id='next_design',kind='next_design')
                 elif not self.state['export_done']:task=dict(id='export',kind='export')
-                else:return dict(task=None,mode='complete')
+                elif self.state.get('part_index',0)+1<len(self.state.get('parts',[])):task=dict(id='next_design',kind='next_design')
+                else:
+                    target,message=self.finish_exports()
+                    self.log(message)
+                    return dict(task=None,mode=self.state['mode'],export_target=target)
             task['phase']=self.state['phase'] if self.state['phase'].get('id')==task['id'] else {}
             self.running=dict(id=task['id'],client=body.get('client'))
             self.last_activity=now
@@ -357,6 +409,7 @@ class Engine:
                 self.log('Đã đặt tên Canva: '+expected)
                 # Renaming must not erase the checkpoint of an interrupted scene.
                 return dict(ok=True)
+            export_target=None
             if key=='audit':
                 scenes=self.state['scenes'];duration=round(scenes[-1]['start']+scenes[-1]['duration'],3)
                 if len(self.state['done'])!=len(scenes) or body.get('verified_count')!=len(scenes) or abs(float(body.get('verified_duration',-1))-duration)>.12:raise ValueError('Chưa xác nhận đủ cảnh và voice phần hiện tại.')
@@ -367,7 +420,8 @@ class Engine:
                 if not self.state.get('audit_done'):raise ValueError('Chưa kiểm tra xong phần hiện tại.')
                 index=self.state.get('part_index',0)+1
                 if index>=len(self.state.get('parts',[])):raise ValueError('Không còn voice tiếp theo.')
-                self.state.setdefault('history',[]).append(dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration']))
+                if not self.state['export_done']:raise ValueError('Chưa tải MP4 phần hiện tại.')
+                self.state.setdefault('history',[]).append(dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration'],download_verified=self.state.pop('download_verified')))
                 part=self.state['parts'][index]
                 refine_queries(part['scenes'])
                 self.state.update(part_index=index,target=target,voice=part['voice'],voice_name='',named_title='',scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
@@ -378,12 +432,16 @@ class Engine:
                 self.state['voice_done']=True;self.state['voice_name']=body.get('voice_name','');msg='Đã đặt voice trên timeline.'
             elif key=='export':
                 if body.get('download_complete') is not True or type(body.get('download_id')) is not int or body['download_id']<0:raise ValueError('Chưa xác nhận MP4 tải xuống hoàn tất.')
-                from .storage import application_dir
-                try:settings=json.loads((self.folder/'settings.json').read_text(encoding='utf8'))
-                except (OSError,ValueError):settings={}
-                expected=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration']
-                self.state['download_verified']=verify_download(body.get('download_path',''),settings.get('ffmpeg') or application_dir()/'CongCu/ffmpeg.exe',expected)
-                self.state['export_done']=True;self.state['mode']='complete';self.state['download_id']=body['download_id'];msg='Đã xác nhận MP4 tải xuống hoàn tất.'
+                history_index=self.state.get('export_history_index')
+                index=self.state.get('part_index',0) if history_index is None else history_index
+                parts=self.state.get('parts',[])
+                expected=parts[index]['duration'] if parts else self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration']
+                download=verify_download(body.get('download_path',''),self.export_tool(),expected)
+                if len(parts)>1:download=save_part(download,self.export_folder(),index)
+                if history_index is None:self.state.update(download_verified=download,export_done=True,download_id=body['download_id'])
+                else:self.state['history'][index]['download_verified']=download
+                if self.state.get('part_index',0)+1<len(parts):msg=f'Đã lưu MP4 phần {index+1}. Đang chuẩn bị phần tiếp theo.'
+                else:export_target,msg=self.finish_exports()
             else:
                 i=int(key)
                 completed=next((s for s in self.state['scenes'] if s['id']==i),{})
@@ -409,7 +467,7 @@ class Engine:
                     if asset not in self.state['used']:self.state['used'].append(asset)
                 msg=f'Đã dựng cảnh {i}/{len(self.state["scenes"])}: '+str(body.get('title',''))
                 if frames is not None:msg+=' • Đã giữ thời lượng thẻ và căn lại các cảnh tiếp theo.'
-            self.state['phase']={};self.running=None;self.log(msg);return dict(ok=True,handoff=key=='next_design',target=self.state['target'])
+            self.state['phase']={};self.running=None;self.log(msg);return dict(ok=True,handoff=key=='next_design',target=self.state['target'],export_target=export_target)
 
 def serve(engine,port=8766):
     class Handler(BaseHTTPRequestHandler):
@@ -469,7 +527,7 @@ def serve(engine,port=8766):
                         if engine.state['mode']=='running' or engine.running:raise ValueError('Hãy chờ tác vụ kết thúc hoặc tạm dừng trước khi cập nhật tiện ích.')
                         v=dict(manifest=update_manifest(application_dir(),body.get('extension_id')),mode=engine.state['mode'],active_task=False)
                 elif self.path=='/prepare_editor':v=engine.prepare_editor()
-                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],active_task=bool(engine.running),message=engine.state['message'],target=engine.state['target'],connection=engine.connection_status(),**engine.editor_status())
+                elif self.path=='/ping':v=dict(ok=True,version=VERSION,mode=engine.state['mode'],active_task=bool(engine.running),message=engine.state['message'],target=engine.canva_target(),connection=engine.connection_status(),**engine.editor_status())
                 else:return self.send(404,dict(error='Không tìm thấy'))
                 self.send(200,v)
             except Exception as exc:self.send(400,dict(error=str(exc)))
