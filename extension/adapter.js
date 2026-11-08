@@ -751,6 +751,7 @@
     await closeMenu();await tail();
     let rows=await readTimeline();
     if(rows.length!==task.count)throw Error(`Canva có ${rows.length} cảnh, cần ${task.count} cảnh. Không chuyển phần khi số cảnh chưa khớp.`);
+    if(task.require_last_media&&!rows.at(-1)?.image)throw Error('Cảnh cuối của phần này chưa có hình. Bổ sung ảnh hoặc video vào đúng cảnh rồi bấm Tiếp tục.');
     const voice=verifyVoice(task.voice_name,task.duration);
     rows=await fitFinalScene(rows,voice.verified_voice_end);
     const last=rows.at(-1);
