@@ -34,6 +34,45 @@ assert(adapter.audioOnTimeline('test.mp3',{querySelectorAll:selector=>{
 console.log('Adapter ranking and Canva upload-input regression checks passed. Live full timeline still requires browser validation.');
 
 (async()=>{
+ const name='SKST_voice_25ef76ab16becb2b.wav';
+ let onTimeline=false,inserted=0;
+ const node=(attrs,extra={})=>({
+   offsetWidth:10,getAttribute:key=>attrs[key]||null,querySelector:()=>null,closest:()=>null,
+   scrollIntoView(){},click(){assert.fail('Unexpected click');},...extra
+ });
+ const uploads=node({'aria-label':'Tải lên','aria-selected':'true'});
+ const tab=node({'aria-label':'Âm thanh','aria-selected':'true','aria-controls':'audio-library'});
+ const plus=node({'aria-label':'Thêm nội dung đa phương tiện/cảnh trống'});
+ const preview=node({'aria-label':'Phát '+name});
+ const other=node({'aria-label':'Thêm SKST_voice_aabbccddeeff1122.wav'});
+ const card=node({'aria-label':'Thêm âm thanh',title:name},{
+   textContent:'SKST_voice_25ef76ab16be…',click(){onTimeline=true;inserted++;}
+ });
+ const slider=(label,time)=>node({'aria-label':label,'aria-valuenow':String(time*1e6)});
+ const audio=node({'aria-label':name+' đoạn âm thanh'},{
+   querySelectorAll:()=>[slider('biên bắt đầu',0),slider('biên kết thúc',232)]
+ });
+ const panel={querySelectorAll:()=>[preview,other,card]};
+ const document={
+   getElementById:id=>id==='audio-library'?panel:null,
+   querySelectorAll:selector=>{
+     if(selector==='input[type="file"]')assert.fail('Do not upload an existing WAV again');
+     if(selector==='[data-role="timeline-scene"]')return [];
+     return [uploads,tab,plus,...(onTimeline?[audio]:[])];
+   }
+ };
+ const env={globalThis:{},document,getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f()};
+ vm.runInNewContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const stages=[];
+ const run=stage=>env.globalThis.SKSTAdapter.run({kind:'voice',duration:232,phase:{stage}},
+   async stage=>{if(stage)stages.push(stage);},async()=>({name}));
+ assert.equal((await run('upload_intent')).voice_name,name);
+ assert.deepEqual(stages,['voice_insert_intent']);
+ assert.equal((await run('voice_insert_intent')).voice_name,name);
+ assert.equal(inserted,1,'A resumed voice already on the timeline must never be inserted twice');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
+(async()=>{
  let clicked=0;
  const parent={textContent:'Loại tệp Video MP4 Chất lượng'};
  const button={offsetWidth:10,parentElement:parent,getAttribute:key=>key==='aria-label'?'Tải xuống':null,
