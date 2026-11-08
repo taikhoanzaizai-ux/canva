@@ -42,17 +42,37 @@
   function uploadedVideoTab(root=document){
     return [...root.querySelectorAll('[role="tab"],button,[role="button"]')].find(e=>visible(e)&&label(e)==='Video'&&!e.closest('[role="tablist"][aria-label="Bảng bên"]'))||null;
   }
-  async function ensureUploadPanel(){
+  async function ensureUploadPanel(requireInput=true){
     const tab=await wait(()=>find('Tải lên','[role="tab"]'),'Không thấy mục Tải lên');
     // Clicking the selected sidebar tab collapses Canva's upload panel.
     if(tab.getAttribute('aria-selected')!=='true')await click(tab);
-    await wait(()=>uploadInput(),'Bảng Tải lên chưa hiển thị ô chọn tệp');
+    if(requireInput)await wait(()=>uploadInput(),'Bảng Tải lên chưa hiển thị ô chọn tệp');
   }
   function durationInput(root=document){
     return [...root.querySelectorAll('input')].find(e=>e.getAttribute('placeholder')==='--'||e.getAttribute('aria-label')==='--')||null;
   }
+  function voiceMatches(name,text){
+    const stem=name.replace(/\.[^.]+$/,'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return new RegExp('(?:^|[^\\w])'+stem+'(?![\\w])','i').test(text||'');
+  }
+  function timelineAudio(root=document){
+    return [...root.querySelectorAll('button,[role="button"]')].filter(e=>/doan am thanh|audio clip/.test(norm(label(e))));
+  }
   function audioOnTimeline(name,root=document){
-    return [...root.querySelectorAll('button,[role="button"]')].some(e=>label(e).includes(name)&&label(e).includes('đoạn âm thanh'));
+    return timelineAudio(root).some(e=>voiceMatches(name,label(e)));
+  }
+  function uploadedVoiceCard(name,root=document,{pending=false}={}){
+    const matches=e=>[e.getAttribute('aria-label'),e.getAttribute('title'),e.textContent].some(text=>voiceMatches(name,text));
+    const playback=e=>/^(phat|tam dung|nghe thu|xem truoc|play|pause|preview|more|tuy chon|thao tac khac)(\b|$)/.test(norm(e.getAttribute('aria-label')||e.getAttribute('title')));
+    const eligible=e=>visible(e)&&!playback(e)&&!/doan am thanh|audio clip/.test(norm(label(e)));
+    const loading=e=>e.closest('[aria-busy="true"]')||e.querySelector('[role="progressbar"]');
+    const ready=e=>eligible(e)&&(pending?loading(e):!loading(e)&&!e.disabled&&e.getAttribute('aria-disabled')!=='true');
+    const selector='button,[role="button"],[draggable="true"]';
+    const cards=[...root.querySelectorAll(selector)].filter(e=>ready(e)&&matches(e));
+    const add=cards.find(e=>/^(them|add|chen|insert)\b/.test(norm(label(e))));
+    return add||cards.find(e=>e.getAttribute('draggable')==='true')||cards.at(-1)||
+      [...root.querySelectorAll('[title],span')].find(e=>ready(e)&&!e.closest(selector)&&
+        !e.childElementCount&&matches(e))||null;
   }
   function timelineTransitionMenu(element){
     if(element.getAttribute('role')!=='menu')return false;
@@ -769,25 +789,58 @@
     return {title:s.title_text,asset:task.fallback_id};
   }
   async function voiceTask(task,checkpoint,voice){
-    if(task.phase?.stage==='upload_intent')throw Error('Voice có thể đã được tải. Kiểm tra Canva trước khi thử lại.');
+    const raw=await voice();
+    const confirmed=async()=>{
+      let issue;
+      try{
+        return await wait(()=>{
+          try{return verifyVoice(raw.name,task.duration);}catch(error){issue=error;return null;}
+        },'Canva chưa cập nhật mốc voice trên timeline',5000);
+      }catch(error){throw issue&&error.message.startsWith('Hết thời gian chờ:')?issue:error;}
+    };
+    if(audioOnTimeline(raw.name))return confirmed();
+    if(timelineAudio().length)throw Error('Timeline đã có âm thanh khác. Kiểm tra đúng phần và đúng voice rồi bấm Tiếp tục.');
     const last=await tail();
     if(last.image||last.end>5.1)throw Error('Cần thiết kế video ngang trống để bắt đầu. Ứng dụng không ghi đè bản dựng có sẵn.');
-    await ensureUploadPanel();
-    const raw=await voice();
-    const input=await wait(()=>uploadInput(),'Canva chưa hiển thị ô tải voice. Mở Tải lên và thử lại',30000);
-    const bytes=Uint8Array.from(atob(raw.data),c=>c.charCodeAt(0));
-    const transfer=new DataTransfer();transfer.items.add(new File([bytes],raw.name,{type:raw.mime||'audio/mpeg'}));
-    await checkpoint('upload_intent');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));
-    const audioTab=await wait(()=>find('Âm thanh','[role="tab"],button,[role="button"]'),'Đợi Canva hiển thị âm thanh tải lên',90000);await click(audioTab);
-    const name=raw.name.replace(/\.mp3$/i,'');
-    const card=await wait(()=>find(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))),'Đợi voice tải lên Canva',120000);
+    await ensureUploadPanel(false);
+    const audioTab=await wait(()=>find(/^(Âm thanh|Audio)$/,'[role="tab"],button,[role="button"]'),'Không thấy mục Âm thanh trong Tải lên');
+    if(audioTab.getAttribute('aria-selected')!=='true'&&audioTab.getAttribute('aria-pressed')!=='true')await click(audioTab);
+    const findCard=options=>uploadedVoiceCard(raw.name,document.getElementById(audioTab.getAttribute('aria-controls'))||document,options);
+    // A previous click or upload may finish after the extension loses its connection.
+    const resuming=['upload_intent','voice_insert_intent'].includes(task.phase?.stage);
+    const deadline=Date.now()+(resuming?15000:1500);
+    let card;
+    while(!(card=findCard())&&Date.now()<deadline){
+      if(audioOnTimeline(raw.name))return confirmed();
+      await guard();await sleep(250);
+    }
+    if(!card&&!findCard({pending:true})){
+      const input=await wait(()=>uploadInput(),'Không thấy ô tải voice trong Canva. Mở Tải lên rồi bấm Tiếp tục',30000);
+      const bytes=Uint8Array.from(atob(raw.data),c=>c.charCodeAt(0));
+      const transfer=new DataTransfer();transfer.items.add(new File([bytes],raw.name,{type:raw.mime||'audio/mpeg'}));
+      await checkpoint('upload_intent',{asset:raw.name});
+      if(audioOnTimeline(raw.name))return confirmed();
+      if(!findCard()&&!findCard({pending:true})){
+        input.files=transfer.files;
+        input.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+    }
+    if(!card)await wait(()=>findCard()||audioOnTimeline(raw.name),
+      'Canva chưa hiện '+raw.name+' trong Tải lên → Âm thanh. Bấm Tiếp tục để kiểm tra lại',120000);
+    if(audioOnTimeline(raw.name))return confirmed();
+    if(timelineAudio().length)throw Error('Timeline đã có âm thanh khác. Kiểm tra đúng phần và đúng voice rồi bấm Tiếp tục.');
+    await checkpoint('voice_insert_intent',{asset:raw.name});
+    if(audioOnTimeline(raw.name))return confirmed();
+    card=findCard();
+    if(!card)throw Error('Tệp '+raw.name+' vừa biến mất khỏi mục Âm thanh. Bấm Tiếp tục để tìm lại.');
     await click(card);
-    await wait(()=>audioOnTimeline(raw.name),'Voice chưa xuất hiện trên timeline');
-    return {voice_name:raw.name};
+    await wait(()=>audioOnTimeline(raw.name),
+      'Đã tìm thấy '+raw.name+' trong Canva nhưng chưa đặt được lên timeline. Kéo đúng tệp xuống đầu dòng Âm thanh rồi bấm Tiếp tục',20000);
+    return confirmed();
   }
   function verifyVoice(name,duration){
     if(!name)throw Error('Thiếu tên voice cần đối chiếu; chưa xác nhận phần dựng.');
-    const audio=[...document.querySelectorAll('button,[role="button"]')].find(e=>label(e).includes(name)&&label(e).includes('đoạn âm thanh'));
+    const audio=timelineAudio().find(e=>voiceMatches(name,label(e)));
     if(!audio)throw Error('Không xác nhận được voice trên timeline; không chuyển sang phần mới.');
     const starts=[...audio.querySelectorAll('[role="slider"]')].filter(e=>label(e).includes('biên bắt đầu')).map(e=>Number(e.getAttribute('aria-valuenow'))/1e6);
     if(!starts.length||starts.some(v=>!Number.isFinite(v)||Math.abs(v)>.12))throw Error('Voice chưa bắt đầu từ giây 0; cần đưa đúng voice về đầu timeline.');
