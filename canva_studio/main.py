@@ -89,6 +89,8 @@ class App:
         row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text='Link Canva (trống = tự tạo)').pack(side='left');self.target=tk.StringVar(value=self.engine.state['target']);ttk.Entry(row,textvariable=self.target).pack(side='left',fill='x',expand=True,padx=8);ttk.Button(row,text='Mở Canva',command=self.open_canva).pack(side='right')
         row=ttk.Frame(build);row.pack(fill='x',pady=7)
         ttk.Button(row,text='2. Bắt đầu / Tiếp tục tự động',style='Accent.TButton',command=self.run).pack(side='left');ttk.Button(row,text='Tạm dừng',command=self.engine.pause).pack(side='left',padx=8);ttk.Button(row,text='Xử lý cảnh bị dở',command=self.recover).pack(side='left');ttk.Button(row,text='Dự án mới',command=self.new_project).pack(side='right');ttk.Button(row,text='Các phần đã dựng',command=self.show_parts).pack(side='right',padx=6)
+        self.next_part_button=ttk.Button(row,text='Dựng phần tiếp theo',command=self.defer_final_scene,state='disabled')
+        self.next_part_button.pack(side='left',padx=8)
         self.progress=ttk.Progressbar(build,maximum=100);self.progress.pack(fill='x',pady=6)
         self.status=tk.StringVar();ttk.Label(outer,textvariable=self.status,wraplength=1060).pack(fill='x',pady=(10,0))
         self.connection=tk.StringVar(value='Chưa có kết nối trình duyệt');ttk.Label(settings,textvariable=self.connection,font=('Segoe UI',12,'bold')).pack(anchor='w',pady=8)
@@ -625,6 +627,7 @@ class App:
     def open_canva(self):
         try:
             u=self.target.get().strip()
+            if u==self.engine.state['target']:u=self.engine.canva_target()
             if valid_canva(u):open_chrome(u)
             else:self.run()
         except Exception as e:messagebox.showerror('Chưa mở được Chrome',str(e))
@@ -639,7 +642,7 @@ class App:
                 self.notice.set('Đang ghép các phần đã tải…');return
             if self.engine.state['mode'] in ('opening','opening_resume'):
                 self.notice.set('Chrome đang mở thiết kế. Không bấm lặp; tiện ích sẽ tự bắt đầu khi trang sẵn sàng.');return
-            if self.engine.state.get('manual_edit_scene'):
+            if self.engine.state.get('manual_edit_scene') and not self.engine.state.get('defer_final_scene'):
                 self.manual_scene.set(str(self.engine.state['manual_edit_scene']));self.confirm_manual_scene();return
             self.save_project_name()
             if not self.plan:
@@ -672,6 +675,12 @@ class App:
                 except Exception:
                     self.engine.pause();raise
         except Exception as e:messagebox.showerror('Chưa thể bắt đầu',str(e))
+    def defer_final_scene(self):
+        try:self.engine.defer_final_scene()
+        except ValueError as error:
+            return messagebox.showerror('Chưa thể chuyển phần',str(error))
+        self.run()
+
     def recover(self):
         self.engine.pause()
         stage=self.engine.state['phase'].get('stage','')
@@ -775,6 +784,7 @@ class App:
             'Cập nhật từ khóa cho các cảnh chưa dựng ở phần đang mở.' if has_scenes else
             'Chưa có danh sách cảnh. Khôi phục bản dựng để tiếp tục bài cũ, hoặc về Dựng video để phân tích bài mới.')
         st=self.engine.state
+        self.next_part_button.configure(state='normal' if self.engine.can_defer_final_scene() else 'disabled')
         self.name_entry.configure(state='disabled' if st['mode'] in ('running','opening','opening_resume') else 'normal')
         self.name_hint.set('  Canva chưa nhận tên; vẫn tiếp tục dựng.' if st.get('rename_warning') else '  Ví dụ: Bài 1 → Bài 1.2 → Bài 1.3')
         if st.get('part_index',0)!=self.display_part:
