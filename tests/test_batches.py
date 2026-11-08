@@ -24,6 +24,17 @@ class BatchTests(unittest.TestCase):
         plan=make_plan([dict(start=2,end=4,text='người cao tuổi đi bộ')],end=12)
         for scene in plan['scenes']:
             self.assertNotIn('Khoảng nghỉ',scene['queries']);self.assertFalse(scene['real_people_only']);self.assertTrue(scene['allow_all_media'])
+    def test_old_pause_scenes_keep_the_voice_range_and_inherit_context(self):
+        from canva_studio.editorial import refine_queries
+        scenes=[dict(id=1,start=0,duration=3,text='mở cửa nhà kho',queries=['nhà kho']),
+                dict(id=2,start=3,duration=5,text='Khoảng nghỉ',queries=['Khoảng nghỉ'],keyword_review='old'),
+                dict(id=3,start=8,duration=4,text='Khoảng nghỉ',queries=['Khoảng nghỉ'])]
+        refine_queries(scenes,preserve_before=1)
+        for row in scenes[1:]:
+            self.assertEqual(row['queries'][0],'nhà kho')
+            self.assertTrue(row['context_only'])
+            self.assertNotIn('keyword_review',row)
+        self.assertEqual((scenes[2]['start'],scenes[2]['duration']),(8,4))
     def test_anatomical_topics_allow_non_people_media(self):
         for text in ['tuần hoàn máu','trái tim','kinh thận','gân gót chân','bắp chân','Khoảng nghỉ']:
             scene=describe(text)
