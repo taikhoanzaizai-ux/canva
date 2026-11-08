@@ -202,6 +202,19 @@ class EngineTests(unittest.TestCase):
         self.e.result(dict(id='1',client='A',title='LỖI CẢNH 1'))
         self.assertEqual(self.e.state['done'],[1])
 
+    def test_verified_card_uses_actual_end_and_starts_next_scene(self):
+        self.e.state['scenes'].append(dict(id=2,start=4,duration=4,text='next',queries=['next']))
+        self.e.state['voice_done']=True
+        self.e.next_task(self.client)
+        self.e.check(dict(id='1',client='A',stage='trimmed',media_kind='image',card_kind='error'))
+        with self.assertRaises(ValueError):
+            self.e.result(dict(id='1',client='A',card_frames=[dict(start=.3,end=4.2)]))
+        self.assertEqual(self.e.state['done'],[])
+        self.e.result(dict(id='1',client='A',card_frames=[dict(start=0,end=4.2)]))
+        self.assertEqual(self.e.state['done'],[1])
+        following=self.e.next_task(self.client)['task']['scene']
+        self.assertEqual((following['id'],following['start'],following['duration']),(2,4.2,3.8))
+
     def test_uncertain_insertion_is_never_silently_skipped(self):
         self.e.state['voice_done']=True;self.e.next_task(self.client)
         self.e.check(dict(id='1',client='A',stage='insert_intent'))
