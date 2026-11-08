@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.22'
+MIN_EXTENSION_VERSION='0.14.23'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -214,10 +214,13 @@ class Engine:
             self.browser={}
             return self.canva_target(),f'Đang mở lại phần {missing+1} để tải MP4.'
         state.pop('export_history_index',None)
-        if not history:
+        current_scenes=state['scenes']
+        if not history and not any(s.get('warning_output') and not s.get('manual_verified') for s in current_scenes):
             state['mode']='complete'
             return None,'Đã xác nhận MP4 tải xuống hoàn tất.'
-        parts=[*history,{**state['parts'][state['part_index']],'download_verified':state['download_verified']}]
+        last=current_scenes[-1]
+        current=state['parts'][state['part_index']] if state.get('parts') else {'source_start':0,'duration':last.get('voice_end',last['start']+last['duration'])}
+        parts=[*history,{**current,'scenes':current_scenes,'download_verified':state['download_verified']}]
         folder=self.export_folder()
         state['mode']='merging'
         def work():
@@ -313,6 +316,8 @@ class Engine:
             self.browser={**body,'seen':time.time()}
             if self.running and self.running['client']!=body.get('client'):return dict(task=None,mode='busy')
             title=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
+            if title and str(body.get('title','')).startswith('LỖI CẢNH ') and '• Video thay thế' in str(body.get('title','')):
+                self.state['named_title']=''
             manual=self.state.get('manual_review')
             history_index=self.state.get('export_history_index')
             if history_index is not None:
@@ -521,6 +526,12 @@ class Engine:
             else:
                 i=int(key)
                 completed=next((s for s in self.state['scenes'] if s['id']==i),{})
+                warning_span=None
+                if body.get('warning_output'):
+                    start,end=float(body.get('warning_start',-1)),float(body.get('warning_end',-1))
+                    if not (completed and math.isfinite(start) and math.isfinite(end) and 0<=start<end and abs(start-completed['start'])<=.12 and abs(end-completed['start']-completed['duration'])<=.12):
+                        raise ValueError('Mốc ghi nhãn chưa khớp clip thay thế.')
+                    warning_span=(start,end)
                 if body.get('overlay_unverified'):
                     completed['overlay_pending']=str(body['overlay_unverified'])[:500]
                     self.state['mode']='attention';self.running=None
@@ -546,6 +557,8 @@ class Engine:
                 if body.get('fallback_warning'):
                     completed['fallback_warning']=str(body['fallback_warning'])[:200]
                     completed['overlay_error']=str(body.get('overlay_error') or '')[:500]
+                if warning_span is not None:
+                    completed.update(warning_output=True,warning_start=warning_span[0],warning_end=warning_span[1])
                 asset=body.get('asset') or completed.get('fallback_source',{}).get('id')
                 if completed.get('fallback_source'):
                     sources=self.state.setdefault('sources',[])
