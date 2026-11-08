@@ -25,7 +25,7 @@ def begin_fallback(engine,scene,retry=False):
             path,source,diagnostics=(None,None,[]) if error else prepare_external(scene,used,folder,ffmpeg)
             if path is None:
                 caption=(f"LỖI CẢNH {scene['id']} — {error.get('start',scene['start']):.2f} giây\n{error['message'][:220]}\nLời đọc: {scene['text'][:140]}") if error else scene['text']
-                card=dict(kind='title',title_text=caption,duration=scene['duration'],error_card=bool(error),still_image=bool(error))
+                card=dict(kind='title',title_text=caption,duration=scene['duration'],error_card=bool(error),still_image=True)
                 render_titles(dict(scenes=[card]),ffmpeg,folder)
                 path=Path(card['title_path']);source=dict(id='designed:'+key,provider='SKST',kind='error_card' if error else 'text_card',title=caption)
             with engine.lock:
