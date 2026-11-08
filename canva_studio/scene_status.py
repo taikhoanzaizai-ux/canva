@@ -12,7 +12,8 @@ def scene_status(scene,state):
     if error:return ('Lỗi — đã chèn ảnh' if ident in state.get('done',[]) else 'Lỗi — cần sửa','error',error.get('message','Không có mô tả lỗi'))
     if ident in state.get('done',[]):
         if scene.get('fallback_warning'):
-            return ('Video thay thế','review',scene.get('overlay_error') or scene['fallback_warning'])
+            detail='Nhãn sẽ hiện trong MP4 hoàn chỉnh.' if scene.get('warning_output') else scene.get('overlay_error') or scene['fallback_warning']
+            return ('Video thay thế','review',detail)
         if scene.get('fallback_source',{}).get('kind')=='text_card':
             return ('Thẻ chữ dự phòng','review','Chưa chọn được tư liệu phù hợp cho cảnh này.')
         return ('Đã dựng','done','')
