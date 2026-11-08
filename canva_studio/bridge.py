@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.10'
+MIN_EXTENSION_VERSION='0.14.11'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -386,8 +386,17 @@ class Engine:
                 self.state['export_done']=True;self.state['mode']='complete';self.state['download_id']=body['download_id'];msg='Đã xác nhận MP4 tải xuống hoàn tất.'
             else:
                 i=int(key)
-                if i not in self.state['done']:self.state['done'].append(i)
                 completed=next((s for s in self.state['scenes'] if s['id']==i),{})
+                frames=body.get('card_frames')
+                if frames is not None:
+                    phase=self.state['phase']
+                    if not completed or phase.get('id')!=key or phase.get('stage')!='trimmed' or phase.get('media_kind')!='image' or phase.get('card_kind') not in ('error','text') or not isinstance(frames,list) or len(frames)!=i:
+                        raise ValueError('Chưa xác nhận được timeline của thẻ chữ.')
+                    from .manual_timing import compensate
+                    updates=compensate(self.state['scenes'],set(self.state['done'])|{i},frames)
+                    if abs(updates[i-1]['start']-completed['start'])>.12:raise ValueError('Thẻ chữ lệch vị trí trên timeline.')
+                    for item,update in zip(self.state['scenes'],updates):item.update(update)
+                if i not in self.state['done']:self.state['done'].append(i)
                 asset=body.get('asset') or completed.get('fallback_source',{}).get('id')
                 if completed.get('fallback_source'):
                     sources=self.state.setdefault('sources',[])
@@ -399,6 +408,7 @@ class Engine:
                     self.state['last_asset']=asset
                     if asset not in self.state['used']:self.state['used'].append(asset)
                 msg=f'Đã dựng cảnh {i}/{len(self.state["scenes"])}: '+str(body.get('title',''))
+                if frames is not None:msg+=' • Đã giữ thời lượng thẻ và căn lại các cảnh tiếp theo.'
             self.state['phase']={};self.running=None;self.log(msg);return dict(ok=True,handoff=key=='next_design',target=self.state['target'])
 
 def serve(engine,port=8766):
