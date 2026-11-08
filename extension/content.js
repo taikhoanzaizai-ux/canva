@@ -4,7 +4,7 @@
   window.__skstContentStarted=version;
   const epoch=crypto.randomUUID();window.__skstControllerEpoch=epoch;
   const active=()=>window.__skstControllerEpoch===epoch;
-  const client=crypto.randomUUID();let busy=false;
+  const client=crypto.randomUUID();let busy=false,dismissedWarning=null;
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message.type==='skst_controller_ping'){respond({ready:true,version:chrome.runtime.getManifest().version});return;}
   });
@@ -19,11 +19,19 @@
   function showStatus(result){
     if(!active())return;
     const existing=document.getElementById('skst-progress-status');
-    if(result.mode!=='attention'){existing?.remove();return;}
-    const panel=existing||document.createElement('div');panel.id='skst-progress-status';
-    panel.textContent='SKST đã tạm dừng: '+(result.message||'Kiểm tra thông báo trong ứng dụng.');
-    panel.style.cssText='position:fixed;bottom:12px;right:12px;max-width:420px;padding:12px 16px;background:#fff4df;color:#523700;border:1px solid #dba650;border-radius:8px;font:14px/1.5 Arial,sans-serif;z-index:2147483647;box-shadow:0 2px 10px #0002;pointer-events:none';
-    if(!existing)document.body.appendChild(panel);
+    if(result.mode!=='attention'){existing?.remove();dismissedWarning=null;return;}
+    const message='SKST đã tạm dừng: '+(result.message||'Kiểm tra thông báo trong ứng dụng.');
+    if(message===dismissedWarning||existing?.dataset.warning===message)return;
+    dismissedWarning=null;
+    existing?.remove();
+    const panel=document.createElement('div');panel.id='skst-progress-status';panel.dataset.warning=message;
+    panel.style.cssText='position:fixed;bottom:12px;right:12px;max-width:420px;padding:12px 44px 12px 16px;background:#fff4df;color:#523700;border:1px solid #dba650;border-radius:8px;font:14px/1.5 Arial,sans-serif;z-index:2147483647;box-shadow:0 2px 10px #0002;pointer-events:none';
+    const text=document.createElement('span');text.textContent=message;text.setAttribute('role','status');
+    const close=document.createElement('button');
+    close.type='button';close.textContent='×';close.title='Đóng cảnh báo SKST';close.setAttribute('aria-label',close.title);
+    close.style.cssText='position:absolute;top:6px;right:6px;width:28px;height:28px;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;font:22px/1 Arial,sans-serif;cursor:pointer;pointer-events:auto';
+    close.addEventListener('click',event=>{event.stopPropagation();dismissedWarning=message;panel.remove();});
+    panel.append(text,close);document.body.appendChild(panel);
   }
   async function cycle(){
     if(busy||!active())return;busy=true;let task,advance=false;
