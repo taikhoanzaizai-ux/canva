@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.24
+
+- Khi tải hoặc chèn voice bị gián đoạn, nút Tiếp tục kiểm tra lại đúng tệp trong Canva và dùng lại tệp đã tải. Chỉ dựng cảnh sau khi xác nhận voice bắt đầu ở giây 0 và đủ thời lượng của phần.
+- Hiển thị riêng lỗi tải lên và lỗi đặt voice trên timeline, giữ nguyên tiến độ để thử lại.
+
 ## 0.14.23
 
 - Ghi nhãn video thay thế theo mốc clip rồi chèn vào MP4 khi xuất, tránh nhập nhầm vào tên Canva hoặc tạo lớp chữ vượt khỏi cảnh.
