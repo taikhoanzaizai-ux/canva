@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.22
+
+- Căn lại dòng báo lỗi đã chèn khi Canva chỉ hiển thị thanh chữ mà chưa cung cấp tay nắm thời lượng. Đọc vị trí của thanh chữ so với clip và kiểm tra lại sau khi di chuyển hoặc cắt ngắn.
+- Dùng nội dung báo lỗi ngắn trên video thay thế.
+
 ## 0.14.21
 
 - Các cảnh chưa có lời nhận diện dùng tư liệu theo ngữ cảnh hoặc cảnh nối trung tính. Giữ nguyên voice và mốc thời gian.
