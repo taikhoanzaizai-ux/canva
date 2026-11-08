@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.23'
+MIN_EXTENSION_VERSION='0.14.24'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -148,7 +148,7 @@ class Engine:
             if phase.get('stage') in ('insert_intent','rollback_intent') and scene:
                 scene.setdefault('error_card',dict(message='Lần trước dừng giữa thao tác chèn cảnh; thay bằng ảnh báo lỗi để tiếp tục.',start=scene['start']))
                 scene['error_recovery']=dict(phase);scene['error_card_attempts']=0;self.state['phase']={}
-            elif phase.get('stage') in ('upload_intent','create_intent'):
+            elif phase.get('stage')=='create_intent':
                 raise ValueError('Lần trước dừng giữa thao tác. Kiểm tra Canva rồi dùng nút Xử lý cảnh bị dở; ứng dụng sẽ không tự chèn trùng.')
             self.running=None;self.last_activity=time.time();self.state['mode']='running';self.log('Đang chờ tiện ích kết nối đúng thiết kế Canva…')
     def connection_status(self,target=None):
@@ -345,7 +345,9 @@ class Engine:
                 fit_final=scene['id']==last['id'] and (set(self.state['done'])|{scene['id']})=={s['id'] for s in self.state['scenes']}
                 task=dict(id=f'manual:{scene["id"]}',kind='manual_review',review_token=manual['token'],scene=scene,allowed_counts=sorted(counts),voice_name=name,voice_duration=last.get('voice_end',last['start']+last['duration']),fit_final=fit_final,overlay_scene=overlay_scene)
             elif title and self.state.get('named_title')!=title and (self.state.get('rename_failed_title')!=title or self.state.get('audit_done') and self.state.get('rename_final_title')!=title):task=dict(id='rename',kind='rename',design_name=title)
-            elif not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
+            elif not self.state['voice_done']:
+                last=self.state['scenes'][-1]
+                task=dict(id='voice',kind='voice',duration=round(last.get('voice_end',last['start']+last['duration']),3))
             else:
                 scene=next((s for s in self.state['scenes'] if s['id'] not in self.state['done']),None)
                 if scene:task=dict(id=str(scene['id']),kind='scene',scene=scene,related_topic=related_topic(scene),used=self.state['used'],usage=self.state.get('usage',{}),last_asset=self.state.get('last_asset',''),previous_scene=next((s for s in self.state['scenes'] if s['id']==scene['id']-1),None))
@@ -387,6 +389,9 @@ class Engine:
             if stage in ('create_intent','create_open') and str(body.get('id'))!='next_design':raise ValueError('Không có lệnh mở thiết kế tiếp theo.')
             if stage:
                 self.state['phase']={**body,'id':str(body['id'])}; self.save()
+                if self.running['id']=='voice' and stage in ('upload_intent','voice_insert_intent'):
+                    action='Đang tải voice lên Canva' if stage=='upload_intent' else 'Đang đặt voice lên timeline'
+                    self.log(action+'…')
             return dict(continue_=True)
     def result(self, body):
         with self.lock:
@@ -423,7 +428,10 @@ class Engine:
                     self.log(f'Không thể thao tác timeline để đặt ảnh lỗi cảnh {key} sau 3 lần phục hồi: {detail}. Tiến độ và voice được giữ nguyên.')
                     return dict(ok=True)
                 self.state['mode']='paused' if cancelled else 'attention';self.running=None
-                self.log(f'Cảnh/tác vụ {key} • bước {stage}: {detail}. Chưa thể chèn thẻ lỗi vì chưa xác nhận được trạng thái timeline.' if not cancelled else detail)
+                if key=='voice' and not cancelled:
+                    self.log(f'Voice phần {record["part"]} • {detail}')
+                else:
+                    self.log(f'Cảnh/tác vụ {key} • bước {stage}: {detail}. Chưa thể chèn thẻ lỗi vì chưa xác nhận được trạng thái timeline.' if not cancelled else detail)
                 return dict(ok=True)
             key=str(body['id'])
             if key.startswith('manual:'):
