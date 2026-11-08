@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.8
+
+- Dùng bộ chủ đề chung để tìm tư liệu theo đối tượng chính cho cả từ khóa tự động và từ khóa nhập tay. Áp dụng cho thực phẩm, cơ quan, triệu chứng, vận động và các chủ đề đã có trong bộ từ khóa.
+- Giữ truy vấn gốc và thử thêm từ khóa ngắn trước khi dùng thẻ chữ.
+
 ## 0.14.7
 
 - Mở rộng gân cơ vùng lưng và đau lưng sang tư liệu vùng lưng, người ôm lưng hoặc cột sống, kể cả khi từ khóa được sửa bằng tay.
