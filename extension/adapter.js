@@ -361,16 +361,16 @@
     return null;
   };
   const photoDuration=duration=>Math.max(.1,Math.round((duration+Number.EPSILON)*10)/10);
-  const timePhoto=async(duration,index=sceneCount()-1)=>{
-    const before=timeline()[index],count=sceneCount();
+  const timePhoto=async(duration)=>{
+    const before=timeline().at(-1);
     if(!before||!Number.isFinite(duration)||duration<=0)throw Error('Không xác định được cảnh ảnh/thời lượng cần đặt.');
     const expected=before.start+duration;
     const applied=()=>{
-      const last=timeline()[index];
-      return sceneCount()===count&&last&&Math.abs(last.start-before.start)<=.02&&Math.abs(last.end-expected)<=.06;
+      const last=timeline().at(-1);
+      return last&&Math.abs(last.start-before.start)<=.02&&Math.abs(last.end-expected)<=.12;
     };
-    // Canva rounds this control to tenths. Verify absolute timeline bounds,
-    // rather than the toolbar caption, and compensate rounding on the next cut.
+    // Use the same endpoint tolerance as the caller and the next scene.
+    // Resizing can change which rows Canva mounts, so match the final start.
     if(applied()&&!visible(durationInput()))return;
     const owner=()=>find(/giây, sửa thời gian$/);
     if(!visible(durationInput()))await click(await wait(owner,'Không thấy thời lượng ảnh'));
