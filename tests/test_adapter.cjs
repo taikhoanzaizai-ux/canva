@@ -272,6 +272,10 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
  assert(Math.abs(end-113.98)<.001,'Persist the rounded image duration on the timeline');
  // The stale toolbar caption is still 5.0 above: actual timeline is authoritative.
  await env.globalThis.SKSTAdapter.timePhoto(4.02);assert.equal(commits,1,'A resumed correct error image must not be edited or uploaded again');
+ end=start+5;
+ await env.globalThis.SKSTAdapter.timePhoto(4.92);
+ assert.equal(commits,1,'Accept an existing 5 s error card for a 4.92 s scene without reopening Canva timing');
+ assert.equal(end,start+5);
  open=true;value='5.0 giây';end=start+5;
  await env.globalThis.SKSTAdapter.timePhoto(1.195);
  assert.equal(value,'1.2','Round before sending to a control that truncates extra decimals');
