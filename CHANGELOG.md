@@ -1,5 +1,9 @@
 # Các bản cập nhật
 
+## 0.14.12
+
+- Thêm nút × để đóng cảnh báo tạm dừng trong Canva. Cảnh báo đã đóng chỉ hiện lại khi có nội dung mới hoặc sau một lần chạy lại.
+
 ## 0.14.11
 
 - Khi Canva giữ thời lượng khác dự kiến cho thẻ chữ đã chèn, kiểm tra vị trí và mốc timeline rồi tự bù chênh lệch vào các cảnh sau. Giữ điểm kết thúc của phần voice.
