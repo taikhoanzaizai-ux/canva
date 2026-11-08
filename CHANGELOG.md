@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.6
+
+- Tìm thêm não bộ cho cảnh vi mạch não, não bộ hoặc đau ngực cho cảnh đột quỵ, và máy đo huyết áp cho cảnh máy đo vận tốc sóng mạch.
+- Áp dụng cả với cảnh đã sửa từ khóa bằng tay. Dùng từ khóa đang nhập để xác định nhóm tư liệu liên quan.
+
 ## 0.14.5
 
 - Đồng nhất ngưỡng kiểm tra điểm kết thúc ảnh với cảnh kế tiếp. Có thể tiếp tục từ ảnh báo lỗi đã chèn nếu điểm cuối lệch không quá 0,12 giây, kể cả khi Canva hiển thị thời lượng mặc định 5 giây.
