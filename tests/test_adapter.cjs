@@ -148,6 +148,8 @@ for(const [subjects,near,wrong] of [
   [['microvessels','vi mạch'],'Red blood cells flowing in an artery','Highway interchange'],
   [['glomerulus','cầu thận'],'Human kidney anatomy','Human stomach anatomy'],
   [['brain microvessels','vi mạch trong não'],'Human brain animation','Office desk'],
+  [['back muscles and tendons','gân cơ vùng lưng'],'Human lower back anatomy','Back to school supplies'],
+  [['person with back pain','người đau lưng'],'Woman holding her lower back','Knee pain while running'],
   [['measuring blood glucose','đo đường huyết'],'Insulin vial and syringe','Traffic on a highway'],
 ]){
  const scene={...researchScene,subjects,positive:subjects};
@@ -267,9 +269,9 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
 (async()=>{
- let value='5.0 giây',end=114.98,open=true,enters=0,commits=0,applyAll=0;
+ let value='5.0 giây',end=114.98,open=true,enters=0,commits=0,applyAll=0,requiresEnter=false;
  const start=109.98;
- class Input{get value(){return value;}set value(v){value=v;}getAttribute(k){return k==='placeholder'?'--':null;}focus(){}blur(){end=start+Math.floor(Number(value)*10+1e-8)/10;commits++;}dispatchEvent(e){if(e.key==='Enter')enters++;}get offsetWidth(){return open?50:0;}get offsetHeight(){return 0;}getClientRects(){return open?[{}]:[];}}
+ class Input{get value(){return value;}set value(v){value=v;}getAttribute(k){return k==='placeholder'?'--':null;}focus(){}blur(){if(!requiresEnter){end=start+Math.floor(Number(value)*10+1e-8)/10;commits++;}}dispatchEvent(e){if(e.key==='Enter'){enters++;if(requiresEnter){end=start+Number(value);open=false;}}}get offsetWidth(){return open?50:0;}get offsetHeight(){return 0;}getClientRects(){return open?[{}]:[];}}
  class Textarea{}
  const field=new Input();
  const owner={offsetWidth:50,scrollIntoView:()=>{},getAttribute:k=>k==='aria-label'?'5.0 giây, sửa thời gian':null,focus:()=>field.blur(),click:()=>{open=!open;}};
@@ -294,6 +296,10 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
  await env.globalThis.SKSTAdapter.timePhoto(1.195);
  assert.equal(value,'1.2','Round before sending to a control that truncates extra decimals');
  assert(Math.abs(end-start-1.2)<.000001);assert.equal(commits,2);
+ requiresEnter=true;open=false;end=start+5;
+ await env.globalThis.SKSTAdapter.timePhoto(4.82);
+ assert(Math.abs(end-start-4.8)<.000001,'Confirm the existing 5 s card when blur alone does not commit');
+ assert(enters>0);assert.equal(applyAll,0);
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
 // Canva only mounts a window of a long timeline. A manual confirmation at
