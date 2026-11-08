@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.4
+
+- Khi Canva báo không có video cho từ khóa đang tìm, chuyển ngay sang cụm tiếp theo. Ưu tiên video gần chủ đề trước khi thử ảnh và thẻ chữ.
+- Mở rộng vi mạch sang mao mạch, mạch máu và hồng cầu, cầu thận sang giải phẫu thận, vi mạch não sang não bộ hoặc mạch máu.
+
 ## 0.14.3
 
 - Khi xác nhận cảnh tự sửa hoặc hoàn tất một phần, cuộn đọc toàn bộ timeline Canva để đếm cả những cảnh ngoài màn hình. Khắc phục tình trạng cảnh 50 đã có nhưng bị báo thiếu cảnh, chặn mở phần voice tiếp theo.
