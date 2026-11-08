@@ -171,7 +171,14 @@
       'blood cells','blood flow','blood circulation','bloodstream',
     ],aliases:['blood','máu','mạch','circulation']},
     {search:['người già thể dục','senior exercise'],names:['exercise','exercising','fitness','workout','thể dục','tập luyện']},
-    {search:['não bộ','human brain'],names:['brain','cerebral','não bộ','bộ não']},
+    {search:['đột quỵ','não bộ','đau ngực','chest pain'],
+     triggers:['đột quỵ','brain stroke','stroke brain','ischemic stroke','cerebral stroke','stroke symptoms'],
+     names:['đột quỵ','brain stroke','stroke symptoms','ischemic stroke','cerebral stroke','não bộ','bộ não','brain','cerebral','đau ngực','ôm ngực','chest pain','clutching chest','clutching his chest','clutching her chest']},
+    {search:['máy đo huyết áp','blood pressure monitor','đo huyết áp'],
+     triggers:['pulse wave velocity monitor','pulse wave velocity device','pulse wave velocity equipment','máy đo vận tốc sóng mạch'],
+     names:['máy đo huyết áp','đo huyết áp','blood pressure monitor','blood pressure measurement','blood pressure cuff','sphygmomanometer','pulse wave velocity monitor','máy đo vận tốc sóng mạch']},
+    {search:['não bộ','human brain'],triggers:['brain','cerebral','não bộ','bộ não','vi mạch trong não','vi mạch não'],
+     names:['brain','cerebral','não bộ','bộ não']},
     {search:['tim','human heart anatomy'],names:['heart','cardiac','heartbeat','tim','trái tim']},
     {search:['dạ dày','human stomach'],names:['stomach','dạ dày']},
     {search:['lá gan','human liver'],names:['liver','lá gan']},
@@ -181,14 +188,17 @@
     {search:['kéo giãn chân','leg stretch'],names:['leg stretch','leg stretching','kéo giãn chân','kéo giãn cơ chân']},
   ];
   function visualFamilies(scene){
-    const subjects=scene.subjects||[];
-    // Infer from the subject, never from the whole narration or Canva query.
-    const matches=VISUAL_FAMILIES.filter(family=>subjects.some(term=>family.names.some(name=>subjectMatch(term,name))));
+    // Manual edits remove the AI subjects. Their explicit queries then anchor
+    // the fallback, rather than the previous AI labels or surrounding narration.
+    const subjects=scene.manual_queries?scene.queries||[]:scene.subjects||[];
+    const matches=VISUAL_FAMILIES.filter(family=>subjects.some(term=>(family.triggers||family.names).some(name=>subjectMatch(term,name))));
     return matches.length?matches:VISUAL_FAMILIES.filter(family=>subjects.some(term=>family.aliases?.some(name=>norm(term)===norm(name))));
   }
   function illustrationScene(scene){
-    if(!(scene.topic_only||scene.allow_all_media)||scene.manual_queries)return null;
-    let queries=scene.illustration_queries;
+    if(!(scene.topic_only||scene.allow_all_media))return null;
+    const families=visualFamilies(scene);
+    if(scene.manual_queries&&!families.length)return null;
+    let queries=scene.manual_queries?[]:scene.illustration_queries;
     if(!queries?.length){
       // Older plans did not include a separate stock illustration for citations.
       const subjects=scene.subjects||[];
@@ -198,7 +208,6 @@
         queries=['scientific journal','bài báo khoa học'];
       }
     }
-    const families=visualFamilies(scene);
     if(!queries?.length&&!families.length)return null;
     queries=[...new Set([...(queries||[]),...families.flatMap(family=>family.search)])];
     const subjects=[...queries,...families.flatMap(family=>family.names)];
@@ -438,6 +447,12 @@
       await prepare(s);
       const illustration=illustrationScene(s),used=task.used||[];
       const search={...s,queries:[...new Set([...s.queries,...(illustration?.queries||[])])],_reuseVideoQueries:[],_reusePhotoQueries:[]};
+      if(s.manual_queries&&illustration){
+        // Rank on the current input. Bare "stroke" can also mean swimming.
+        search.subjects=s.queries.filter(query=>norm(query).trim()!=='stroke');
+        if(!search.subjects.length)search.subjects=illustration.subjects;
+        search.positive=search.subjects;
+      }
       let selected=await choose(search,used,false,illustration);
       if(!selected&&search._reuseVideoQueries.length)selected=await choose(search,used,true,illustration);
       if(!selected)selected=await choosePhoto(search,used,false,illustration);
