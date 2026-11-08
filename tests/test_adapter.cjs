@@ -29,6 +29,22 @@ assert(adapter.audioOnTimeline('test.mp3',{querySelectorAll:selector=>{
 }}),'Audio timeline DIV role=button must be recognized');
 console.log('Adapter ranking and Canva upload-input regression checks passed. Live full timeline still requires browser validation.');
 
+(async()=>{
+ let clicked=0;
+ const parent={textContent:'Loại tệp Video MP4 Chất lượng'};
+ const button={offsetWidth:10,parentElement:parent,getAttribute:key=>key==='aria-label'?'Tải xuống':null,
+   scrollIntoView(){},click(){clicked++;}};
+ const document={body:{},querySelectorAll:()=>[button]};
+ const chrome={runtime:{sendMessage:async()=>clicked?{tracking:true,complete:true,id:7,filename:'part.mp4'}:{tracking:true}}};
+ const env={globalThis:{},document,chrome,getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f()};
+ vm.runInNewContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const checkpoints=[];
+ const result=await env.globalThis.SKSTAdapter.run({kind:'export',phase:{stage:'export_intent'}},async stage=>{if(stage)checkpoints.push(stage);});
+ assert.equal(clicked,1,'Resume an armed export whose MP4 confirmation is still open');
+ assert.deepEqual(checkpoints,['export_clicked']);
+ assert.equal(result.download_id,7);
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
 const candidates=[{id:'used',duration:10,title:'senior exercise'},{id:'short',duration:2,title:'senior exercise'},{id:'fresh',duration:8,title:'senior exercise'},{id:'bad',duration:8,title:'ballet'}];
 assert.equal(adapter.eligibleCards(candidates,{duration:4,positive:['exercise'],negative:['ballet']},['used']).map(c=>c.id).join(','),'fresh','Expanded search still rejects used, short, and unsuitable clips');
 
