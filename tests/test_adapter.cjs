@@ -6,6 +6,34 @@ assert(adapter.warningBounds({start:10,end:13},{start:10,end:13}));
 assert(!adapter.warningBounds({start:10,end:13},{start:10,end:15}),'Do not let a default five-second caption spill into the next clip');
 assert(!adapter.warningBounds({start:10,end:13},{start:9,end:12}),'Reject a caption shifted into the preceding clip');
 (async()=>{
+ const message='LỖI CẢNH 1 • Video thay thế: nhà kho';
+ let start=8,end=13,drag;
+ const scale=16,left=300;
+ const rect=(x,y,w,h)=>({left:x,right:x+w,top:y,bottom:y+h,width:w,height:h});
+ const clipRect=rect(left,100,1.82*scale,40);
+ const sliders=['biên bắt đầu','biên kết thúc'].map((name,i)=>({getAttribute:k=>k==='aria-label'?name:k==='aria-valuenow'?String(i*1820000):null}));
+ const clip={parentElement:{querySelector:()=>sliders[0],querySelectorAll:()=>sliders},querySelector:()=>null,querySelectorAll:()=>[],getBoundingClientRect:()=>clipRect};
+ const text={closest:()=>null,matches:()=>true,contains:()=>false,querySelectorAll:()=>[],querySelector:()=>null,
+   getAttribute:k=>k==='aria-label'?'Văn bản':null,textContent:'LỖI CẢNH 1 • Video thay thế',
+   getBoundingClientRect:()=>rect(left+start*scale,75,(end-start)*scale,18),
+   dispatchEvent:event=>{
+    if(event.type==='pointerdown'){
+      const r=text.getBoundingClientRect(),x=event.clientX;
+      drag={x,edge:x-r.left<2?'start':r.right-x<2?'end':'both'};
+    }
+    if(event.type==='pointerup'){
+      const delta=(event.clientX-drag.x)/scale;
+      if(drag.edge!=='end')start+=delta;
+      if(drag.edge!=='start')end+=delta;
+    }
+   }};
+ const document={elementFromPoint:()=>text,querySelectorAll:s=>s==='[data-role="timeline-scene"]'?[clip]:[text]};
+ const env={globalThis:{},document,PointerEvent:class{constructor(type,opts){Object.assign(this,opts,{type})}},setTimeout:f=>f()};
+ vm.runInNewContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ await env.globalThis.SKSTAdapter.fitWarningTrack({start:0,end:1.82,element:clip},message);
+ assert(adapter.warningBounds({start:0,end:1.82},{start,end}),'Move and shorten a 5 s bar with no accessible sliders');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{
  const message='LỖI CẢNH 14 • Video thay thế';
  const range={start:16,end:21};
  const handle=(name,read,update)=>{
