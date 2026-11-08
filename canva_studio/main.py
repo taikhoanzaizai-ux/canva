@@ -579,6 +579,8 @@ class App:
     def run(self):
         try:
             if self.worker_busy:return
+            if self.engine.state['mode']=='merging':
+                self.notice.set('Đang ghép các phần đã tải…');return
             if self.engine.state['mode'] in ('opening','opening_resume'):
                 self.notice.set('Chrome đang mở thiết kế. Không bấm lặp; tiện ích sẽ tự bắt đầu khi trang sẵn sàng.');return
             if self.engine.state.get('manual_edit_scene'):
@@ -605,11 +607,12 @@ class App:
                         self.engine.pause();raise
                     return
                 self.engine.configure(self.plan,u,chosen)
-            connection=self.engine.connection_status(u)
+            active_url=self.engine.canva_target()
+            connection=self.engine.connection_status(active_url)
             if connection['ready']:self.engine.start()
             else:
                 chrome_path();self.engine.resume_in_chrome()
-                try:open_chrome(u)
+                try:open_chrome(active_url)
                 except Exception:
                     self.engine.pause();raise
         except Exception as e:messagebox.showerror('Chưa thể bắt đầu',str(e))
@@ -619,7 +622,7 @@ class App:
         if stage=='insert_intent':
             v=messagebox.askyesnocancel('Kiểm tra Canva','Cảnh đang dở đã xuất hiện ở cuối timeline chưa?\nCó: tiếp tục cắt cảnh đó.\nKhông: chỉ chọn sau khi đã xóa phần chèn dở trong Canva.\nHủy: giữ nguyên để kiểm tra thêm.')
             if v is not None:self.engine.recover('inserted' if v else 'not_inserted')
-        elif stage in ('upload_intent','export_intent','title_uploading'):
+        elif stage in ('upload_intent','export_intent','export_clicked','title_uploading'):
             if messagebox.askyesno('Kiểm tra Canva','Chỉ đặt lại sau khi đã xóa voice tải dở khỏi thiết kế, hoặc đã hủy lần xuất đang dở. Đặt lại thao tác này?'):self.engine.recover('not_inserted')
         else:messagebox.showinfo('Tiếp tục','Đã giữ tiến độ. Kiểm tra lại Canva rồi bấm Tiếp tục.')
     def show_errors(self):
