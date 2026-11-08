@@ -162,6 +162,20 @@ assert.equal(adapter.stockDuration('5,0 giây'),5);
 assert.equal(adapter.stockDuration('EDU'),0);
 assert.equal(adapter.illustrationScene(customIllustration).queries[0],'printed scientific article');
 assert.equal(adapter.illustrationScene({...customIllustration,manual_queries:true}),null);
+assert.equal(adapter.illustrationScene({allow_all_media:true,manual_queries:true,queries:['swimming stroke','stroke']}),null);
+for(const [query,broad,caption,unrelated] of [
+ ['vi mạch trong não tổn thương mô phỏng','não bộ','Human brain animation','Highway interchange'],
+ ['đột quỵ mô phỏng não','đau ngực','Woman clutching her chest','Swimming freestyle stroke'],
+ ['đột quỵ','não bộ','Human brain anatomy','Paint brush stroke'],
+ ['máy đo vận tốc sóng mạch chuyên dụng','máy đo huyết áp','Digital blood pressure monitor','Kitchen weighing scale'],
+]){
+ const scene={duration:4,allow_all_media:true,manual_queries:true,queries:[query],illustration_queries:['old unrelated AI query']};
+ const fallback=adapter.illustrationScene(scene);
+ assert(fallback.queries.includes(broad),query);
+ assert(!fallback.queries.includes('old unrelated AI query'),query);
+ const cards=[{id:'ok',title:caption,duration:8},{id:'wrong',title:unrelated,duration:8}];
+ assert.equal(adapter.eligibleCards(cards,fallback,[]).map(c=>c.id).join(','),'ok',query);
+}
 for(const [subject,correct,wrong] of [['walnut','Walnut kernels on table','Cashew nuts on table'],['stomach','Human stomach anatomy','Human intestine anatomy'],['walking','Senior walking outdoors','Senior seated exercise'],['brain','Human brain illustration','Human heart illustration'],['juice','Fresh juice in glass','Fresh fruits on table']]){
  const scene={duration:4,allow_all_media:true,topic_only:true,subjects:[subject],positive:[subject]};
  assert.equal(adapter.eligibleCards([{id:'right',title:correct,duration:10},{id:'wrong',title:wrong,duration:10}],scene,[]).map(c=>c.id).join(','),'right','Match the named object, not a neighboring subject: '+subject);
