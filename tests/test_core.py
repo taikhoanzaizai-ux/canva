@@ -46,6 +46,15 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_unverified_overlay_retains_clip_checkpoint(self):
+        self.e.state['voice_done']=True
+        self.e.next_task(self.client)
+        self.e.check(dict(id='1',client='A',stage='overlay_intent',asset='video'))
+        self.e.result(dict(id='1',client='A',overlay_unverified='Chữ vượt khỏi thời lượng clip'))
+        self.assertEqual(self.e.state['phase']['stage'],'overlay_intent')
+        self.assertEqual(self.e.state['mode'],'attention')
+        self.assertNotIn('error_card',self.e.state['scenes'][0])
+
     def test_missing_stock_does_not_schedule_a_text_card(self):
         self.e.state['voice_done']=True
         self.e.next_task(self.client)
