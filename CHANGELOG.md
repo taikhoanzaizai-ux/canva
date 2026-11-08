@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.9
+
+- Với chủ đề ngoài bộ từ khóa, thử bỏ từ mô tả kiểu hình, thao tác và triệu chứng để tìm theo đối tượng chính. Áp dụng cả với cụm tìm do người dùng nhập.
+- Xoa đầu, bóp đầu và đau đầu có thể dùng tư liệu vùng đầu. Giữ dấu tiếng Việt khi so khớp để phân biệt đầu với đau.
+
 ## 0.14.8
 
 - Dùng bộ chủ đề chung để tìm tư liệu theo đối tượng chính cho cả từ khóa tự động và từ khóa nhập tay. Áp dụng cho thực phẩm, cơ quan, triệu chứng, vận động và các chủ đề đã có trong bộ từ khóa.
