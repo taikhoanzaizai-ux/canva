@@ -52,6 +52,16 @@ def sentence_context(scenes,index):
 def refine_queries(scenes,preserve_before=0):
     for i,scene in enumerate(scenes):
         if scene['id']<=preserve_before or scene.get('kind')=='title':continue
+        if norm(scene.get('text','').strip())=='khoang nghi' and not scene.get('manual_queries'):
+            nearby=next((row for row in [*reversed(scenes[:i]),*scenes[i+1:]]
+                         if row.get('kind')!='title' and norm(row.get('text','').strip())!='khoang nghi' and row.get('queries')),None)
+            keywords=(nearby or {}).get('queries',[])
+            queries=list(dict.fromkeys([q for q in keywords if len(q.strip())>3]+['cảnh đường phố','street scenery']))
+            scene.update(queries=queries,subjects=(nearby or {}).get('subjects') or queries[:2],
+                         positive=queries,actions=[],review=False,requires_review=False,topic_only=True,
+                         allow_all_media=True,context_only=True,query_basis='tư liệu nối theo cảnh liền kề')
+            scene.pop('keyword_review',None)
+            continue
         # Respect manually edited query lists; generated fallback is explicitly review=True.
         generated=scene.get('query_basis') or scene.get('queries')==describe(scene.get('text',''))['queries'] or any(scene.get('queries')==r[1] for r in RULES)
         if scene.get('manual_queries') or scene.get('keyword_provider') or (not scene.get('review') and not generated):continue
