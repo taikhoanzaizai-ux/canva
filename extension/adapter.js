@@ -909,12 +909,13 @@
     const count=rows.length,scene=task.scene;
     if(!task.allowed_counts.includes(count))throw Error(`Canva có ${count} cảnh, cần ${task.allowed_counts.join(' hoặc ')} cảnh. Hãy thay cảnh tại chỗ, không thêm thừa hay xóa cảnh khác.`);
     if(!rows[scene.id-1]?.image)throw Error(`Cảnh ${scene.id} chưa có ảnh/video trên timeline.`);
+    if(task.overlay_scene&&!rows[task.overlay_scene-1]?.image)throw Error(`Chưa thấy video đã chèn ở cảnh ${task.overlay_scene}.`);
     const voice=verifyVoice(task.voice_name,task.voice_duration);
     if(task.fit_final&&scene.id===count)rows=await fitFinalScene(rows,voice.verified_voice_end);
     const row=rows[scene.id-1];
     if(!Number.isFinite(row.start)||!Number.isFinite(row.end))throw Error('Chưa đọc được mốc thời gian cảnh tự sửa.');
     const frames=rows.map(r=>({start:r.start,end:r.end}));
-    return {manual_verified:true,review_token:task.review_token,verified_count:count,verified_start:row.start,verified_end:row.end,frames,asset:row.image,...voice};
+    return {manual_verified:true,review_token:task.review_token,verified_count:count,verified_start:row.start,verified_end:row.end,frames,asset:row.image,verified_overlay_scene:task.overlay_scene,...voice};
   }
   async function auditTask(task){
     await closeMenu();await tail();
