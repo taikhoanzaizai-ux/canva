@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.5
+
+- Đồng nhất ngưỡng kiểm tra điểm kết thúc ảnh với cảnh kế tiếp. Có thể tiếp tục từ ảnh báo lỗi đã chèn nếu điểm cuối lệch không quá 0,12 giây, kể cả khi Canva hiển thị thời lượng mặc định 5 giây.
+- Xác nhận ảnh theo mốc của cảnh cuối khi Canva thay đổi số cảnh đang hiển thị trong lúc chỉnh thời lượng.
+
 ## 0.14.4
 
 - Khi Canva báo không có video cho từ khóa đang tìm, chuyển ngay sang cụm tiếp theo. Ưu tiên video gần chủ đề trước khi thử ảnh và thẻ chữ.
