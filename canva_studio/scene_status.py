@@ -11,9 +11,12 @@ def scene_status(scene,state):
     error=scene.get('error_card') or (records[-1] if records else {})
     if error:return ('Lỗi — đã chèn ảnh' if ident in state.get('done',[]) else 'Lỗi — cần sửa','error',error.get('message','Không có mô tả lỗi'))
     if ident in state.get('done',[]):
+        if scene.get('fallback_warning'):
+            return ('Video thay thế','review',scene.get('overlay_error') or scene['fallback_warning'])
         if scene.get('fallback_source',{}).get('kind')=='text_card':
             return ('Thẻ chữ dự phòng','review','Chưa chọn được tư liệu phù hợp cho cảnh này.')
         return ('Đã dựng','done','')
+    if scene.get('missing_stock'):return ('Thiếu tư liệu','review',scene['missing_stock'])
     if state.get('phase',{}).get('id')==str(ident):return ('Đang dựng' if state.get('mode')=='running' else 'Đang dở','review','')
     if scene.get('keyword_review') and not scene.get('manual_queries'):
         return ('Duyệt từ khóa','review',scene['keyword_review'])
