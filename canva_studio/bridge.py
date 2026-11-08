@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.21'
+MIN_EXTENSION_VERSION='0.14.22'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
