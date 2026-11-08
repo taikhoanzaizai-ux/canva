@@ -1,5 +1,9 @@
 # Các bản cập nhật
 
+## 0.14.11
+
+- Khi Canva giữ thời lượng khác dự kiến cho thẻ chữ đã chèn, kiểm tra vị trí và mốc timeline rồi tự bù chênh lệch vào các cảnh sau. Giữ điểm kết thúc của phần voice.
+
 ## 0.14.10
 
 - Tải thẻ chữ và tiêu đề dưới dạng ảnh PNG, tránh bước xử lý video tiêu đề khiến Canva chờ lâu. Khi tiếp tục, xác nhận ảnh đã chèn và giữ mốc voice.
