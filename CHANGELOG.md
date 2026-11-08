@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.14
+
+- Ghi nhớ lựa chọn AI, model và đường dẫn Antigravity. Khôi phục phiên ChatGPT đã lưu và tự gia hạn khi cần.
+- Mã hóa phiên ChatGPT và khóa API bằng Windows. Thêm mục Dán khi bấm chuột phải vào ô khóa API.
+
 ## 0.14.13
 
 - Xác nhận đúng nút tải MP4 trong bảng Canva và tiếp tục phiên tải đã theo dõi.
