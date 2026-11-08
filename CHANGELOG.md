@@ -1,5 +1,9 @@
 # Các bản cập nhật
 
+## 0.14.17
+
+- Thêm nút Dựng phần tiếp theo khi cảnh cuối đang kẹt và còn phần voice khác. Giữ thiết kế cũ và quay lại xác nhận cảnh cuối trước khi tải MP4.
+
 ## 0.14.16
 
 - Tự thử căn cảnh cuối theo điểm kết thúc voice khi xác nhận cảnh đã sửa và khi kiểm tra cả phần. Giữ mốc voice gốc khi đối chiếu.
