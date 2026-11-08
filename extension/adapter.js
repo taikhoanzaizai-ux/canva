@@ -569,9 +569,11 @@
   }
   async function errorCardTask(task,checkpoint,assetData){
     const s=task.scene;
+    const isError=!!s.error_card;
+    const cardPhase={media_kind:'image',card_kind:isError?'error':'text'};
     // Reconcile the failed insert once; never repeat the original media search.
     // A confirmed final scene is removed before the single error image is added.
-    if(!['inserted','trimmed','muted'].includes(task.phase?.stage)){
+    if(isError&&!['inserted','trimmed','muted'].includes(task.phase?.stage)){
       const last=await tail(),count=await countTimeline([s.id-1,s.id]);
       const placement=errorPlacement(count,last,s);
       if(placement==='replace'){
@@ -582,12 +584,11 @@
     if(['inserted','trimmed','muted'].includes(task.phase?.stage)){
       const last=await tail();if(!last.element)throw Error('Không thấy thẻ lỗi vừa chèn để đặt thời lượng');
       if(await countTimeline([s.id])!==s.id||Math.abs(last.start-s.start)>.12)throw Error('Thẻ lỗi chưa đúng cảnh cần xử lý.');
-      await selectClip(await tail());
     }else{
       if(task.phase?.stage==='insert_intent')throw Error('Thẻ lỗi đang chèn dở; chưa tự chèn lại.');
       let raw=await assetData();
-      if(raw.error_text)raw={...raw,mime:'image/png',data:errorImage(raw.error_text)};
-      if(raw.mime!=='image/png')throw Error('Thẻ lỗi phải là ảnh PNG, không dùng lại clip Video tải lên đang lỗi.');
+      if(raw.error_text||raw.card_text)raw={...raw,mime:'image/png',data:errorImage(raw.error_text||raw.card_text)};
+      if(raw.mime!=='image/png')throw Error('Thẻ chữ cần ảnh PNG.');
       task.fallback_id=raw.asset_id;
       const name=raw.name.replace(/\.png$/i,'');
       const uploaded=()=>{const e=find(new RegExp(name));return e&&!e.closest('[role="group"]')?.querySelector('[role="progressbar"]')?e:null;};
@@ -607,18 +608,19 @@
       await ensureUploadPanel();
       if(imageTab())await click(imageTab());
       const imageCard=await wait(uploaded,'Không thấy ảnh báo lỗi vừa tải');
-      await checkpoint('insert_intent',{asset:raw.name,media_kind:'image'});await click(imageCard);
+      await checkpoint('insert_intent',{asset:raw.name,...cardPhase});await click(imageCard);
       await tail();
       if(await countTimeline([s.id])!==s.id)throw Error('Chưa xác nhận được ảnh báo lỗi trên timeline');
-      await checkpoint('inserted',{asset:raw.name,media_kind:'image'});
+      await checkpoint('inserted',{asset:raw.name,...cardPhase});
     }
-    await ensureBackground();const before=await tail();
-    if(Math.abs(before.start-s.start)>.12)throw Error('Thẻ lỗi không nằm đúng mốc voice');
+    const before=await tail();
+    if(!before.element||Math.abs(before.start-s.start)>.12)throw Error('Thẻ chữ không nằm đúng mốc voice');
+    await selectClip(before);await ensureBackground();
     await timePhoto(s.start+s.duration-before.start);
     const last=await tail();
     if(Math.abs(last.end-s.start-s.duration)>.12)throw Error('Thẻ lỗi chưa đủ thời lượng voice');
-    await checkpoint('trimmed',{media_kind:'image'});
-    return {asset:task.fallback_id||'error:'+s.id,title:'LỖI CẢNH '+task.id};
+    await checkpoint('trimmed',cardPhase);
+    return {asset:task.fallback_id||(isError?'error:'+s.id:undefined),title:isError?'LỖI CẢNH '+task.id:s.title_text||s.text};
   }
   function errorPlacement(count,last,scene){
     if(scene.id===1&&count===1&&!last.image)return 'append';
@@ -648,8 +650,10 @@
   async function titleTask(task,checkpoint,assetData){
     const s=task.scene;const phase=task.phase?.stage;
     if(phase==='insert_intent')throw Error('Tiêu đề có thể đã được chèn. Dùng Xử lý cảnh bị dở trước khi tiếp tục để tránh trùng.');
+    if(task.phase?.card_kind==='text')return await errorCardTask(task,checkpoint,assetData);
     if(!['inserted','trimmed','muted'].includes(phase)){
       const raw=await assetData();task.fallback_id=raw.asset_id;
+      if(raw.card_text||raw.mime==='image/png')return await errorCardTask(task,checkpoint,async()=>raw);
       const titleName=raw.name.replace(/\.mp4$/i,'');
       const uploaded=()=>{
         const e=find(new RegExp(titleName));if(!e)return null;
@@ -807,11 +811,12 @@
     try{
     if(task.kind==='manual_review')return await manualReviewTask(task);
     if(task.kind==='rename')return await renameTask(task);
-    if(task.kind==='scene'&&['rollback_intent','rollback_done'].includes(task.phase?.stage)){
+    if(task.kind==='scene'&&!task.scene.error_card&&['rollback_intent','rollback_done'].includes(task.phase?.stage)){
       const reason=task.phase.reason||'Tiếp tục thay cảnh lỗi bằng thẻ chữ';
       await rollbackScene(task,checkpoint);throw Error(reason);
     }
     if(task.kind==='scene'&&task.scene.error_card)return await errorCardTask(task,checkpoint,fallbackAsset);
+    if(task.kind==='scene'&&task.phase?.card_kind==='text')return await errorCardTask(task,checkpoint,fallbackAsset);
     if(task.kind==='scene')return task.scene.kind==='title'?await titleTask(task,checkpoint,titleAsset):await sceneTask(task,checkpoint,fallbackAsset);
     if(task.kind==='voice')return voiceTask(task,checkpoint,voice);
     if(task.kind==='audit')return auditTask(task);
