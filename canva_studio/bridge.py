@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.16'
+MIN_EXTENSION_VERSION='0.14.17'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -138,7 +138,7 @@ class Engine:
             if self.state['mode']=='merging':return
             if not self.state['scenes']:raise ValueError('Chưa có danh sách cảnh.')
             if len(self.state['scenes'])>50:raise ValueError('Bản thử hỗ trợ tối đa 50 cảnh mỗi dự án. Hãy chọn đoạn ngắn hơn.')
-            if self.state.get('manual_edit_scene'):
+            if self.state.get('manual_edit_scene') and not self.state.get('defer_final_scene'):
                 if not self.state.get('manual_review'):self.request_manual_review(self.state['manual_edit_scene'])
                 else:
                     self.running=None;self.last_activity=time.time();self.state['mode']='running';self.log('Tiếp tục kiểm tra cảnh bạn đã tự sửa trên Canva…')
@@ -169,6 +169,19 @@ class Engine:
     def has_more_voice_parts(self):
         return self.state.get('part_index',0)+1<len(self.state.get('parts',[]))
 
+    def can_defer_final_scene(self):
+        state=self.state
+        scenes=state['scenes']
+        return (state['mode'] in ('attention','paused') and not self.running and
+                self.has_more_voice_parts() and bool(scenes) and state['voice_done'] and
+                {s['id'] for s in scenes[:-1]}.issubset(state['done']))
+
+    def defer_final_scene(self):
+        with self.lock:
+            if not self.can_defer_final_scene():raise ValueError('Chỉ có thể chuyển phần khi đã tới cảnh cuối và còn phần voice tiếp theo.')
+            self.state['defer_final_scene']=True
+            self.log('Sẽ kiểm tra lại cảnh cuối trước khi xuất MP4. Đang chuẩn bị dựng phần tiếp theo.')
+
     def export_folder(self):
         if not self.state.get('export_dir'):
             self.state['export_dir']=str((self.folder/'Exports'/secrets.token_hex(8)).resolve())
@@ -186,6 +199,15 @@ class Engine:
             state['mode']='complete'
             return None,'Đã ghép video hoàn chỉnh: '+state['final_video']
         history=state.get('history',[])
+        pending=next((i for i,p in enumerate(history) if p.get('audit_pending')),None)
+        if pending is not None:
+            state['export_history_index']=pending
+            self.browser={}
+            return self.canva_target(),f'Đang quay lại phần {pending+1} để kiểm tra cảnh cuối trước khi tải.'
+        if not state.get('export_done'):
+            state.pop('export_history_index',None)
+            self.browser={}
+            return self.canva_target(),'Đã kiểm tra các phần. Đang mở lại phần cuối để tải MP4.'
         missing=next((i for i,p in enumerate(history) if not p.get('download_verified')),None)
         if missing is not None:
             state['export_history_index']=missing
@@ -292,7 +314,14 @@ class Engine:
             if self.running and self.running['client']!=body.get('client'):return dict(task=None,mode='busy')
             title=project_title(self.state.get('project_name',''),self.state.get('part_index',0))
             manual=self.state.get('manual_review')
-            if self.state.get('export_history_index') is not None:task=dict(id='export',kind='export')
+            history_index=self.state.get('export_history_index')
+            if history_index is not None:
+                record=self.state['history'][history_index]
+                if record.get('audit_pending'):
+                    task=dict(id='audit_history',kind='audit',voice_name=record['voice_name'],count=len(record['scenes']),
+                              duration=record['duration'],require_last_media=True)
+                else:task=dict(id='export',kind='export')
+            elif self.state.get('defer_final_scene'):task=dict(id='next_design',kind='next_design')
             elif manual:
                 scene=next(s for s in self.state['scenes'] if s['id']==manual['scene_id'])
                 counts={max([scene['id'],*self.state['done']])}
@@ -324,7 +353,8 @@ class Engine:
                         self.state['deferred_export_phase']=phase
                         self.save()
                     task=dict(id='next_design',kind='next_design')
-                elif not self.state['export_done']:task=dict(id='export',kind='export')
+                elif not self.state['export_done'] and not any(p.get('audit_pending') for p in self.state.get('history',[])):
+                    task=dict(id='export',kind='export')
                 else:
                     target,message=self.finish_exports()
                     self.log(message)
@@ -428,18 +458,33 @@ class Engine:
                 scenes=self.state['scenes'];last=scenes[-1];duration=round(last.get('voice_end',last['start']+last['duration']),3)
                 if len(self.state['done'])!=len(scenes) or body.get('verified_count')!=len(scenes) or abs(float(body.get('verified_duration',-1))-duration)>.12:raise ValueError('Chưa xác nhận đủ cảnh và voice phần hiện tại.')
                 self.state['audit_done']=True;msg='Đã kiểm tra đủ cảnh và thời lượng voice.'
+            elif key=='audit_history':
+                record=self.state['history'][self.state['export_history_index']]
+                duration=float(body.get('verified_duration',-1))
+                if not math.isfinite(duration) or body.get('verified_count')!=len(record['scenes']) or abs(duration-record['duration'])>.12:
+                    raise ValueError('Chưa xác nhận đủ cảnh và voice của phần cần kiểm tra lại.')
+                record.pop('audit_pending',None)
+                export_target,msg=self.finish_exports()
             elif key=='next_design':
                 target=body.get('new_target','')
                 if not valid_canva(target) or canonical_url(target)==canonical_url(self.state['target']):raise ValueError('Thiết kế tiếp theo không hợp lệ.')
-                if not self.state.get('audit_done'):raise ValueError('Chưa kiểm tra xong phần hiện tại.')
+                deferred=self.state.get('defer_final_scene')
+                if not self.state.get('audit_done') and not deferred:raise ValueError('Chưa kiểm tra xong phần hiện tại.')
                 index=self.state.get('part_index',0)+1
                 if index>=len(self.state.get('parts',[])):raise ValueError('Không còn voice tiếp theo.')
                 record=dict(target=self.state['target'],voice=self.state['voice'],scenes=self.state['scenes'],source_start=self.state['parts'][index-1]['source_start'],duration=self.state['parts'][index-1]['duration'])
+                if deferred and not self.state.get('audit_done'):
+                    name=self.state.get('voice_name','')
+                    if not name:
+                        with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
+                    record.update(audit_pending=True,voice_name=name)
                 if self.state.get('export_done') and self.state.get('download_verified'):
                     record['download_verified']=self.state.pop('download_verified')
                 if self.state.get('deferred_export_phase'):
                     record['export_phase']=self.state.pop('deferred_export_phase')
                 self.state.setdefault('history',[]).append(record)
+                for field in ('defer_final_scene','manual_review','manual_review_error','manual_edit_scene'):
+                    self.state.pop(field,None)
                 part=self.state['parts'][index]
                 refine_queries(part['scenes'])
                 self.state.update(part_index=index,target=target,voice=part['voice'],voice_name='',named_title='',scenes=part['scenes'],done=[],voice_done=False,export_done=False,audit_done=False)
@@ -449,7 +494,8 @@ class Engine:
             elif key=='voice':
                 self.state['voice_done']=True;self.state['voice_name']=body.get('voice_name','');msg='Đã đặt voice trên timeline.'
             elif key=='export':
-                if self.has_more_voice_parts():raise ValueError('Còn phần voice chưa dựng. Hoàn tất các phần rồi mới tải MP4.')
+                if self.has_more_voice_parts() or any(p.get('audit_pending') for p in self.state.get('history',[])):
+                    raise ValueError('Còn phần voice hoặc cảnh cuối chưa xác nhận. Hoàn tất các phần rồi mới tải MP4.')
                 if body.get('download_complete') is not True or type(body.get('download_id')) is not int or body['download_id']<0:raise ValueError('Chưa xác nhận MP4 tải xuống hoàn tất.')
                 history_index=self.state.get('export_history_index')
                 index=self.state.get('part_index',0) if history_index is None else history_index
