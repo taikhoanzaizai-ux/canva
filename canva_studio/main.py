@@ -19,7 +19,8 @@ from canva_studio.companion import companion_status
 from canva_studio.recognizer import paths as recognizer_paths,ensure_recognizer,command as recognition_command,convert_output
 from canva_studio.scene_status import scene_status
 from canva_studio.keyword_api import API_KEY_PAGES, CHATGPT_PLAN, DEFAULT_MODELS, GEMINI, GEMINI_SIGNIN, LOCAL, MODEL_OPTIONS, OPENAI, keyword_updates
-from canva_studio.chatgpt_signin import sign_in
+from canva_studio.chatgpt_signin import forget_session, remember_session, restore_session, sign_in
+from canva_studio import credentials
 from canva_studio.gemini_signin import INSTALL_URL, cli_executable, open_sign_in
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent.parent))
@@ -121,7 +122,9 @@ class App:
             atomic_json(os.environ['SKST_UPDATE_HEALTH'],dict(version=VERSION,ready=True))
 
     def build_keyword_settings(self, panel):
-        self.keyword_provider = tk.StringVar(value=LOCAL)
+        providers=(LOCAL, CHATGPT_PLAN, GEMINI_SIGNIN, OPENAI, GEMINI)
+        selected=self.settings.get('keyword_provider')
+        self.keyword_provider = tk.StringVar(value=selected if selected in providers else LOCAL)
         ttk.Label(panel, text='Tạo từ khóa theo nội dung từng cảnh', font=('Segoe UI',13,'bold')).pack(anchor='w')
         ttk.Combobox(panel, textvariable=self.keyword_provider, values=(LOCAL, CHATGPT_PLAN, GEMINI_SIGNIN, OPENAI, GEMINI),
                      state='readonly', width=30).pack(anchor='w', pady=8)
@@ -136,15 +139,20 @@ class App:
         ttk.Button(actions, text='Ngắt / Hủy đăng nhập', command=self.disconnect_chatgpt).pack(side='left', padx=6)
         self.chatgpt_model = ttk.Combobox(actions, state='readonly', width=30)
         self.chatgpt_model.pack(side='left', fill='x', expand=True)
-        self.chatgpt_status = tk.StringVar(value='Dành cho tài khoản ChatGPT đủ điều kiện. Phiên dùng trong lần mở SKST này.')
+        self.chatgpt_status = tk.StringVar(value='Đăng nhập ChatGPT một lần để SKST có thể khôi phục phiên trên máy này.')
         ttk.Label(chatgpt, textvariable=self.chatgpt_status, wraplength=900).pack(anchor='w', pady=(6,0))
         self.keyword_models = {}
         self.keyword_keys = {}
+        self.keyword_key_path=DATA/'keyword-keys.json'
+        try:self.saved_keyword_keys=credentials.load(self.keyword_key_path)
+        except OSError:self.saved_keyword_keys={}
+        saved_models=self.settings.get('keyword_models',{})
+        if not isinstance(saved_models,dict):saved_models={}
         for provider, model in DEFAULT_MODELS.items():
             group = ttk.LabelFrame(panel, text=provider, padding=10)
             group.pack(fill='x', pady=5)
-            self.keyword_models[provider] = tk.StringVar(value=model)
-            self.keyword_keys[provider] = tk.StringVar()
+            self.keyword_models[provider] = tk.StringVar(value=saved_models.get(provider,model))
+            self.keyword_keys[provider] = tk.StringVar(value=self.saved_keyword_keys.get(provider,''))
             model_row = ttk.Frame(group)
             model_row.pack(fill='x', pady=3)
             ttk.Label(model_row, text='Model', width=12).pack(side='left')
@@ -155,7 +163,10 @@ class App:
             key_row = ttk.Frame(group)
             key_row.pack(fill='x', pady=3)
             ttk.Label(key_row, text='Khóa API', width=12).pack(side='left')
-            ttk.Entry(key_row, textvariable=self.keyword_keys[provider], show='*').pack(side='left', fill='x', expand=True)
+            entry=ttk.Entry(key_row, textvariable=self.keyword_keys[provider], show='*')
+            entry.pack(side='left', fill='x', expand=True)
+            self.bind_key_paste(entry)
+            entry.bind('<FocusOut>',lambda event:self.save_keyword_keys())
             ttk.Button(key_row, text='Mở Google AI Studio để lấy khóa' if provider == GEMINI else 'Lấy khóa API',
                        command=lambda url=API_KEY_PAGES[provider]: webbrowser.open_new_tab(url)).pack(side='left', padx=(8, 0))
             if provider == GEMINI:
@@ -164,7 +175,7 @@ class App:
             'Chọn model trong danh sách hoặc nhập mã model khác. '
             'Khi dùng AI trực tuyến, ứng dụng gửi văn bản từng cảnh và câu kề để phân tích. '
             'Voice vẫn xử lý trên máy. API có thể tính phí theo tài khoản. '
-            'Khóa nhập ở đây chỉ dùng trong phiên này.')).pack(anchor='w', pady=10)
+            'Khóa API được mã hóa trên máy này. Xóa nội dung ô để bỏ khóa đã lưu.')).pack(anchor='w', pady=10)
         plan_actions = ttk.Frame(panel)
         plan_actions.pack(fill='x')
         self.keyword_update_button = ttk.Button(plan_actions, text='Cập nhật từ khóa cảnh chưa dựng',
@@ -176,6 +187,25 @@ class App:
         ttk.Label(panel, textvariable=self.keyword_plan_hint, wraplength=900).pack(anchor='w', pady=(8,0))
         self.keyword_notice = tk.StringVar()
         ttk.Label(panel, textvariable=self.keyword_notice, wraplength=900).pack(anchor='w', pady=8)
+        self.root.after(0,self.restore_chatgpt)
+
+    def bind_key_paste(self, entry):
+        menu=tk.Menu(entry,tearoff=False)
+        menu.add_command(label='Dán',command=lambda:entry.event_generate('<<Paste>>'))
+        def show(event):
+            entry.focus_set()
+            try:menu.tk_popup(event.x_root,event.y_root)
+            finally:menu.grab_release()
+            return 'break'
+        entry.bind('<Button-3>',show)
+
+    def save_keyword_keys(self):
+        keys={provider:key.get().strip() for provider,key in self.keyword_keys.items() if key.get().strip()}
+        if keys==self.saved_keyword_keys:return
+        try:credentials.save(self.keyword_key_path,keys)
+        except OSError:
+            self.keyword_notice.set('Windows chưa lưu được khóa API mã hóa. Khóa vẫn dùng được trong lần mở này.')
+        else:self.saved_keyword_keys=keys
 
     def build_gemini_signin(self, group):
         self.antigravity_path = tk.StringVar(value=self.settings.get('antigravity_path',''))
@@ -186,7 +216,7 @@ class App:
         ttk.Button(controls,text='Chọn agy.exe',command=self.choose_antigravity).pack(side='left')
         self.gemini_signin_status = tk.StringVar(value=(
             'Để dùng Gemini bằng tài khoản Google, đăng nhập trong Antigravity rồi đặt /config → Tool Permission → Strict. '
-            'SKST dùng model đã chọn trong Antigravity.'))
+            'SKST dùng lại tài khoản và model do Antigravity lưu trên máy này.'))
         ttk.Label(group,textvariable=self.gemini_signin_status,wraplength=900).pack(anchor='w',pady=(4,0))
 
     def choose_antigravity(self):
@@ -195,6 +225,7 @@ class App:
             return
         try:
             self.antigravity_path.set(str(cli_executable(selected)))
+            self.save_settings()
             self.gemini_signin_status.set('Đã chọn Antigravity CLI. Bấm Đăng nhập Google để mở phiên.')
         except ValueError as error:
             self.gemini_signin_status.set(str(error))
@@ -209,25 +240,31 @@ class App:
             self.gemini_signin_status.set(str(error))
             return
         self.keyword_provider.set(GEMINI_SIGNIN)
+        self.antigravity_path.set(str(executable))
+        self.save_settings()
         self.gemini_signin_status.set(
             'Hoàn tất đăng nhập Google trong Antigravity. Đặt /config → Tool Permission → Strict, rồi quay lại SKST.')
 
-    def connect_chatgpt(self):
+    def restore_chatgpt(self):
+        if (DATA/'chatgpt-session.json').is_file():
+            self.connect_chatgpt(restore=True)
+
+    def connect_chatgpt(self, restore=False):
         if self.chatgpt_attempt is not None or self.worker_busy:
             return
         cancelled = threading.Event()
         self.chatgpt_attempt = cancelled
         self.chatgpt_signin_button.configure(state='disabled')
-        self.chatgpt_status.set('Hoàn tất đăng nhập và cấp quyền trong trình duyệt.')
+        self.chatgpt_status.set('Đang khôi phục phiên ChatGPT…' if restore else 'Hoàn tất đăng nhập và cấp quyền trong trình duyệt.')
 
         def work():
             try:
-                session = sign_in(DATA, cancelled)
-                self.tasks.put(('chatgpt_signin', (cancelled, session, 'Đang dùng lượt AI theo gói ChatGPT.')))
-            except ValueError as error:
-                self.tasks.put(('chatgpt_signin', (cancelled, None, str(error))))
+                session = restore_session(DATA,cancelled) if restore else sign_in(DATA, cancelled)
+                self.tasks.put(('chatgpt_signin', (cancelled, session, 'Đang dùng lượt AI theo gói ChatGPT.',restore)))
+            except (OSError,ValueError) as error:
+                self.tasks.put(('chatgpt_signin', (cancelled, None, str(error),restore)))
             except Exception:
-                self.tasks.put(('chatgpt_signin', (cancelled, None, 'Chưa đăng nhập được ChatGPT. Hãy thử lại.')))
+                self.tasks.put(('chatgpt_signin', (cancelled, None, 'Chưa đăng nhập được ChatGPT. Hãy thử lại.',restore)))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -240,24 +277,39 @@ class App:
         self.chatgpt_session = None
         self.chatgpt_model.set('')
         self.chatgpt_model.configure(values=())
-        self.chatgpt_status.set('Đã ngắt phiên ChatGPT trong SKST.')
+        try:
+            forget_session(DATA)
+            self.chatgpt_status.set('Đã ngắt và xóa phiên ChatGPT lưu trong SKST.')
+        except OSError:
+            self.chatgpt_status.set('Đã ngắt phiên hiện tại. Windows chưa xóa được phiên ChatGPT đã lưu.')
         if self.keyword_provider.get() == CHATGPT_PLAN:
             self.keyword_provider.set(LOCAL)
 
     def finish_chatgpt_signin(self, result):
-        attempt, session, message = result
+        attempt, session, message, restore = result
         if self.chatgpt_attempt is not attempt:
             return
         self.chatgpt_attempt = None
         self.chatgpt_signin_button.configure(state='normal')
         if attempt.is_set():
+            try:forget_session(DATA)
+            except OSError:pass
             return
         self.chatgpt_status.set(message)
         if session:
             self.chatgpt_session = session
             self.chatgpt_model.configure(values=[f'{name} ({slug})' for slug,name in session.models])
-            self.chatgpt_model.current(0)
-            self.keyword_provider.set(CHATGPT_PLAN)
+            preferred=self.settings.get('chatgpt_model')
+            self.chatgpt_model.current(next((i for i,(slug,_) in enumerate(session.models) if slug==preferred),0))
+            if session.account:self.chatgpt_status.set(message+' '+session.account)
+            if not restore:
+                self.keyword_provider.set(CHATGPT_PLAN)
+                try:
+                    if not remember_session(DATA,session):
+                        self.chatgpt_status.set('Đã kết nối ChatGPT. OpenAI chưa cấp mã gia hạn để nhớ phiên.')
+                except OSError:
+                    self.chatgpt_status.set('Đã kết nối ChatGPT. Windows chưa lưu được phiên mã hóa.')
+                self.save_settings()
 
     def keyword_config(self):
         provider = self.keyword_provider.get()
@@ -271,7 +323,6 @@ class App:
             session = self.chatgpt_session
             if session is None or not 0 <= index < len(session.models):
                 raise ValueError('Bấm Sign in with ChatGPT trong Từ khóa AI, rồi chọn model.')
-            session.access_token()
             return provider, session.models[index][0], session
         env_key = 'OPENAI_API_KEY' if provider == OPENAI else 'GEMINI_API_KEY'
         key = self.keyword_keys[provider].get().strip() or os.environ.get(env_key, '').strip()
@@ -403,7 +454,12 @@ class App:
         p=filedialog.askopenfilename(filetypes=[('Mốc lời đọc','*.json *.srt *.vtt')]);
         if p:self.transcript.set(p)
     def save_settings(self):
-        self.settings={k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript),('antigravity_path',self.antigravity_path)]};atomic_json(DATA/'settings.json',self.settings)
+        self.settings.update({k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript),('antigravity_path',self.antigravity_path)]})
+        self.settings.update(keyword_provider=self.keyword_provider.get(),keyword_models={name:value.get() for name,value in self.keyword_models.items()})
+        index=self.chatgpt_model.current()
+        if self.chatgpt_session and index>=0:self.settings['chatgpt_model']=self.chatgpt_session.models[index][0]
+        atomic_json(DATA/'settings.json',self.settings)
+        self.save_keyword_keys()
     def save_project_name(self,event=None):
         try:self.engine.set_project_name(self.project_name.get())
         except ValueError as exc:
