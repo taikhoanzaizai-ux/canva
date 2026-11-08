@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.13
+
+- Xác nhận đúng nút tải MP4 trong bảng Canva và tiếp tục phiên tải đã theo dõi.
+- Lưu MP4 từng phần rồi ghép hình theo thứ tự với voice gốc. Mở lại các phần đã dựng từ bản cũ nếu còn thiếu tệp xuất.
+
 ## 0.14.12
 
 - Thêm nút × để đóng cảnh báo tạm dừng trong Canva. Cảnh báo đã đóng chỉ hiện lại khi có nội dung mới hoặc sau một lần chạy lại.
