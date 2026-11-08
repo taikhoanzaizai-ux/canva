@@ -134,6 +134,23 @@ for(const subjects of [['blood vessel walls','thành mạch'],['blood vessel lum
  assert.equal(adapter.eligibleCards(vesselCards,fallback,['vessel']).length,0);
 }
 const customIllustration={...journalScene,illustration_queries:['printed scientific article']};
+for(const [subjects,near,wrong] of [
+  [['orange juice','nước ép cam'],'Sliced orange on a table','Orange neon frame'],
+  [['arterial plaque','thành mạch xơ vữa'],'Red blood cells in motion','Dental plaque removal'],
+  [['blood vessel'],'Red blood cells in motion','Blood glucose meter'],
+  [['elastin fibers','sợi elastin'],'Elastic connective tissue animation','Fabric threads'],
+  [['measuring blood glucose','đo đường huyết'],'Insulin vial and syringe','Traffic on a highway'],
+]){
+ const scene={...researchScene,subjects,positive:subjects};
+ const illustration=adapter.illustrationScene(scene);
+ const cards=[{id:'used',title:near,duration:8},{id:'near',title:near,duration:8},{id:'wrong',title:wrong,duration:8}];
+ assert.equal(adapter.stockCandidates(cards,scene,['used','title:'+adapter.norm(near)],false,illustration).map(c=>c.id).join(','),'near',subjects[0]);
+ assert.equal(adapter.stockCandidates(cards,scene,['used','near'],false,illustration).length,0,subjects[0]);
+ assert.equal(adapter.stockCandidates(cards,scene,['used','near'],true,illustration)[0].id,'used',subjects[0]);
+}
+assert.equal(adapter.stockDuration('EDU 1:09'),69);
+assert.equal(adapter.stockDuration('5,0 giây'),5);
+assert.equal(adapter.stockDuration('EDU'),0);
 assert.equal(adapter.illustrationScene(customIllustration).queries[0],'printed scientific article');
 assert.equal(adapter.illustrationScene({...customIllustration,manual_queries:true}),null);
 for(const [subject,correct,wrong] of [['walnut','Walnut kernels on table','Cashew nuts on table'],['stomach','Human stomach anatomy','Human intestine anatomy'],['walking','Senior walking outdoors','Senior seated exercise'],['brain','Human brain illustration','Human heart illustration'],['juice','Fresh juice in glass','Fresh fruits on table']]){
