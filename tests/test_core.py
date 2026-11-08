@@ -46,6 +46,19 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_manual_final_cut_uses_voice_anchor_and_tolerance(self):
+        self.prepare_manual(done=[1])
+        self.e.state['scenes'][-1]['voice_end']=8
+        self.e.request_manual_review(2)
+        task=self.e.next_task(self.client)['task']
+        self.assertTrue(task['fit_final'])
+        self.assertEqual(task['voice_duration'],8)
+        body=self.manual_result(2,2)
+        body.update(review_token=task['review_token'],verified_start=4,verified_end=8.09)
+        body['frames'][-1]['end']=8.09
+        self.e.result(body)
+        self.assertEqual(self.e.next_task(self.client)['task']['duration'],8)
+
     def test_failed_rename_continues_drafting_and_gets_one_final_retry(self):
         self.e.pause();self.e.set_project_name('Bài 1');self.e.start()
         self.assertEqual(self.e.next_task(self.client)['task']['kind'],'rename')
