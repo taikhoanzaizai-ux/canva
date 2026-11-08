@@ -197,10 +197,10 @@
     const matches=VISUAL_FAMILIES.filter(family=>subjects.some(term=>(family.triggers||family.names).some(name=>subjectMatch(term,name))));
     return matches.length?matches:VISUAL_FAMILIES.filter(family=>subjects.some(term=>family.aliases?.some(name=>norm(term)===norm(name))));
   }
-  function illustrationScene(scene){
+  function illustrationScene(scene,topic){
     if(!(scene.topic_only||scene.allow_all_media))return null;
     const families=visualFamilies(scene);
-    if(scene.manual_queries&&!families.length)return null;
+    if(scene.manual_queries&&!families.length&&!topic)return null;
     let queries=scene.manual_queries?[]:scene.illustration_queries;
     if(!queries?.length){
       // Older plans did not include a separate stock illustration for citations.
@@ -211,9 +211,12 @@
         queries=['scientific journal','bài báo khoa học'];
       }
     }
-    if(!queries?.length&&!families.length)return null;
-    queries=[...new Set([...(queries||[]),...families.flatMap(family=>family.search)])];
-    const subjects=[...queries,...families.flatMap(family=>family.names)];
+    // Dedicated families use more specific captions. Use the shared topics
+    // for other scenes without replacing their original search.
+    const broad=families.length?null:topic;
+    if(!queries?.length&&!families.length&&!broad)return null;
+    queries=[...new Set([...(queries||[]),...families.flatMap(family=>family.search),...(broad?.queries||[])])];
+    const subjects=[...queries,...families.flatMap(family=>family.names),...(broad?.subjects||[])];
     if(subjects.includes('scientist in laboratory'))subjects.push('scientist','laboratory','researcher','microscope','nhà khoa học','phòng thí nghiệm');
     if(subjects.includes('scientific journal')||subjects.includes('bài báo khoa học'))subjects.push('scientific paper','research paper','tạp chí khoa học');
     return {...scene,queries,subjects,positive:subjects,topic_only:true,actions:[],preferred:''};
@@ -460,7 +463,7 @@
     if(task.phase?.stage==='insert_intent')throw Error('Lần trước dừng ngay lúc chèn cảnh. Kiểm tra Canva và dùng Xử lý cảnh bị dở trong ứng dụng.');
     if(!['inserted','trimmed','muted'].includes(task.phase?.stage)){
       await prepare(s);
-      const illustration=illustrationScene(s),used=task.used||[];
+      const illustration=illustrationScene(s,task.related_topic),used=task.used||[];
       const search={...s,queries:[...new Set([...s.queries,...(illustration?.queries||[])])],_reuseVideoQueries:[],_reusePhotoQueries:[]};
       if(s.manual_queries&&illustration){
         // Rank on the current input. Bare "stroke" can also mean swimming.
