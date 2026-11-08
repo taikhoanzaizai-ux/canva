@@ -46,6 +46,27 @@ class PlannerTests(unittest.TestCase):
         self.assertFalse(valid_canva('https://www.canva.com.evil/design/abc/def/edit'))
 
 class EngineTests(unittest.TestCase):
+    def test_review_earlier_scene_preserves_pending_overlay_clip(self):
+        self.prepare_manual(done=[1,2],phase=dict(id='3',stage='overlay_intent',asset='clip-3'))
+        self.e.state['scenes'].extend([
+            dict(id=3,start=8,duration=4,text='third',queries=['third']),
+            dict(id=4,start=12,duration=4,text='fourth',queries=['fourth']),
+        ])
+        self.e.request_manual_review(1)
+        task=self.e.next_task(self.client)['task']
+        self.assertEqual(task['allowed_counts'],[3])
+        self.assertEqual(task['overlay_scene'],3)
+        body=self.manual_result(1,3)
+        body.update(verified_voice_end=16,verified_end=4.1,
+                    frames=[dict(start=0,end=4.1),dict(start=4.1,end=8.1),dict(start=8.1,end=12.1)])
+        with self.assertRaises(ValueError):self.e.result(body)
+        self.e.result({**body,'verified_overlay_scene':3})
+        next_task=self.e.next_task(self.client)['task']
+        self.assertEqual(next_task['id'],'3')
+        self.assertEqual(next_task['phase']['stage'],'overlay_intent')
+        self.assertEqual(next_task['scene']['start'],8.1)
+        self.assertEqual(self.e.state['done'],[1,2])
+
     def test_unverified_overlay_retains_clip_checkpoint(self):
         self.e.state['voice_done']=True
         self.e.next_task(self.client)
