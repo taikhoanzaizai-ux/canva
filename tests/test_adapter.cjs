@@ -165,6 +165,21 @@ assert.equal(adapter.stockDuration('EDU'),0);
 assert.equal(adapter.illustrationScene(customIllustration).queries[0],'printed scientific article');
 assert.equal(adapter.illustrationScene({...customIllustration,manual_queries:true}),null);
 const foodTopic={queries:['cà rốt','carrots'],subjects:['carrot','cà rốt']};
+const broadScene={duration:4,allow_all_media:true,manual_queries:true};
+const titleCards=(...titles)=>titles.map((title,id)=>({id,title,duration:8}));
+for(const query of ['xoa đầu','bóp đầu','đau đầu']){
+ const fallback=adapter.illustrationScene({...broadScene,queries:[query]},null,true);
+ assert(fallback.queries.includes('vùng đầu'));
+ assert.equal(adapter.eligibleCards(titleCards('Cận cảnh đầu người','Đau bụng','Đầu gối bị đau'),fallback,[]).map(card=>card.title).join(','),'Cận cảnh đầu người');
+}
+for(const [query,subject,caption] of [
+ ['người đang cắt củ sen cận cảnh','củ sen','Củ sen trên bàn'],
+ ['animation of a hummingbird','hummingbird','Hummingbirds on a branch'],
+]){
+ const fallback=adapter.illustrationScene({...broadScene,queries:[query]},null,true);
+ assert(fallback.queries.includes(subject),query);
+ assert.equal(adapter.eligibleCards(titleCards(caption,'Generic illustration of a table'),fallback,[]).map(card=>card.title).join(','),caption);
+}
 const carrotScene={duration:4,allow_all_media:true,manual_queries:true,queries:['người cắt cà rốt thành lát']};
 const carrotFallback=adapter.illustrationScene(carrotScene,foodTopic);
 assert(carrotFallback.queries.includes('cà rốt'));
