@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.7
+
+- Mở rộng gân cơ vùng lưng và đau lưng sang tư liệu vùng lưng, người ôm lưng hoặc cột sống, kể cả khi từ khóa được sửa bằng tay.
+- Thử xác nhận lại thời lượng trên chính ảnh đã chèn nếu Canva chưa lưu sau khi rời ô nhập.
+
 ## 0.14.6
 
 - Tìm thêm não bộ cho cảnh vi mạch não, não bộ hoặc đau ngực cho cảnh đột quỵ, và máy đo huyết áp cho cảnh máy đo vận tốc sóng mạch.
