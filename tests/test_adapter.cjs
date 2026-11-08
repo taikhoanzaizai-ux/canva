@@ -2,6 +2,10 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const context={globalThis:{},document:{},getComputedStyle:e=>({overflowX:e.overflowX}),setTimeout,Promise,console};vm.createContext(context);
 vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),context);
 const adapter=context.globalThis.SKSTAdapter;
+const stock=[{id:'top',duration:8},{id:'short',duration:2},{id:'used',duration:8},{id:'fresh',duration:8}];
+assert.equal(adapter.randomFallbackCard(stock,{duration:4},['used'],new Set(['top'])).id,'fresh');
+assert.equal(adapter.randomFallbackCard(stock,{duration:4,_lastAsset:'used'},['used','fresh'],new Set(['top']),true).id,'fresh');
+assert.equal(adapter.randomFallbackCard(stock.slice(0,2),{duration:4},[],new Set(['top']),true).id,'top');
 assert.equal(adapter.norm('Nhón GÓT chân'),'nhon got chan');
 const transition={getAttribute:k=>k==='aria-label'?'Thêm chuyển cảnh':null};
 const persistentMenu={getAttribute:k=>k==='role'?'menu':null,querySelectorAll:()=>[transition]};
