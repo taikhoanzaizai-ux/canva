@@ -7,7 +7,7 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.13'
+MIN_EXTENSION_VERSION='0.14.16'
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -303,7 +303,9 @@ class Engine:
                 if not name and Path(self.state['voice']).is_file():
                     with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
                 manual.update(allowed_counts=sorted(counts),voice_name=name)
-                task=dict(id=f'manual:{scene["id"]}',kind='manual_review',review_token=manual['token'],scene=scene,allowed_counts=sorted(counts),voice_name=name,voice_duration=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'])
+                last=self.state['scenes'][-1]
+                fit_final=scene['id']==last['id'] and (set(self.state['done'])|{scene['id']})=={s['id'] for s in self.state['scenes']}
+                task=dict(id=f'manual:{scene["id"]}',kind='manual_review',review_token=manual['token'],scene=scene,allowed_counts=sorted(counts),voice_name=name,voice_duration=last.get('voice_end',last['start']+last['duration']),fit_final=fit_final)
             elif title and self.state.get('named_title')!=title and (self.state.get('rename_failed_title')!=title or self.state.get('audit_done') and self.state.get('rename_final_title')!=title):task=dict(id='rename',kind='rename',design_name=title)
             elif not self.state['voice_done']: task=dict(id='voice',kind='voice',name='SKST_Voice.mp3')
             else:
@@ -314,7 +316,8 @@ class Engine:
                     if not name and Path(self.state['voice']).is_file():
                         with Path(self.state['voice']).open('rb') as file:name='SKST_voice_'+hashlib.file_digest(file,'sha256').hexdigest()[:16]+Path(self.state['voice']).suffix.lower()
                         self.state['voice_name']=name;self.save()
-                    task=dict(id='audit',kind='audit',voice_name=name,count=len(self.state['scenes']),duration=round(self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration'],3))
+                    last=self.state['scenes'][-1]
+                    task=dict(id='audit',kind='audit',voice_name=name,count=len(self.state['scenes']),duration=round(last.get('voice_end',last['start']+last['duration']),3))
                 elif self.has_more_voice_parts():
                     phase=self.state['phase']
                     if phase.get('id')=='export' and phase.get('stage')=='export_clicked':
@@ -388,7 +391,7 @@ class Engine:
                 review=self.state.get('manual_review',{});scene=next((s for s in self.state['scenes'] if s['id']==review.get('scene_id')),None)
                 if not scene or key!=f'manual:{scene["id"]}' or body.get('manual_verified') is not True:raise ValueError('Chưa xác nhận đúng cảnh tự sửa.')
                 values=[float(body.get(k,-1)) for k in ('verified_start','verified_end','verified_voice_start','verified_voice_end')]
-                total=self.state['scenes'][-1]['start']+self.state['scenes'][-1]['duration']
+                last=self.state['scenes'][-1];total=last.get('voice_end',last['start']+last['duration'])
                 if not all(map(math.isfinite,values)) or values[1]<=values[0]:raise ValueError('Chưa đọc được khoảng thời gian cảnh tự sửa.')
                 if body.get('verified_count') not in review.get('allowed_counts',[]) or not review.get('voice_name') or body.get('voice_name')!=review['voice_name'] or abs(values[2])>.12 or abs(values[3]-total)>.12:raise ValueError('Số cảnh hoặc voice đã thay đổi; chưa thể tiếp tục.')
                 from .manual_timing import compensate
@@ -422,7 +425,7 @@ class Engine:
                 return dict(ok=True)
             export_target=None
             if key=='audit':
-                scenes=self.state['scenes'];duration=round(scenes[-1]['start']+scenes[-1]['duration'],3)
+                scenes=self.state['scenes'];last=scenes[-1];duration=round(last.get('voice_end',last['start']+last['duration']),3)
                 if len(self.state['done'])!=len(scenes) or body.get('verified_count')!=len(scenes) or abs(float(body.get('verified_duration',-1))-duration)>.12:raise ValueError('Chưa xác nhận đủ cảnh và voice phần hiện tại.')
                 self.state['audit_done']=True;msg='Đã kiểm tra đủ cảnh và thời lượng voice.'
             elif key=='next_design':
