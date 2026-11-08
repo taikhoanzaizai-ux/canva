@@ -362,7 +362,19 @@
         [`"${quoted}"`,`“${quoted}”`,`'${quoted}'`].some(value=>message.includes(value))&&visible(el);
     });
   }
-  const choose=async(scene,used,allowReuse=false,illustration=null)=>{
+  function randomFallbackCard(items,scene,used,top,allowReuse=false){
+    const valid=items.filter(card=>card.duration>=scene.duration-.05);
+    const lower=valid.filter(card=>!top.has(card.id));
+    let pool=lower.filter(card=>!used.includes(card.id));
+    if(!pool.length&&allowReuse){
+      pool=lower.filter(card=>card.id!==scene._lastAsset);
+      if(!pool.length)pool=lower;
+      if(!pool.length)pool=valid.filter(card=>!used.includes(card.id));
+      if(!pool.length)pool=valid;
+    }
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+  const choose=async(scene,used,allowReuse=false,illustration=null,randomFallback=false)=>{
     if(scene.requires_review&&!scene.allow_all_media)return null;
     for(const query of (allowReuse?scene._reuseVideoQueries||[]:scene.queries)){
       for(let attempt=0;attempt<2;attempt++){
@@ -380,14 +392,23 @@
         if(empty)break;
         if(!settled)continue; // Only repeat read-only searches, never insertion.
         await sleep(700);
+        const top=new Set(cards().filter(c=>c.stock).slice(0,2).map(card=>card.id));
         for(let page=0;page<4;page++){
           await guard();const items=cards().filter(c=>c.stock);
+          if(randomFallback){
+            const card=randomFallbackCard(items,scene,used,top,page===3);
+            if(card)return card;
+            items.at(-1)?.el.scrollIntoView({block:'end',inline:'nearest'});
+            await sleep(1500);
+            continue;
+          }
           if(!allowReuse)rememberReuse(scene,'_reuseVideoQueries',query,items,used,illustration);
           const found=stockCandidates(items,scene,used,allowReuse,illustration);
           if(found.length)return found[0];
           const last=cards().at(-1);if(last)last.el.scrollIntoView({block:'end',inline:'nearest'});
           await sleep(1500);
         }
+        if(randomFallback)break;
         const related=relatedCards(cards().filter(c=>c.stock),scene,used);
         if(related.length)return related[0];
         break;
@@ -490,8 +511,31 @@
     const r=canvasVideo.getBoundingClientRect();canvasVideo.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2,button:2}));
     await click(await wait(()=>find('Đặt video làm nền','[role="menuitem"],button,[role="button"]'),'Không đặt được video làm nền'));
   };
-  async function sceneTask(task,checkpoint,fallbackAsset){
+  async function addFallbackWarning(row,message){
+    await selectClip(row);
+    await click(await wait(()=>find('Văn bản','[role="tab"]'),'Không thấy mục Văn bản',4500));
+    const heading=await wait(()=>find(/^(Thêm tiêu đề|Thêm văn bản|Thêm hộp văn bản)$/i),'Không thấy nút thêm văn bản',4500);
+    await click(heading);
+    const editor=await wait(()=>{
+      const element=document.activeElement;
+      return element?.isContentEditable&&!element.closest('[role="tablist"],[role="menu"],[role="dialog"]')?element:null;
+    },'Canva chưa mở ô nhập chữ trên khung vẽ',4500);
+    await guard();
+    const range=document.createRange(),selection=window.getSelection();
+    range.selectNodeContents(editor);
+    if(selection){selection.removeAllRanges();selection.addRange(range);}
+    const transfer=new DataTransfer();transfer.setData('text/plain',message);
+    editor.dispatchEvent(new ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true}));
+    await sleep(350);await guard();
+    if(document.activeElement===editor&&!editor.textContent.includes(message)&&document.execCommand)
+      document.execCommand('insertText',false,message);
+    await wait(()=>editor.textContent.includes(message),'Canva chưa xác nhận chữ báo tư liệu thay thế',4500);
+    key(editor,'Escape');
+  }
+  async function sceneTask(task,checkpoint){
     const s=task.scene;s._usage=task.usage||{};s._lastAsset=task.last_asset||'';let asset=task.phase?.asset,title=task.phase?.title||'';
+    let warning=task.phase?.fallback_warning||'';
+    const warningAlreadyAttempted=task.phase?.stage==='overlay_intent';
     if(s.timing_original_duration<.1&&task.previous_scene&&['inserted','trimmed','muted'].includes(task.phase?.stage)){
       const last=await tail(),prev=task.previous_scene;
       if(last.end-last.start<.1&&Math.abs(last.start-prev.start)<=.12&&await countTimeline([s.id-1])===s.id-1){
@@ -502,7 +546,7 @@
       if(Math.abs(ready.end-s.start)<=.12&&await countTimeline([s.id-1])===s.id-1)await checkpoint('ready_after_repair');
     }
     if(task.phase?.stage==='insert_intent')throw Error('Lần trước dừng ngay lúc chèn cảnh. Kiểm tra Canva và dùng Xử lý cảnh bị dở trong ứng dụng.');
-    if(!['inserted','trimmed','muted'].includes(task.phase?.stage)){
+    if(!['inserted','trimmed','muted','overlay_intent'].includes(task.phase?.stage)){
       await prepare(s);
       const illustration=illustrationScene(s,task.related_topic,true),used=task.used||[];
       const search={...s,queries:[...new Set([...s.queries,...(illustration?.queries||[])])],_reuseVideoQueries:[],_reusePhotoQueries:[]};
@@ -516,40 +560,59 @@
       }
       let selected=await choose(search,used,false,illustration);
       if(!selected&&search._reuseVideoQueries.length)selected=await choose(search,used,true,illustration);
+      if(!selected&&s.queries[0]){
+        selected=await choose({...search,queries:[s.queries[0]]},used,false,null,true);
+        if(selected)warning=`LỖI CẢNH ${s.id} • Video thay thế: ${s.queries[0]}`.slice(0,160);
+      }
       if(!selected)selected=await choosePhoto(search,used,false,illustration);
       if(!selected&&search._reusePhotoQueries.length)selected=await choosePhoto(search,used,true,illustration);
       if(!selected){
-        const generatedTask={...task,scene:{...s,title_text:s.text}};
-        return await titleTask(generatedTask,checkpoint,fallbackAsset);
+        return {missing_stock:'Canva không có video thay thế đủ dài hoặc ảnh phù hợp cho: '+(s.queries[0]||s.text)};
       }
       asset=selected.id;title=selected.title+((task.used||[]).includes(asset)?' (dùng lại do thiếu tư liệu phù hợp khác)':'');task.media_kind=selected.media_kind||'video';
-      await checkpoint('insert_intent',{asset,title,media_kind:task.media_kind});await click(selected.el);
+      await checkpoint('insert_intent',{asset,title,media_kind:task.media_kind,fallback_warning:warning});await click(selected.el);
       await wait(()=>task.media_kind==='image'?find(/giây, sửa thời gian$/):find(/^Xén video dài/),'Nội dung chưa được đưa vào timeline');
       await tail();
       const count=await countTimeline([s.id]);
       if(count!==s.id)throw Error(`Canva có ${count} cảnh, đang chèn cảnh ${s.id}. Chưa xác nhận chèn thành công; kiểm tra cảnh dở để tránh chèn trùng.`);
-      await checkpoint('inserted',{asset,title,media_kind:task.media_kind});
-    } else {
+      await checkpoint('inserted',{asset,title,media_kind:task.media_kind,fallback_warning:warning});
+    } else if(!warningAlreadyAttempted){
       const last=await tail();
       if(last.element)await selectClip(last);
       task.media_kind=task.phase.media_kind||'video';
       await wait(()=>task.media_kind==='image'?find(/giây, sửa thời gian$/):find(/^Xén video dài/),'Hãy chọn cảnh cuối timeline để tiếp tục');
     }
+    const mediaPhase={asset,title,media_kind:task.media_kind,fallback_warning:warning};
     await tail();
     const count=await countTimeline([s.id]);
     const selectedTail=timeline().at(-1);
     if(count!==s.id||!selectedTail||Math.abs(selectedTail.start-s.start)>.12)throw Error('Cảnh cuối chưa đúng vị trí, chưa cắt để tránh sửa nhầm cảnh trước.');
-    await selectClip(selectedTail);await ensureBackground();
-    if(task.media_kind==='image'){
-      const current=await tail();
-      if(Math.abs(current.start-s.start)>.12)throw Error('Điểm bắt đầu ảnh chưa khớp voice; không thay đổi cảnh khác.');
-      await timePhoto(s.start+s.duration-current.start);
-    }else await trim(s.start+s.duration-selectedTail.start);
-    await checkpoint('trimmed',{asset,title,media_kind:task.media_kind});
-    if(task.media_kind!=='image')await mute();await checkpoint('muted',{asset,title,media_kind:task.media_kind});
+    if(!warningAlreadyAttempted){
+      await selectClip(selectedTail);await ensureBackground();
+      if(task.media_kind==='image'){
+        const current=await tail();
+        if(Math.abs(current.start-s.start)>.12)throw Error('Điểm bắt đầu ảnh chưa khớp voice; không thay đổi cảnh khác.');
+        await timePhoto(s.start+s.duration-current.start);
+      }else await trim(s.start+s.duration-selectedTail.start);
+      await checkpoint('trimmed',mediaPhase);
+      if(task.media_kind!=='image')await mute();await checkpoint('muted',mediaPhase);
+    }
     const last=await tail();
     if(Math.abs(last.start-s.start)>.12||Math.abs(last.end-(s.start+s.duration))>.12)throw Error('Độ dài/vị trí cảnh chưa khớp lời đọc. Kiểm tra cảnh cuối timeline, không thêm lại video.');
-    return {asset,title};
+    if(!warning)return {asset,title};
+    let overlayError=warningAlreadyAttempted?'Cần kiểm tra chữ đã chèn sau lần gián đoạn.':'';
+    if(!warningAlreadyAttempted){
+      await checkpoint('overlay_intent',mediaPhase);
+      try{await addFallbackWarning(last,warning);}
+      catch(error){
+        if(/đã tạm dừng|Phiên thao tác|đã ngắt|mã kết nối/i.test(error.message))throw error;
+        overlayError=error.message;
+      }
+    }
+    const verified=await tail();
+    if(Math.abs(verified.start-s.start)>.12||Math.abs(verified.end-s.start-s.duration)>.12||await countTimeline([s.id])!==s.id)
+      throw Error('Timeline đã thay đổi khi thêm chữ lên video thay thế.');
+    return {asset,title,fallback_warning:warning,overlay_error:overlayError};
   }
   async function rollbackScene(task,checkpoint){
     const s=task.scene;await closeMenu();
@@ -846,7 +909,7 @@
     }
     throw Error('MP4 chưa tải xong sau 10 phút. Giữ tab để Tiếp tục kiểm tra; không tự xuất trùng.');
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,randomFallbackCard,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{
@@ -858,7 +921,7 @@
     }
     if(task.kind==='scene'&&task.scene.error_card)return await errorCardTask(task,checkpoint,fallbackAsset);
     if(task.kind==='scene'&&task.phase?.card_kind==='text')return await errorCardTask(task,checkpoint,fallbackAsset);
-    if(task.kind==='scene')return task.scene.kind==='title'?await titleTask(task,checkpoint,titleAsset):await sceneTask(task,checkpoint,fallbackAsset);
+    if(task.kind==='scene')return task.scene.kind==='title'?await titleTask(task,checkpoint,titleAsset):await sceneTask(task,checkpoint);
     if(task.kind==='voice')return voiceTask(task,checkpoint,voice);
     if(task.kind==='audit')return auditTask(task);
     if(task.kind==='next_design')return nextDesignTask(task,checkpoint);
