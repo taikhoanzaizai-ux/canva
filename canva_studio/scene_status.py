@@ -17,6 +17,7 @@ def scene_status(scene,state):
             return ('Thẻ chữ dự phòng','review','Chưa chọn được tư liệu phù hợp cho cảnh này.')
         return ('Đã dựng','done','')
     if scene.get('missing_stock'):return ('Thiếu tư liệu','review',scene['missing_stock'])
+    if scene.get('overlay_pending'):return ('Kiểm tra chữ','review',scene['overlay_pending'])
     if state.get('phase',{}).get('id')==str(ident):return ('Đang dựng' if state.get('mode')=='running' else 'Đang dở','review','')
     if scene.get('keyword_review') and not scene.get('manual_queries'):
         return ('Duyệt từ khóa','review',scene['keyword_review'])
