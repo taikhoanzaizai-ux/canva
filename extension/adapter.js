@@ -155,6 +155,10 @@
     return new RegExp('(^|[^a-z0-9])'+value+'(?:s|es)?($|[^a-z0-9])').test(norm(title));
   }
   function subjectWordsMatch(title,term){
+    if(/[^\x00-\x7F]/.test(term)){
+      const words=term.toLowerCase().normalize('NFC').match(/\p{L}+/gu)||[];
+      return words.length>1&&words.every(word=>literalSubject(title,word));
+    }
     const words=norm(term).match(/[a-z0-9]+/g)||[];
     return words.length>1&&words.every(word=>subjectMatch(title,word));
   }
@@ -179,6 +183,10 @@
      names:['máy đo huyết áp','đo huyết áp','blood pressure monitor','blood pressure measurement','blood pressure cuff','sphygmomanometer','pulse wave velocity monitor','máy đo vận tốc sóng mạch']},
     {search:['não bộ','human brain'],triggers:['brain','cerebral','não bộ','bộ não','vi mạch trong não','vi mạch não'],
      names:['brain','cerebral','não bộ','bộ não']},
+    {search:['vùng đầu','đau đầu','xoa đầu','head massage'],
+     triggers:['đau đầu','nhức đầu','xoa đầu','bóp đầu','vùng đầu','headache','head massage','scalp'],
+     names:['đầu','vùng đầu','thái dương','da đầu','head','headache','temple massage','scalp'],
+     exclude:['đầu gối','đầu tiên','knee']},
     {search:['tim','human heart anatomy'],names:['heart','cardiac','heartbeat','tim','trái tim']},
     {search:['dạ dày','human stomach'],names:['stomach','dạ dày']},
     {search:['lá gan','human liver'],names:['liver','lá gan']},
@@ -197,10 +205,39 @@
     const matches=VISUAL_FAMILIES.filter(family=>subjects.some(term=>(family.triggers||family.names).some(name=>subjectMatch(term,name))));
     return matches.length?matches:VISUAL_FAMILIES.filter(family=>subjects.some(term=>family.aliases?.some(name=>norm(term)===norm(name))));
   }
-  function illustrationScene(scene,topic){
+  const descriptiveWords=new Set((
+    'a an the of and or in on at by with for from to is are as into through around '+
+    'person people man woman senior elderly human someone animated animation simulation illustration graphic diagram anatomy '+
+    'show showing closeup close up footage video image photo realistic motion moving professional specialized '+
+    'holding touching using doing getting making cutting chopping massaging massage applying standing sitting walking '+
+    'pain painful sore soreness tired fresh old new slow fast '+
+    'của và hoặc trong trên dưới với cho từ đến tại ở đang bị có một các những người cụ ông bà '+
+    'hình ảnh minh họa mô phỏng hoạt giải phẫu chân thực cận cảnh video chuyên dụng '+
+    'xoa bóp mỏi đau nhức cầm chạm cắt dùng làm giữ đứng ngồi chạy tập'
+  ).split(/\s+/));
+  function genericTopic(scene){
+    const phrases=scene.manual_queries?scene.queries:scene.subjects?.length?scene.subjects:scene.queries;
+    const subjects=[];
+    for(const phrase of (phrases||[]).slice(0,4)){
+      const words=(phrase.toLowerCase().normalize('NFC').match(/\p{L}+/gu)||[]).filter(word=>!descriptiveWords.has(word));
+      if(!words.length||words.length>5)continue;
+      const subject=words.join(' ');
+      if(words.length===1&&subject.length<3)continue;
+      subjects.push(subject);
+    }
+    const unique=[...new Set(subjects)];
+    return unique.length?{queries:unique,subjects:unique}:null;
+  }
+  function literalSubject(title,term){
+    const clean=value=>value.toLowerCase().normalize('NFC').match(/\p{L}+/gu)?.join(' ')||'';
+    const text=' '+clean(title)+' ',word=clean(term);
+    return !!word&&[word,word+'s',word+'es'].some(value=>text.includes(' '+value+' '));
+  }
+  function illustrationScene(scene,topic,allowGeneric=false){
     if(!(scene.topic_only||scene.allow_all_media))return null;
     const families=visualFamilies(scene);
-    if(scene.manual_queries&&!families.length&&!topic)return null;
+    const generic=allowGeneric&&!families.length&&!topic&&!scene.illustration_queries?.length?genericTopic(scene):null;
+    if(scene.manual_queries&&!families.length&&!topic&&!generic)return null;
     let queries=scene.manual_queries?[]:scene.illustration_queries;
     if(!queries?.length){
       // Older plans did not include a separate stock illustration for citations.
@@ -213,15 +250,18 @@
     }
     // Dedicated families use more specific captions. Use the shared topics
     // for other scenes without replacing their original search.
-    const broad=families.length?null:topic;
+    const broad=families.length?null:topic||generic;
     if(!queries?.length&&!families.length&&!broad)return null;
     queries=[...new Set([...(queries||[]),...families.flatMap(family=>family.search),...(broad?.queries||[])])];
     const subjects=[...queries,...families.flatMap(family=>family.names),...(broad?.subjects||[])];
     if(subjects.includes('scientist in laboratory'))subjects.push('scientist','laboratory','researcher','microscope','nhà khoa học','phòng thí nghiệm');
     if(subjects.includes('scientific journal')||subjects.includes('bài báo khoa học'))subjects.push('scientific paper','research paper','tạp chí khoa học');
-    return {...scene,queries,subjects,positive:subjects,topic_only:true,actions:[],preferred:''};
+    return {...scene,queries,subjects,positive:subjects,topic_only:true,actions:[],preferred:'',
+            literal_subjects:!!generic||families.some(family=>family.exclude),exclude:families.flatMap(family=>family.exclude||[])};
   }
   function matchesSceneSubject(title,scene){
+    if(scene.exclude?.some(term=>literalSubject(title,term)))return false;
+    if(scene.literal_subjects)return scene.subjects.some(term=>literalSubject(title,term));
     return !scene.subjects?.length||scene.subjects.some(term=>subjectMatch(title,term)||
       (scene.topic_only&&subjectWordsMatch(title,term)));
   }
@@ -463,13 +503,15 @@
     if(task.phase?.stage==='insert_intent')throw Error('Lần trước dừng ngay lúc chèn cảnh. Kiểm tra Canva và dùng Xử lý cảnh bị dở trong ứng dụng.');
     if(!['inserted','trimmed','muted'].includes(task.phase?.stage)){
       await prepare(s);
-      const illustration=illustrationScene(s,task.related_topic),used=task.used||[];
+      const illustration=illustrationScene(s,task.related_topic,true),used=task.used||[];
       const search={...s,queries:[...new Set([...s.queries,...(illustration?.queries||[])])],_reuseVideoQueries:[],_reusePhotoQueries:[]};
       if(s.manual_queries&&illustration){
         // Rank on the current input. Bare "stroke" can also mean swimming.
         search.subjects=s.queries.filter(query=>norm(query).trim()!=='stroke');
         if(!search.subjects.length)search.subjects=illustration.subjects;
         search.positive=search.subjects;
+        search.literal_subjects=illustration.literal_subjects;
+        search.exclude=illustration.exclude;
       }
       let selected=await choose(search,used,false,illustration);
       if(!selected&&search._reuseVideoQueries.length)selected=await choose(search,used,true,illustration);
