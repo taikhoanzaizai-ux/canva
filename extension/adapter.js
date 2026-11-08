@@ -88,12 +88,17 @@
     await sleep(900);
     const rows=timeline();return rows.at(-1)||{start:0,end:0,image:''};
   };
+  function stockDuration(text){
+    const seconds=text.match(/(\d+(?:[.,]\d+)?)\s*(?:giây|seconds?|s\b)/i);
+    if(seconds)return Number(seconds[1].replace(',','.'));
+    const clock=text.match(/(?:^|[^\d:])(\d+:[0-5]\d(?::[0-5]\d)?)(?![\d:])/);
+    return clock?clock[1].split(':').reduce((total,part)=>total*60+Number(part),0):0;
+  }
   const cards=()=>[...document.querySelectorAll('[role="button"][draggable="true"][aria-label]')].filter(visible).map(el=>{
     const group=el.closest('[role="group"]')||el.parentElement;
     const src=group.querySelector('img')?.src||'';
     const id=src.match(/video-public\.canva\.com\/([^/]+)/)?.[1]||src.split('?')[0]||'title:'+norm(label(el));
-    const m=group.textContent.match(/(\d+(?:[.,]\d+)?)\s*(?:giây|seconds?|s\b)/i);
-    return {el,id,stock:/video-public\.canva\.com\//.test(src),title:label(el),duration:m?Number(m[1].replace(',','.')):0};
+    return {el,id,stock:/video-public\.canva\.com\//.test(src),title:label(el),duration:stockDuration(group.textContent)};
   });
   function photoCards(){
     return [...document.querySelectorAll('[role="button"][draggable="true"][aria-label]')].filter(visible).map(el=>{
@@ -116,11 +121,18 @@
     return words.length>1&&words.every(word=>subjectMatch(title,word));
   }
   const VISUAL_FAMILIES=[
-    {search:['mạch máu','blood vessel anatomy'], names:[
+    {search:['đường huyết','blood glucose'],names:['blood glucose','blood sugar','glucose','diabetes','glucometer','insulin','đường huyết','tiểu đường','máy đo đường']},
+    {search:['sợi elastin','elastin fibers','elastin collagen','sợi đàn hồi'],
+     names:['elastin','collagen','elastic fibers','elastic fibres','elastic connective tissue','sợi đàn hồi','sợi collagen']},
+    {search:['quả cam','orange fruit'],names:['orange juice','orange fruit','fresh oranges','orange slices','sliced orange','quả cam','trái cam','nước cam','ép cam','lát cam'],
+     aliases:['orange','citrus','cam']},
+    {search:['mạch máu','blood vessel anatomy','hồng cầu','blood cells'], names:[
       'blood vessel','blood vessels','vascular','artery','arteries','arterial','vein','veins',
       'capillary','capillaries','atherosclerosis','mạch máu','thành mạch','lòng mạch',
-      'động mạch','tĩnh mạch','mao mạch','xơ vữa mạch','mảng xơ vữa',
-    ]},
+      'động mạch','tĩnh mạch','mao mạch','xơ vữa','hồng cầu','tế bào máu','máu lưu thông',
+      'blood cells','blood flow','blood circulation','bloodstream',
+    ],aliases:['blood','máu','mạch','circulation']},
+    {search:['người già thể dục','senior exercise'],names:['exercise','exercising','fitness','workout','thể dục','tập luyện']},
     {search:['não bộ','human brain'],names:['brain','cerebral','não bộ','bộ não']},
     {search:['dạ dày','human stomach'],names:['stomach','dạ dày']},
     {search:['lá gan','human liver'],names:['liver','lá gan']},
@@ -133,11 +145,11 @@
     const subjects=scene.subjects||[];
     if(!subjects.length)return null;
     // Infer from the subject, never from the whole narration or Canva query.
-    return VISUAL_FAMILIES.find(family=>subjects.every(term=>
-      family.names.some(name=>subjectMatch(term,name))))||null;
+    return VISUAL_FAMILIES.find(family=>subjects.some(term=>family.names.some(name=>subjectMatch(term,name))))||
+      VISUAL_FAMILIES.find(family=>subjects.some(term=>family.aliases?.some(name=>norm(term)===norm(name))))||null;
   }
   function illustrationScene(scene){
-    if(!scene.topic_only||scene.manual_queries)return null;
+    if(!(scene.topic_only||scene.allow_all_media)||scene.manual_queries)return null;
     let queries=scene.illustration_queries;
     if(!queries?.length){
       // Older plans did not include a separate stock illustration for citations.
@@ -154,7 +166,7 @@
     const subjects=[...queries,...(family?.names||[])];
     if(subjects.includes('scientist in laboratory'))subjects.push('scientist','laboratory','researcher','microscope','nhà khoa học','phòng thí nghiệm');
     if(subjects.includes('scientific journal')||subjects.includes('bài báo khoa học'))subjects.push('scientific paper','research paper','tạp chí khoa học');
-    return {...scene,queries,subjects,positive:subjects,actions:[],preferred:'',
+    return {...scene,queries,subjects,positive:subjects,topic_only:true,actions:[],preferred:'',
             _reuseVideoQueries:[],_reusePhotoQueries:[]};
   }
   function matchesSceneSubject(title,scene){
@@ -162,7 +174,7 @@
       (scene.topic_only&&subjectWordsMatch(title,term)));
   }
   function eligibleCards(items,scene,used){
-    return items.filter(c=>!used.includes(c.id)&&!used.includes('title:'+norm(c.title))&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&matchesSceneSubject(c.title,scene)&&(scene.topic_only||!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
+    return items.filter(c=>!used.includes(c.id)&&c.duration>=scene.duration-.05&&(scene.allow_all_media||realPerson(c))&&matchesSceneSubject(c.title,scene)&&(scene.topic_only||!scene.actions?.length||scene.actions.some(w=>norm(c.title).includes(norm(w))))&&score(c,scene)>=4).sort((a,b)=>score(b,scene)-score(a,scene));
   }
   function relatedCards(items,scene,used){
     return eligibleCards(items,scene,used).filter(c=>c.duration>=scene.duration+.1);
@@ -174,8 +186,13 @@
       return penalty(a)-penalty(b)||score(b,scene)-score(a,scene);
     });
   }
-  function rememberReuse(scene,key,query,items,used){
-    if(eligibleCards(items,scene,[]).some(c=>used.includes(c.id))){
+  function stockCandidates(items,scene,used,allowReuse,illustration){
+    const select=allowReuse?reuseEligibleCards:eligibleCards;
+    const exact=select(items,scene,used);
+    return exact.length||!illustration?exact:select(items,illustration,used);
+  }
+  function rememberReuse(scene,key,query,items,used,illustration){
+    if(items.some(c=>used.includes(c.id)&&stockCandidates([c],scene,[],false,illustration).length)){
       scene[key]||=[];if(!scene[key].includes(query))scene[key].push(query);
     }
   }
@@ -241,12 +258,12 @@
     // input plus a settled result grid instead of requiring a literal caption.
     return !!items.length&&(signature!==previous||elapsed>=3000);
   }
-  const choose=async(scene,used,allowReuse=false)=>{
+  const choose=async(scene,used,allowReuse=false,illustration=null)=>{
     if(scene.requires_review&&!scene.allow_all_media)throw Error('Cảnh cần từ khóa cụ thể: '+scene.text);
     for(const query of (allowReuse?scene._reuseVideoQueries||[]:scene.queries)){
       for(let attempt=0;attempt<2;attempt++){
         const input=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'),'Không thấy ô tìm kiếm video khi đổi từ khóa');
-        const previous=cards().map(c=>c.id).join('|');
+        const previous=cards().filter(c=>c.stock).map(c=>c.id).join('|');
         fill(input,query);await sleep(350);await guard();
         const liveInput=await wait(()=>document.querySelector('input[aria-label="Tìm kiếm video"]'),'Không thấy ô tìm kiếm video khi đổi từ khóa');
         key(liveInput,'Enter');const started=Date.now();let settled=false;
@@ -259,8 +276,8 @@
         await sleep(700);
         for(let page=0;page<4;page++){
           await guard();const items=cards().filter(c=>c.stock);
-          if(!allowReuse)rememberReuse(scene,'_reuseVideoQueries',query,items,used);
-          const found=allowReuse?reuseEligibleCards(items,scene,used):eligibleCards(items,scene,used);
+          if(!allowReuse)rememberReuse(scene,'_reuseVideoQueries',query,items,used,illustration);
+          const found=stockCandidates(items,scene,used,allowReuse,illustration);
           if(found.length)return found[0];
           const last=cards().at(-1);if(last)last.el.scrollIntoView({block:'end',inline:'nearest'});
           await sleep(1500);
@@ -272,7 +289,7 @@
     }
     throw Error('Không tìm được video đúng từ khóa, đủ dài cho: '+scene.text+'. Hãy sửa từ khóa cảnh rồi tiếp tục.');
   };
-  const choosePhoto=async(scene,used,allowReuse=false)=>{
+  const choosePhoto=async(scene,used,allowReuse=false,illustration=null)=>{
     if(scene.requires_review&&!scene.allow_all_media)return null;
     await closeMenu();const last=await tail();
     if(Math.abs(last.end-scene.start)>.12&&!(scene.start===0&&!last.image))throw Error('Timeline chưa đúng mốc tìm ảnh.');
@@ -283,8 +300,8 @@
       const input=await wait(inputFn,'Không thấy ô tìm kiếm ảnh');fill(input,query);await sleep(350);
       key(await wait(inputFn,'Không thấy ô tìm kiếm ảnh sau khi nhập'),'Enter');await sleep(2200);
       for(let page=0;page<4;page++){
-        await guard();const items=photoCards();if(!allowReuse)rememberReuse(scene,'_reusePhotoQueries',query,items,used);
-        const candidates=allowReuse?reuseEligibleCards(items,scene,used):eligibleCards(items,scene,used);
+        await guard();const items=photoCards();if(!allowReuse)rememberReuse(scene,'_reusePhotoQueries',query,items,used,illustration);
+        const candidates=stockCandidates(items,scene,used,allowReuse,illustration);
         if(candidates.length)return candidates[0];
         const lastPhoto=photoCards().at(-1);if(lastPhoto)lastPhoto.el.scrollIntoView({block:'end'});
         await sleep(1500);
@@ -368,18 +385,18 @@
     if(task.phase?.stage==='insert_intent')throw Error('Lần trước dừng ngay lúc chèn cảnh. Kiểm tra Canva và dùng Xử lý cảnh bị dở trong ứng dụng.');
     if(!['inserted','trimmed','muted'].includes(task.phase?.stage)){
       await prepare(s);let selected;
-      try{selected=await choose(s,task.used||[]);}catch(error){
+      const illustration=illustrationScene(s);
+      try{selected=await choose(s,task.used||[],false,illustration);}catch(error){
         if(/đã tạm dừng|Phiên thao tác|Timeline|cảnh dở/i.test(error.message))throw error;
         const trySearch=async(fn)=>{try{return await fn();}catch(e){if(/đã tạm dừng|Phiên thao tác|Timeline|cảnh dở|mã kết nối|đã ngắt/i.test(e.message))throw e;return null;}};
-        selected=await trySearch(()=>choosePhoto(s,task.used||[]));
+        if(illustration)selected=await trySearch(async()=>{await prepare(illustration);return choose(illustration,task.used||[]);});
+        if(!selected)selected=await trySearch(()=>choosePhoto(s,task.used||[],false,illustration));
+        if(!selected&&illustration)selected=await trySearch(()=>choosePhoto(illustration,task.used||[]));
         if(!selected&&s._reuseVideoQueries?.length){
-          await prepare(s);selected=await trySearch(()=>choose(s,task.used||[],true));
+          await prepare(s);selected=await trySearch(()=>choose(s,task.used||[],true,illustration));
         }
-        if(!selected&&s._reusePhotoQueries?.length)selected=await trySearch(()=>choosePhoto(s,task.used||[],true));
-        const illustration=selected?null:illustrationScene(s);
-        if(illustration){
-          selected=await trySearch(async()=>{await prepare(illustration);return choose(illustration,task.used||[]);});
-          if(!selected)selected=await trySearch(()=>choosePhoto(illustration,task.used||[]));
+        if(!selected&&s._reusePhotoQueries?.length)selected=await trySearch(()=>choosePhoto(s,task.used||[],true,illustration));
+        if(!selected&&illustration){
           if(!selected&&illustration._reuseVideoQueries.length){
             selected=await trySearch(async()=>{await prepare(illustration);return choose(illustration,task.used||[],true);});
           }
@@ -664,7 +681,7 @@
     }
     throw Error('MP4 chưa tải xong sau 10 phút. Giữ tab để Tiếp tục kiểm tra; không tự xuất trùng.');
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,searchReady,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,stockDuration,searchReady,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{
