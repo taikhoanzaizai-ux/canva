@@ -19,6 +19,36 @@ from canva_studio.keyword_api import CHATGPT_PLAN, request_keywords
 
 
 class ChatGPTSigninTests(unittest.TestCase):
+    def test_restore_uses_cached_token_and_replaces_expired_refresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory)
+            (folder/'chatgpt-session.json').touch()
+            saved=dict(token='old-access',expires_at=time.time()+600,models=[['model','Model']],
+                       refresh='old-refresh',client_id='oaiapp_fixture',account='fixture')
+            reply=dict(access_token='new-access',refresh_token='new-refresh',expires_in=3600,
+                       scope=oauth.SCOPES,token_type='Bearer')
+            with patch.object(oauth.credentials,'load',return_value=saved),patch.object(oauth.credentials,'save') as save,patch.object(oauth,'api_json',return_value=reply) as request:
+                self.assertEqual(oauth.restore_session(folder).access_token(),'old-access')
+                request.assert_not_called()
+                saved['expires_at']=0
+                session=oauth.restore_session(folder)
+                self.assertEqual(session.access_token(),'new-access')
+                self.assertEqual(request.call_args.kwargs['form']['refresh_token'],'old-refresh')
+                self.assertEqual(save.call_args.args[1]['refresh'],'new-refresh')
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows DPAPI required')
+    def test_saved_api_keys_are_encrypted_and_can_be_removed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'keys.json'
+            try:oauth.credentials.save(path,{'provider':'fixture-api-key'})
+            except OSError as exc:
+                if exc.errno==2:self.skipTest('Windows profile does not have access to its DPAPI key store')
+                raise
+            self.assertNotIn('fixture-api-key',path.read_text())
+            self.assertEqual(oauth.credentials.load(path),{'provider':'fixture-api-key'})
+            oauth.credentials.save(path,{})
+            self.assertEqual(oauth.credentials.load(path),{})
+
     def test_loopback_authorization_uses_issued_client_pkce_and_granted_models(self):
         issued = 'oaiapp_fixture'
         params = {}
