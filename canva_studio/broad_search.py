@@ -59,6 +59,28 @@ def topic_for(text):
     text=unicodedata.normalize('NFC',text.lower())
     return next((topic for topic in TOPICS if any(re.search(r'(?<!\w)'+re.escape(w)+r'(?!\w)',text) for w in topic[0].split('|'))),None)
 
+def related_topic(scene):
+    """Give the stock picker a simpler subject without replacing saved queries."""
+    phrases = scene.get('queries', []) if scene.get('manual_queries') else scene.get('subjects') or scene.get('queries', [])
+    for phrase in phrases:
+        topic = topic_for(phrase)
+        if not topic and phrase.isascii():
+            text = norm(phrase)
+            matches = [
+                (len(term), item)
+                for item in TOPICS
+                for term in item[2]
+                if term.isascii()
+                and term not in {'back', 'bed', 'beet', 'blood', 'foot', 'leg', 'skin', 'vessel'}
+                and re.search(r'(?<!\w)' + re.escape(term) + r'(?:s|es)?(?!\w)', text)
+            ]
+            if matches:
+                topic = max(matches, key=lambda match: match[0])[1]
+        if topic:
+            _, queries, subjects = topic
+            return dict(queries=queries, subjects=subjects)
+    return None
+
 def broaden(scene,context=''):
     direct=topic_for(scene.get('text',''))
     previous={norm(w) for w in scene.get('subjects',[])}
