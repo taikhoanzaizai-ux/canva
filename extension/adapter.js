@@ -637,7 +637,15 @@
   async function sceneTask(task,checkpoint){
     const s=task.scene;s._usage=task.usage||{};s._lastAsset=task.last_asset||'';let asset=task.phase?.asset,title=task.phase?.title||'';
     let warning=task.phase?.fallback_warning||'';
-    const warningAlreadyAttempted=task.phase?.stage==='overlay_intent';
+    let warningAlreadyAttempted=task.phase?.stage==='overlay_intent';
+    const contextOnly=s.context_only||(!s.manual_queries&&norm(s.text).trim()==='khoang nghi');
+    if(warningAlreadyAttempted){
+      const last=await tail();
+      if(Math.abs(last.end-s.start)<=.12&&await countTimeline([s.id-1])===s.id-1){
+        if(warningNodes(warning).length)return {overlay_unverified:'Video thay thế đã bị gỡ nhưng dòng chữ cũ còn trên timeline.'};
+        await checkpoint('ready_after_repair');warningAlreadyAttempted=false;warning='';asset='';title='';
+      }
+    }
     if(s.timing_original_duration<.1&&task.previous_scene&&['inserted','trimmed','muted'].includes(task.phase?.stage)){
       const last=await tail(),prev=task.previous_scene;
       if(last.end-last.start<.1&&Math.abs(last.start-prev.start)<=.12&&await countTimeline([s.id-1])===s.id-1){
@@ -652,6 +660,10 @@
       await prepare(s);
       const illustration=illustrationScene(s,task.related_topic,true),used=task.used||[];
       const search={...s,queries:[...new Set([...s.queries,...(illustration?.queries||[])])],_reuseVideoQueries:[],_reusePhotoQueries:[]};
+      if(contextOnly){
+        search.queries=[...new Set([...search.queries.filter(q=>norm(q).trim()!=='khoang nghi'),'cảnh đường phố','street scenery'])];
+        search.requires_review=false;
+      }
       if(s.manual_queries&&illustration){
         // Rank on the current input. Bare "stroke" can also mean swimming.
         search.subjects=s.queries.filter(query=>norm(query).trim()!=='stroke');
@@ -662,9 +674,11 @@
       }
       let selected=await choose(search,used,false,illustration);
       if(!selected&&search._reuseVideoQueries.length)selected=await choose(search,used,true,illustration);
-      if(!selected&&s.queries[0]){
-        selected=await choose({...search,queries:[s.queries[0]]},used,false,null,true);
-        if(selected)warning=`LỖI CẢNH ${s.id} • Video thay thế: ${s.queries[0]}`.slice(0,160);
+      if(!selected&&search.queries[0]){
+        const fallback=contextOnly?[...new Set([...search.queries,'cảnh đường phố','street scenery','phong cảnh thiên nhiên'])]:
+          norm(s.queries[0]).trim()==='kho'?[s.queries[0],'nhà kho','storage warehouse']:[s.queries[0]];
+        selected=await choose({...search,queries:fallback},used,false,null,true);
+        if(selected&&!contextOnly)warning=`LỖI CẢNH ${s.id} • Video thay thế: ${s.queries[0]}`.slice(0,160);
       }
       if(!selected)selected=await choosePhoto(search,used,false,illustration);
       if(!selected&&search._reusePhotoQueries.length)selected=await choosePhoto(search,used,true,illustration);
