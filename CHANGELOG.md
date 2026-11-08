@@ -1,5 +1,9 @@
 # Các bản cập nhật
 
+## 0.14.19
+
+- Đặt chữ báo lỗi tại clip thay thế và kiểm tra hai đầu của chữ trên timeline. Nếu chữ dài hơn clip hoặc nằm lệch, thử căn lại; nếu chưa xác nhận được, báo để kiểm tra thay vì chèn thêm chữ chồng lên nhau.
+
 ## 0.14.18
 
 - Khi thiếu video khớp chủ đề, tìm lại từ khóa đầu và chọn ngẫu nhiên clip đủ dài ở các hàng dưới, ưu tiên clip chưa dùng.
