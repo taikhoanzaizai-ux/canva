@@ -87,7 +87,8 @@ class FreeMediaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             engine=Engine(d);scene=dict(id=1,start=0,duration=3,text='Bảo vệ cơ thể')
             def render(plan,ffmpeg,folder):
-                path=Path(folder)/'test.mp4';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'video');plan['scenes'][0]['title_path']=str(path)
+                self.assertTrue(plan['scenes'][0]['still_image'])
+                path=Path(folder)/'test.png';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'png');plan['scenes'][0]['title_path']=str(path)
             with patch('canva_studio.fallback.prepare_external',return_value=(None,None,[{'status':403}])),patch('canva_studio.fallback.render_titles',side_effect=render):
                 job=begin_fallback(engine,scene)
                 for _ in range(100):
