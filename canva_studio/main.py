@@ -687,7 +687,9 @@ class App:
         if stage=='insert_intent':
             v=messagebox.askyesnocancel('Kiểm tra Canva','Cảnh đang dở đã xuất hiện ở cuối timeline chưa?\nCó: tiếp tục cắt cảnh đó.\nKhông: chỉ chọn sau khi đã xóa phần chèn dở trong Canva.\nHủy: giữ nguyên để kiểm tra thêm.')
             if v is not None:self.engine.recover('inserted' if v else 'not_inserted')
-        elif stage in ('upload_intent','export_intent','export_clicked','title_uploading'):
+        elif stage in ('upload_intent','voice_insert_intent'):
+            self.run()
+        elif stage in ('export_intent','export_clicked','title_uploading'):
             if messagebox.askyesno('Kiểm tra Canva','Chỉ đặt lại sau khi đã xóa voice tải dở khỏi thiết kế, hoặc đã hủy lần xuất đang dở. Đặt lại thao tác này?'):self.engine.recover('not_inserted')
         else:messagebox.showinfo('Tiếp tục','Đã giữ tiến độ. Kiểm tra lại Canva rồi bấm Tiếp tục.')
     def show_errors(self):
