@@ -164,6 +164,14 @@ assert.equal(adapter.stockDuration('5,0 giây'),5);
 assert.equal(adapter.stockDuration('EDU'),0);
 assert.equal(adapter.illustrationScene(customIllustration).queries[0],'printed scientific article');
 assert.equal(adapter.illustrationScene({...customIllustration,manual_queries:true}),null);
+const foodTopic={queries:['cà rốt','carrots'],subjects:['carrot','cà rốt']};
+const carrotScene={duration:4,allow_all_media:true,manual_queries:true,queries:['người cắt cà rốt thành lát']};
+const carrotFallback=adapter.illustrationScene(carrotScene,foodTopic);
+assert(carrotFallback.queries.includes('cà rốt'));
+assert.equal(adapter.eligibleCards([
+ {id:'carrot',title:'Fresh carrots on a table',duration:8},
+ {id:'other',title:'Person chopping celery',duration:9},
+],carrotFallback,[]).map(card=>card.id).join(','),'carrot');
 assert.equal(adapter.illustrationScene({allow_all_media:true,manual_queries:true,queries:['swimming stroke','stroke']}),null);
 for(const [query,broad,caption,unrelated] of [
  ['vi mạch trong não tổn thương mô phỏng','não bộ','Human brain animation','Highway interchange'],
