@@ -269,6 +269,37 @@ assert.equal(adapter.errorPlacement(17,{start:56,end:60,image:'clip'},{id:17,sta
  assert(Math.abs(end-start-1.2)<.000001);assert.equal(commits,2);
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
+// Canva only mounts a window of a long timeline. A manual confirmation at
+// scene 50 and the final audit must read the same complete picture track.
+(async()=>{
+ const scroller={scrollLeft:0,scrollWidth:1000,clientWidth:320,overflowX:'auto'};
+ const slider=(label,time)=>({getAttribute:k=>k==='aria-label'?label:k==='aria-valuenow'?String(time*1e6):null});
+ const rows=Array.from({length:50},(_,i)=>{
+   const sliders=[...(i===30?[]:[slider('biên bắt đầu',i*4)]),slider('biên kết thúc',(i+1)*4)];
+   return {parentElement:{parentElement:scroller,querySelector:()=>sliders[0],querySelectorAll:()=>sliders},querySelector:()=>({src:'clip-'+i}),querySelectorAll:()=>[]};
+ });
+ const plus={offsetWidth:10,getAttribute:k=>k==='aria-label'?'Thêm nội dung đa phương tiện/cảnh trống':null,scrollIntoView:()=>{scroller.scrollLeft=680;}};
+ const name='SKST_voice_part1.mp3';
+ const audio={getAttribute:k=>k==='aria-label'?name+' đoạn âm thanh':null,querySelectorAll:()=>[slider('biên bắt đầu',0),slider('biên kết thúc',200)]};
+ const document={querySelectorAll:s=>{
+   if(s==='[data-role="timeline-scene"]'){
+     const first=Math.floor(scroller.scrollLeft/20);
+     return rows.slice(first,first+16);
+   }
+   return s.includes('[role="menu"]')?[]:[plus,audio];
+ }};
+ const env={globalThis:{},document,getComputedStyle:e=>({visibility:'visible',overflowX:e.overflowX}),setTimeout:f=>f(),Promise,console};
+ vm.createContext(env);vm.runInContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const adapter=env.globalThis.SKSTAdapter;
+ const review=await adapter.run({kind:'manual_review',scene:{id:50},allowed_counts:[50],voice_name:name,voice_duration:200},async()=>{});
+ assert.equal(review.verified_count,50);assert.equal(review.verified_start,196);
+ assert.equal(review.frames[30].start,120,'Recover a missing start handle from the previous scene');
+ assert.equal(scroller.scrollLeft,680,'Restore the visible timeline after verification');
+ assert.equal((await adapter.auditTask({count:50,duration:200,voice_name:name})).verified_count,50);
+ rows.pop();
+ await assert.rejects(()=>adapter.auditTask({count:50,duration:200,voice_name:name}),/Canva có 49 cảnh/);
+})().catch(e=>{console.error(e);process.exitCode=1;});
+
 // Canva truncates a long decimal input: send an explicitly rounded tenth.
 for(const d of [.1,.149,.15,.195,.999,1.195,2.999,4.782,4.25,5.057]){
  const q=adapter.photoDuration(d),canva=Math.floor(Number(String(q))*10+1e-8)/10;
