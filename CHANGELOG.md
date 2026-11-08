@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.10
+
+- Tải thẻ chữ và tiêu đề dưới dạng ảnh PNG, tránh bước xử lý video tiêu đề khiến Canva chờ lâu. Khi tiếp tục, xác nhận ảnh đã chèn và giữ mốc voice.
+- Gửi yêu cầu cảnh tiếp theo ngay sau khi hoàn tất, đồng thời cho tác vụ đang chạy thêm thời gian giữ kết nối khi Chrome giảm tần suất xử lý tab.
+
 ## 0.14.9
 
 - Với chủ đề ngoài bộ từ khóa, thử bỏ từ mô tả kiểu hình, thao tác và triệu chứng để tìm theo đối tượng chính. Áp dụng cả với cụm tìm do người dùng nhập.
