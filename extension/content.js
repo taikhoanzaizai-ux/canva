@@ -26,7 +26,7 @@
     if(!existing)document.body.appendChild(panel);
   }
   async function cycle(){
-    if(busy||!active())return;busy=true;let task;
+    if(busy||!active())return;busy=true;let task,advance=false;
     try{
       const blank_video=!!document.querySelector('button[aria-label="Thêm nội dung đa phương tiện/cảnh trống"]')&&!document.querySelector('[data-role="timeline-scene"] img')&&![...document.querySelectorAll('button,[role="button"]')].some(e=>(e.getAttribute('aria-label')||'').includes('đoạn âm thanh'));
       const result=await api('next',{blank_video});showStatus(result);task=result.task;if(!task)return;
@@ -47,14 +47,16 @@
         if(!output||output.error)throw Error(output?.error||'Chưa mở được thiết kế tiếp theo.');
       }
       await api('result',{id:task.id,...output});
+      advance=true;
     }catch(e){
       if(task){
         try{const result=await api('result',{id:task.id,review_token:task.review_token,error:e.message});
+          advance=result.continuing===true;
           showStatus({mode:'attention',message:result.continuing?'Cảnh '+task.id+': '+e.message+' Đang chèn thẻ lỗi rồi tiếp tục.':e.message});
         }catch(connectionError){showStatus({mode:'attention',message:'Mất kết nối khi báo lỗi cảnh '+task.id+': '+connectionError.message+'. Đang thử nối lại; tiến độ được giữ.'});}
       }else showStatus({mode:'attention',message:'Chưa nhận được lệnh dựng: '+e.message+'. Đang thử kết nối lại.'});
       // Connection loss never causes an implicit duplicate click. Server retains phase.
-    }finally{busy=false;}
+    }finally{busy=false;if(advance&&active())void cycle();}
   }
   setInterval(cycle,1700);
   cycle();
