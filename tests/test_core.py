@@ -84,10 +84,12 @@ class EngineTests(unittest.TestCase):
         self.assertNotIn('error_card',self.e.state['scenes'][0])
         self.e.start()
         self.e.next_task(self.client)
-        self.e.result(dict(id='1',client='A',asset='lower-stock',fallback_warning='Video thay thế'))
+        self.e.result(dict(id='1',client='A',asset='lower-stock',fallback_warning='Video thay thế',
+                           warning_output=True,warning_start=0,warning_end=4))
         self.assertEqual(self.e.state['used'],['lower-stock'])
         self.assertNotIn('missing_stock',self.e.state['scenes'][0])
         self.assertEqual(self.e.state['scenes'][0]['fallback_warning'],'Video thay thế')
+        self.assertTrue(self.e.state['scenes'][0]['warning_output'])
 
     def test_manual_final_cut_uses_voice_anchor_and_tolerance(self):
         self.prepare_manual(done=[1])
