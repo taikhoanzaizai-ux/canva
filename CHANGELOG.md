@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.23
+
+- Ghi nhãn video thay thế theo mốc clip rồi chèn vào MP4 khi xuất, tránh nhập nhầm vào tên Canva hoặc tạo lớp chữ vượt khỏi cảnh.
+- Khi tiếp tục dự án cũ, giữ clip thay thế đã chèn và báo nếu còn lớp chữ cũ cần gỡ.
+
 ## 0.14.22
 
 - Căn lại dòng báo lỗi đã chèn khi Canva chỉ hiển thị thanh chữ mà chưa cung cấp tay nắm thời lượng. Đọc vị trí của thanh chữ so với clip và kiểm tra lại sau khi di chuyển hoặc cắt ngắn.
