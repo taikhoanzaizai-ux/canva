@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.14.27'
+VERSION = '0.14.28'
 
 def project_title(name,part_index=0):
     name=' '.join(str(name or '').split())
@@ -233,43 +233,31 @@ def make_plan(segments, start=0, end=None, opening=35, max_seconds=5):
 
 
 def make_keyword_plan(segments,start=0,end=None,opening=35):
-    """Keep imported cue boundaries, searches and the full voice range."""
+    """One imported cue per scene; extend pictures across subtitle gaps."""
     start=float(start)
     end=float(end if end is not None else segments[-1]['end'])
     if not math.isfinite(start) or not math.isfinite(end) or not 0<=start<end:
         raise ValueError('Mốc thời gian nhập SRT không hợp lệ.')
+    selected=[s for s in segments if s['end']>start and s['start']<end]
+    if not selected:raise ValueError('Không có cảnh trong khoảng SRT đã chọn.')
     scenes=[];at=start
-    def add(segment,left,right):
-        for row in make_plan([segment],left,right,opening)['scenes']:
-            row['id']=len(scenes)+1
-            row['start']=round(row['source_start']-start,3)
-            if segment.get('queries'):
-                row.update(queries=list(segment['queries']),manual_queries=True,review=False,
-                           requires_review=False,positive=[],negative=[],keyword_provider='SRT')
-            scenes.append(row)
-    def gap(left,right):
-        if right-left<.001:return
-        context=scenes[-1]['text'] if scenes else 'Khoảng nghỉ'
-        desc=describe(context)
-        if scenes:desc['queries']=list(scenes[-1]['queries'])
-        while left<right-.001:
-            to=min(right,left+5)
-            scenes.append(dict(id=len(scenes)+1,start=round(left-start,3),
-                source_start=round(left,3),duration=round(to-left,3),text='Khoảng nghỉ',**desc))
-            left=to
-    for segment in segments:
-        left=max(start,float(segment['start']),at)
-        right=min(end,float(segment['end']))
-        if right<=left:continue
+    for index,segment in enumerate(selected):
         if not str(segment.get('text','')).strip():
             raise ValueError('Đoạn SRT có từ khóa cần có lời đọc.')
-        gap(at,left)
-        add(segment,left,right)
-        at=right
-    gap(at,end)
-    if not scenes:raise ValueError('Không có cảnh trong khoảng SRT đã chọn.')
-    return dict(scenes=scenes,duration=round(end-start,3),source_start=start,approximate=True,
+        to=min(end,max(segment['end'],selected[index+1]['start'])) if index+1<len(selected) else end
+        desc=describe(segment['text'])
+        if segment.get('queries'):
+            desc.update(queries=list(segment['queries']),manual_queries=True,review=False,
+                        requires_review=False,positive=[],negative=[],keyword_provider='SRT')
+        scenes.append(dict(id=len(scenes)+1,start=round(at-start,3),source_start=round(at,3),
+            duration=round(to-at,3),text=segment['text'],srt_import=True,
+            srt_start=max(start,segment['start']),srt_end=min(end,segment['end']),**desc))
+        at=to
+    return dict(scenes=scenes,duration=round(end-start,3),source_start=start,approximate=False,
                 imported_keywords=True)
+
+def scene_time_bounds(scene):
+    return scene.get('srt_start',scene['start']),scene.get('srt_end',scene['start']+scene['duration'])
 
 def repair_tiny_scenes(scenes,completed=()):
     """Borrow only from pending neighbours; preserve IDs, total voice and completed cuts."""

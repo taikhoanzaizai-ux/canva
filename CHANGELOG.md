@@ -1,5 +1,12 @@
 # Các bản cập nhật
 
+## 0.14.28
+
+- Nhập SRT độc lập ngay cả khi đã chọn voice. Giữ một đoạn SRT thành một cảnh, lời đọc và từ khóa đầy đủ, hiển thị đúng mốc SRT đến mili giây.
+- Phủ khoảng nghỉ bằng hình của cảnh trước; không tạo thêm dòng khoảng nghỉ hoặc tự chia lại các đoạn SRT dài theo giới hạn 5 giây.
+- Chỉ chuẩn bị âm thanh khi bấm Bắt đầu, giữ danh sách SRT và từ khóa đã sửa khi chọn voice. Hơn 50 cảnh vẫn tự chia thành nhiều phần.
+- Kiểm tra hộp nhập của bản Windows bằng SRT 49 đoạn dài, với đường dẫn voice và FFmpeg không tồn tại.
+
 ## 0.14.27
 
 - Ưu tiên SRT cho toàn bộ thời gian, lời đọc và từ khóa khi có SRT. Voice đi kèm chỉ được cắt và ghép làm âm thanh; chỉ nhận diện voice khi không có SRT.

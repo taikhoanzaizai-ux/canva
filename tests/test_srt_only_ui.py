@@ -1,5 +1,6 @@
 """Exercise the app entry points without requiring a Windows display or audio tools."""
 import ast
+import copy
 import os
 import queue
 import tempfile
@@ -27,11 +28,11 @@ class SrtOnlyUiTests(unittest.TestCase):
             for i in range(123)),encoding='utf-8-sig')
         tree=ast.parse((Path(__file__).parents[1]/'canva_studio/main.py').read_text(encoding='utf8'))
         cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='App')
-        methods=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in ('analyze','analyze_worker','choose_transcript','run','tick')]
+        methods=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in ('analyze','analyze_worker','choose_transcript','choose_voice','prepare_srt_voice','prepare_srt_voice_worker','run','tick')]
         self.dialog=SimpleNamespace(showinfo=Mock(),showerror=Mock())
         self.thread=Mock()
         self.probe=Mock(return_value=369)
-        self.env=dict(Path=Path,load_transcript=load_transcript,make_keyword_plan=make_keyword_plan,
+        self.env=dict(Path=Path,copy=copy,load_transcript=load_transcript,make_keyword_plan=make_keyword_plan,
             split_batches=split_batches,messagebox=self.dialog,
             filedialog=SimpleNamespace(askopenfilename=Mock(return_value=str(self.path))),
             neighboring_script=Mock(return_value=None),probe_duration=self.probe,
@@ -42,7 +43,7 @@ class SrtOnlyUiTests(unittest.TestCase):
             transcript=Value(str(self.path)),voice=Value(),start=Value('0'),end=Value(),opening=Value('35'),
             ffmpeg=Value('missing-ffmpeg'),python=Value(),model=Value(),script=Value(),
             plan_button=Mock(),notice=Value(),save_settings=Mock(),keyword_config=Mock(side_effect=AssertionError('Unexpected AI')),
-            tasks=queue.Queue(),analyze_worker=Mock(),project_name=Value(),save_project_name=Mock(),
+            tasks=queue.Queue(),analyze_worker=Mock(),prepare_srt_voice_worker=Mock(),project_name=Value(),save_project_name=Mock(),
             plan=None,analyze_then_run=False)
         self.app.analyze=lambda:self.env['analyze'](self.app)
 
@@ -108,7 +109,7 @@ class SrtOnlyUiTests(unittest.TestCase):
         self.assertEqual(self.app.plan,{'sentinel':True})
         self.assertTrue(self.app.tasks.empty())
 
-    def test_srt_and_voice_prepare_audio_using_srt_end(self):
+    def test_srt_import_is_independent_of_selected_voice(self):
         audio=Path(self.tmp.name)/'voice.wav';audio.touch()
         tool=Path(self.tmp.name)/'ffmpeg.exe';tool.touch()
         self.app.voice.set(str(audio));self.app.ffmpeg.set(str(tool))
@@ -116,12 +117,10 @@ class SrtOnlyUiTests(unittest.TestCase):
         self.probe.assert_not_called()
         self.app.keyword_config.assert_not_called()
         self.env['neighboring_script'].assert_not_called()
-        self.thread.assert_called_once()
-        inputs=self.thread.call_args.kwargs['args'][0]
-        self.assertEqual(inputs['voice'],str(audio))
-        self.assertEqual(inputs['transcript'],str(self.path))
-        self.assertEqual(inputs['b'],369)
-        self.assertTrue(self.app.tasks.empty())
+        self.thread.assert_not_called()
+        plan=self.app.tasks.get_nowait()[1][0]
+        self.assertTrue(plan['transcript_only'])
+        self.assertEqual(sum(len(p['scenes']) for p in plan['parts']),123)
 
     def test_plain_srt_with_voice_does_not_require_ai(self):
         self.path.write_text('1\n00:00:00,000 --> 00:00:03,000\nĐi bộ.\n',encoding='utf8')
@@ -131,7 +130,8 @@ class SrtOnlyUiTests(unittest.TestCase):
         self.app.analyze()
         self.app.keyword_config.assert_not_called()
         self.probe.assert_not_called()
-        self.assertEqual(self.thread.call_args.kwargs['args'][0]['b'],3)
+        self.thread.assert_not_called()
+        self.assertEqual(self.app.tasks.get_nowait()[1][0]['duration'],3)
 
     def test_voice_without_srt_keeps_voice_analysis(self):
         audio=Path(self.tmp.name)/'voice.wav';audio.touch()
@@ -172,9 +172,9 @@ class SrtOnlyUiTests(unittest.TestCase):
         audio=Path(self.tmp.name)/'voice.wav';audio.touch()
         self.app.voice.set(str(audio))
         self.app.plan={'transcript_only':True}
-        self.app.analyze=Mock(side_effect=lambda:setattr(self.app,'worker_busy',True))
+        self.app.prepare_srt_voice=Mock(side_effect=lambda:setattr(self.app,'worker_busy',True))
         self.env['run'](self.app)
-        self.app.analyze.assert_called_once()
+        self.app.prepare_srt_voice.assert_called_once()
         self.assertTrue(self.app.analyze_then_run)
         self.dialog.showerror.assert_not_called()
 
@@ -193,3 +193,41 @@ class SrtOnlyUiTests(unittest.TestCase):
         self.app.analyze=Mock()
         self.env['choose_transcript'](self.app)
         self.app.analyze.assert_called_once()
+
+    def test_attach_voice_keeps_srt_preview_and_manual_keywords(self):
+        self.app.analyze();self.app.worker_busy=False
+        self.app.plan=self.app.tasks.get_nowait()[1][0]
+        self.app.plan['scenes'][0]['queries']=['từ khóa đã sửa']
+        before=self.app.plan
+        audio=Path(self.tmp.name)/'voice.wav';audio.touch()
+        self.env['filedialog'].askopenfilename.return_value=str(audio)
+        self.env['choose_voice'](self.app)
+        self.assertIs(self.app.plan,before)
+        self.assertEqual(self.app.plan['scenes'][0]['queries'],['từ khóa đã sửa'])
+
+    def test_prepare_audio_uses_all_imported_parts_without_reparsing(self):
+        self.app.analyze();self.app.worker_busy=False
+        self.app.plan=self.app.tasks.get_nowait()[1][0]
+        self.app.plan['scenes'][0]['queries']=['từ khóa đã sửa']
+        audio=Path(self.tmp.name)/'voice.wav';audio.touch()
+        tool=Path(self.tmp.name)/'ffmpeg.exe';tool.touch()
+        self.app.voice.set(str(audio));self.app.ffmpeg.set(str(tool))
+        self.env['prepare_srt_voice'](self.app)
+        snapshot,voice,ffmpeg=self.thread.call_args.kwargs['args']
+        self.assertEqual(len(snapshot['scenes']),123)
+        self.assertEqual(snapshot['scenes'][50]['id'],51)
+        self.assertEqual(snapshot['scenes'][50]['start'],150)
+        self.assertEqual(snapshot['scenes'][0]['queries'],['từ khóa đã sửa'])
+        def prepare(plan,*args):
+            parts=split_batches(plan)
+            for part in parts:part['voice']='prepared.wav'
+            return parts
+        self.env.update(DATA=Path(self.tmp.name),uuid=uuid,prepare_parts=Mock(side_effect=prepare))
+        self.env['load_transcript']=Mock(side_effect=AssertionError('Keep imported scenes'))
+        self.env['prepare_srt_voice_worker'](self.app,snapshot,voice,ffmpeg)
+        kind,(prepared,clip)=self.app.tasks.get_nowait()
+        self.assertEqual(kind,'plan')
+        self.assertFalse(prepared['transcript_only'])
+        self.assertEqual([len(p['scenes']) for p in prepared['parts']],[50,50,23])
+        self.assertEqual(prepared['scenes'][0]['queries'],['từ khóa đã sửa'])
+        self.assertEqual(clip,'prepared.wav')

@@ -7,7 +7,7 @@ if getattr(sys,'frozen',False):
     os.environ['TCL_LIBRARY']='_tcl_data';os.environ['TK_LIBRARY']='_tk_data'
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from canva_studio.core import VERSION, load_transcript, read_script, make_plan, make_keyword_plan, split_batches, atomic_json, valid_canva, align_script,project_title
+from canva_studio.core import VERSION, load_transcript, read_script, make_plan, make_keyword_plan, split_batches, scene_time_bounds, atomic_json, valid_canva, align_script,project_title
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio.editorial import add_title_cards,render_titles,neighboring_script
 from canva_studio.browser import open_chrome,chrome_path
@@ -445,8 +445,15 @@ class App:
         if info['mismatches']:text+='\n\nCó bản đang nạp từ thư mục khác nên không nhận tệp cập nhật ở đây. Gỡ bản cũ và chọn đúng thư mục cố định trên một lần.'
         messagebox.showinfo('Tiện ích đi kèm và tự cập nhật',text)
     def choose_voice(self):
+        if self.worker_busy or self.engine.state['mode'] in ('running','opening','opening_resume'):
+            return messagebox.showinfo('Đang xử lý','Tạm dừng trước khi đổi voice.')
         p=filedialog.askopenfilename(filetypes=[('Voice','*.mp3 *.wav *.m4a *.aac *.flac'),('Tất cả','*.*')]);
-        if p:self.voice.set(p);self.end.set('');self.prepared_voice='';self.plan=None;self.tree.delete(*self.tree.get_children())
+        if p:
+            self.voice.set(p);self.prepared_voice=''
+            if self.plan and self.plan.get('transcript_only'):
+                self.notice.set('Đã chọn voice. Danh sách giữ theo SRT; bấm Bắt đầu để chuẩn bị âm thanh và dựng.')
+            else:
+                self.end.set('');self.plan=None;self.tree.delete(*self.tree.get_children())
     def choose_script(self):
         p=filedialog.askopenfilename(filetypes=[('Kịch bản','*.docx *.txt')]);
         if not p:return
@@ -481,8 +488,7 @@ class App:
                 'Nếu muốn bắt đầu bài khác, chọn Dự án mới để lưu lại tiến độ trước.')
         try:
             imported=load_transcript(self.transcript.get()) if self.transcript.get().strip() else []
-            if not self.voice.get().strip():
-                if not imported:raise ValueError('Chọn SRT hoặc voice để phân tích.')
+            if imported:
                 plan=make_keyword_plan(imported,float(self.start.get()),
                     float(self.end.get()) if self.end.get().strip() else None,float(self.opening.get()))
                 parts=split_batches(plan)
@@ -494,6 +500,7 @@ class App:
                 self.plan_button.configure(state='disabled')
                 self.tasks.put(('plan',(preview,'')))
                 return
+            if not self.voice.get().strip():raise ValueError('Chọn SRT hoặc voice để phân tích.')
             config=None if imported else self.keyword_config()
             if not Path(self.voice.get()).is_file():raise ValueError('Không tìm thấy voice đã chọn. Chọn lại tệp hoặc xóa đường dẫn để chỉ phân tích SRT.')
             if not Path(self.ffmpeg.get()).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ.')
@@ -512,6 +519,31 @@ class App:
         self.notice.set('Đang lấy cảnh từ SRT và chuẩn bị voice đi kèm…' if imported else 'Đang nhận diện voice trên máy. Có thể mất vài phút…')
         inputs=dict(a=a,b=b,o=o,voice=self.voice.get(),ffmpeg=self.ffmpeg.get(),python=self.python.get(),model=self.model.get(),transcript=self.transcript.get(),script=self.script.get('1.0','end').strip(),keyword_config=config)
         threading.Thread(target=self.analyze_worker,args=(inputs,),daemon=True).start()
+    def prepare_srt_voice(self):
+        try:
+            voice=self.voice.get().strip();ffmpeg=self.ffmpeg.get()
+            if not Path(voice).is_file():raise ValueError('Chọn voice tương ứng để dựng video từ danh sách SRT.')
+            if not Path(ffmpeg).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ để chuẩn bị âm thanh.')
+            snapshot=copy.deepcopy(self.plan)
+            base=snapshot['parts'][0]['source_start']
+            scenes=[row for part in snapshot['parts'] for row in part['scenes']]
+            for index,row in enumerate(scenes,1):
+                row.update(id=index,start=round(row['source_start']-base,3))
+            snapshot.update(scenes=scenes,source_start=base,
+                duration=round(scenes[-1]['start']+scenes[-1]['duration'],3))
+            self.worker_busy=True;self.plan_button.configure(state='disabled')
+            self.notice.set('Đang chuẩn bị voice theo danh sách SRT đã nhập…')
+            threading.Thread(target=self.prepare_srt_voice_worker,args=(snapshot,voice,ffmpeg),daemon=True).start()
+        except Exception as error:messagebox.showerror('Chưa chuẩn bị được voice',str(error))
+    def prepare_srt_voice_worker(self,plan,voice,ffmpeg):
+        try:
+            job=DATA/'Projects'/uuid.uuid4().hex;job.mkdir(parents=True)
+            parts=prepare_parts(plan,voice,ffmpeg,job)
+            prepared={**plan,**parts[0],'parts':parts,'original_voice':voice,
+                      'transcript_only':False,'planning_source':'srt',
+                      'keyword_note':'Cảnh, lời đọc và từ khóa theo SRT; đã chuẩn bị voice đi kèm.'}
+            self.tasks.put(('plan',(prepared,parts[0]['voice'])))
+        except Exception as error:self.tasks.put(('error',str(error)))
     def analyze_worker(self,c):
         try:
             native=not c['transcript'] and (not Path(c['python']).is_file() or not Path(c['model']).is_file() or Path(c['model']).suffix.lower()=='.bin')
@@ -560,7 +592,8 @@ class App:
     def populate(self):
         self.tree.delete(*self.tree.get_children())
         for s in self.plan['scenes']:
-            self.tree.insert('','end',iid=str(s['id']),values=(f'{s["id"]} | {s["start"]:.2f} → {s["start"]+s["duration"]:.2f}',s['text'],s.get('queries',[''])[0],''))
+            a,b=scene_time_bounds(s)
+            self.tree.insert('','end',iid=str(s['id']),values=(f'{s["id"]} | {a:.3f} → {b:.3f}',s['text'],s.get('queries',[''])[0],''))
         self.refresh_scene_status()
     def refresh_scene_status(self):
         if not self.plan:return
@@ -568,7 +601,8 @@ class App:
         for scene in self.plan['scenes']:
             status,tag,_=scene_status(scene,st);ident=str(scene['id'])
             if self.tree.exists(ident):
-                self.tree.set(ident,'time',f'{scene["id"]} | {scene["start"]:.2f} → {scene["start"]+scene["duration"]:.2f}')
+                a,b=scene_time_bounds(scene)
+                self.tree.set(ident,'time',f'{scene["id"]} | {a:.3f} → {b:.3f}')
                 self.tree.set(ident,'text',scene['text']);self.tree.set(ident,'query',scene.get('queries',[''])[0])
                 self.tree.set(ident,'status',status);self.tree.item(ident,tags=(tag,) if tag else ())
         errors=st.get('errors',[])
@@ -585,7 +619,8 @@ class App:
         scene=next((s for s in self.plan['scenes'] if s['id']==ident),None)
         if scene:
             status,_,reason=scene_status(scene,self.engine.state if self.engine.state.get('scenes')==self.plan['scenes'] else {})
-            self.scene_detail.set(f'Cảnh {ident} • {scene["start"]:.3f}–{scene["start"]+scene["duration"]:.3f} giây • {status}'+(' • '+reason[:240] if reason else ''))
+            a,b=scene_time_bounds(scene)
+            self.scene_detail.set(f'Cảnh {ident} • {a:.3f}–{b:.3f} giây • {status}'+(' • '+reason[:240] if reason else ''))
     def manual_scene_id(self):
         if self.worker_busy:raise ValueError('Chờ tác vụ đang chạy hoàn tất trước khi sửa cảnh.')
         if not self.plan or self.engine.state.get('scenes') is not self.plan['scenes']:
@@ -628,7 +663,7 @@ class App:
             plan=json.loads(Path(p).read_text(encoding='utf8')); scenes=plan['scenes'];at=0
             if not scenes or len(scenes)>50:raise ValueError('Danh sách cần từ 1 đến 50 cảnh.')
             for i,s in enumerate(scenes,1):
-                if s['id']!=i or abs(s['start']-at)>.05 or not .1<=s['duration']<=(600 if s.get('manual_timing_adjusted') else 5.05) or not s['queries']:raise ValueError('Danh sách cảnh không liên tục hoặc thời lượng không hợp lệ.')
+                if s['id']!=i or abs(s['start']-at)>.05 or not .1<=s['duration']<=(600 if s.get('manual_timing_adjusted') or s.get('srt_import') else 5.05) or not s['queries']:raise ValueError('Danh sách cảnh không liên tục hoặc thời lượng không hợp lệ.')
                 at=s['start']+s['duration']
             self.plan=plan;self.prepared_voice='';self.engine.state.update(scenes=scenes,done=[],used=[],phase={},errors=[],voice_done=False,target='',voice='',mode='ready');self.engine.state.pop('manual_review',None);self.engine.state.pop('manual_review_error',None);self.engine.state.pop('manual_edit_scene',None);self.populate();self.engine.save();self.target.set('');self.notice.set('Đã nạp danh sách. Chọn đúng voice đã cắt theo độ dài danh sách này.')
         except Exception as e:messagebox.showerror('Không nạp được',str(e))
@@ -670,8 +705,10 @@ class App:
             if not self.plan:
                 self.analyze();self.analyze_then_run=self.worker_busy;return
             if not Path(self.voice.get()).is_file():raise ValueError('Đã có danh sách SRT. Chọn voice tương ứng để kiểm tra thời lượng và bắt đầu dựng.')
-            if self.plan.get('transcript_only') or ('transcript_path' in self.plan and self.plan['transcript_path']!=self.transcript.get().strip()):
+            if 'transcript_path' in self.plan and self.plan['transcript_path']!=self.transcript.get().strip():
                 self.analyze();self.analyze_then_run=self.worker_busy;return
+            if self.plan.get('transcript_only'):
+                self.prepare_srt_voice();self.analyze_then_run=self.worker_busy;return
             self.plan['project_name']=project_title(self.project_name.get())
             u=self.target.get().strip();st=self.engine.state
             if u and not valid_canva(u):raise ValueError('Link thiết kế chưa đúng. Để trống để phần mềm tự tạo Video khổ ngang.')
@@ -794,7 +831,9 @@ class App:
                 for key in ('manual_edit_scene','manual_review','manual_review_error'):self.engine.state.pop(key,None)
                 self.manual_scene.set('')
                 self.engine.save();self.populate()
-                n=len(self.plan['scenes']);note=f'Đã chia {n} cảnh phần đầu; {self.plan.get("title_count",0)} tiêu đề nền đen. Nhấp đúp để sửa từ khóa.'
+                n=len(self.plan['scenes'])
+                note=(f'Đã nhập {n} cảnh SRT phần đầu. Nhấp đúp để sửa từ khóa.' if self.plan.get('transcript_only') or self.plan.get('planning_source')=='srt'
+                      else f'Đã chia {n} cảnh phần đầu; {self.plan.get("title_count",0)} tiêu đề nền đen. Nhấp đúp để sửa từ khóa.')
                 if self.plan.get('approximate'):note+=' Mốc từ được ước lượng từ phụ đề; nên duyệt phần mở đầu.'
                 if self.script.get('1.0','end').strip() and not self.plan.get('script_aligned'):note+=' Chưa khớp chắc chắn kịch bản: đang dùng lời nhận diện từ voice.'
                 if self.plan.get('parts'):
@@ -807,7 +846,7 @@ class App:
                 self.notice.set(note)
                 if self.analyze_then_run:
                     self.analyze_then_run=False
-                    if not self.plan.get('transcript_only'):self.root.after(0,self.run)
+                    if not self.plan.get('transcript_only') or self.voice.get().strip():self.root.after(0,self.run)
         self.engine.watchdog()
         has_scenes=bool(self.plan and self.plan.get('scenes'))
         self.keyword_update_button.configure(state='normal' if has_scenes and not self.worker_busy else 'disabled')
@@ -868,8 +907,27 @@ def main():
             app.manual_scene.set('2');app.refresh_scene_status()
             manual_number_kept=app.manual_scene.get()=='2'
         else:manual_number_kept=False
+        saved_plan=app.plan
+        saved_voice,saved_transcript,saved_ffmpeg=app.voice.get(),app.transcript.get(),app.ffmpeg.get()
+        fixture=DATA/'Temp'/'self-test-srt.srt';fixture.parent.mkdir(parents=True,exist_ok=True)
+        stamp=lambda ms:f'{ms//3600000:02d}:{ms//60000%60:02d}:{ms//1000%60:02d},{ms%1000:03d}'
+        fixture.write_text('\n\n'.join(
+            f'{i+1}\n{stamp(i*13000+133)} --> {stamp(i*13000+12300)}\nLời đọc: Cảnh SRT {i+1}.\nTừ khóa Canva: SRTkeyword{i+1} | alternative{i+1}'
+            for i in range(49)),encoding='utf-8-sig')
+        app.voice.set(str(DATA/'missing-voice.mp3'));app.ffmpeg.set(str(DATA/'missing-ffmpeg.exe'))
+        app.transcript.set(str(fixture));app.start.set('0');app.end.set('')
+        app.analyze();app.tick();root.update_idletasks()
+        imported_rows=app.tree.get_children()
+        srt_import_ui=(len(imported_rows)==49 and bool(app.plan.get('transcript_only'))
+            and app.tree.set(imported_rows[0],'query')=='SRTkeyword1'
+            and app.tree.set(imported_rows[0],'time')=='1 | 0.133 → 12.300'
+            and app.tree.set(imported_rows[-1],'query')=='SRTkeyword49')
+        app.plan=saved_plan;app.voice.set(saved_voice);app.transcript.set(saved_transcript);app.ffmpeg.set(saved_ffmpeg)
+        if app.plan:app.populate()
         report=dict(version=VERSION,ui_opened=True,demo_scenes=len(app.tree.get_children()) if app.plan else 0,ffmpeg_found=Path(app.ffmpeg.get()).is_file(),whisper_found=Path(app.python.get()).is_file(),model_found=Path(app.model.get()).is_file(),pairing_code_visible=token_visible,pairing_copy_ok=copy_ok,update_button=app.update_button.cget('text')=='Kiểm tra cập nhật',portable_data=str(DATA),portable_temp=tempfile.gettempdir(),runtime_extracts_to_temp=bool(getattr(sys,'frozen',False) and Path(sys._MEIPASS).name!='_internal'),canva_live_tested=False)
         report.update(project_name_field=name_field,project_name_persisted=name_persisted,manual_repair_ui=manual_ui,error_row_visible=error_row,manual_number_kept=manual_number_kept)
+        report['srt_import_ui']=srt_import_ui
+        if not srt_import_ui:raise RuntimeError('SRT import must preserve all 49 cues without voice or FFmpeg')
         if not all((token_visible,copy_ok,name_field,name_persisted,manual_ui,error_row,manual_number_kept)):raise RuntimeError('Pairing/project-name/manual-repair regression check failed')
         atomic_json(DATA/'self-test.json',report);app.close();return
     root.mainloop()
