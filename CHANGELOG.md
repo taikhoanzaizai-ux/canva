@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.14.25
+
+- Nhập lời đọc và từ khóa từ SRT qua dòng Từ khóa: bên dưới lời đọc. Giữ ranh giới đoạn, chia nhỏ đoạn dài và giữ nguyên bộ từ khóa khi dựng.
+- Có thể nhập từ khóa SRT khi chưa đăng nhập AI, tự phủ khoảng nghỉ và phần voice còn lại.
+
+
 ## 0.14.24
 
 - Khi tải hoặc chèn voice bị gián đoạn, nút Tiếp tục kiểm tra lại đúng tệp trong Canva và dùng lại tệp đã tải. Chỉ dựng cảnh sau khi xác nhận voice bắt đầu ở giây 0 và đủ thời lượng của phần.

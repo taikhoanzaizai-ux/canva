@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.14.24'
+VERSION = '0.14.25'
 
 def project_title(name,part_index=0):
     name=' '.join(str(name or '').split())
@@ -117,7 +117,22 @@ def load_transcript(path):
             lines=block.strip().splitlines()
             for i,line in enumerate(lines):
                 m=re.match(r'([\d:,.]+)\s*-->\s*([\d:,.]+)',line)
-                if m: segments.append(dict(start=sec(m[1]),end=sec(m[2]),text=' '.join(lines[i+1:])));break
+                if m:
+                    speech=[];queries=[];reading_keywords=False
+                    for body in lines[i+1:]:
+                        marker=re.match(r'^\s*(?:từ\s*khóa(?:\s*canva)?|keywords?|canva)\s*:\s*(.*)$',body,re.I)
+                        if marker:
+                            reading_keywords=True
+                            queries.extend(q.strip() for q in re.split(r'[;|]',marker[1]) if q.strip())
+                        elif reading_keywords and re.match(r'^\s*[-•]',body):
+                            queries.append(re.sub(r'^\s*[-•]\s*','',body).strip())
+                        else:
+                            reading_keywords=False
+                            speech.append(re.sub(r'^\s*Lời\s*đọc\s*:\s*','',body,flags=re.I))
+                    segment=dict(start=sec(m[1]),end=sec(m[2]),text=' '.join(speech).strip())
+                    if queries:segment['queries']=list(dict.fromkeys(queries))
+                    segments.append(segment)
+                    break
     previous=-1;cleaned=[]
     for index,s in enumerate(segments,1):
         try:s['start'],s['end']=float(s['start']),float(s['end'])
@@ -215,6 +230,46 @@ def make_plan(segments, start=0, end=None, opening=35, max_seconds=5):
         desc=describe(context)
         scenes.append(dict(id=len(scenes)+1,start=round(a-start,3),source_start=round(a,3),duration=round(b-a,3),text=text,**desc))
     return dict(scenes=scenes,duration=round(end-start,3),source_start=start,approximate=approximate)
+
+
+def make_keyword_plan(segments,start=0,end=None,opening=35):
+    """Keep imported cue boundaries, searches and the full voice range."""
+    start=float(start)
+    end=float(end if end is not None else segments[-1]['end'])
+    if not math.isfinite(start) or not math.isfinite(end) or not 0<=start<end:
+        raise ValueError('Mốc thời gian nhập SRT không hợp lệ.')
+    scenes=[];at=start
+    def add(segment,left,right):
+        for row in make_plan([segment],left,right,opening)['scenes']:
+            row['id']=len(scenes)+1
+            row['start']=round(row['source_start']-start,3)
+            if segment.get('queries'):
+                row.update(queries=list(segment['queries']),manual_queries=True,review=False,
+                           requires_review=False,positive=[],negative=[],keyword_provider='SRT')
+            scenes.append(row)
+    def gap(left,right):
+        if right-left<.001:return
+        context=scenes[-1]['text'] if scenes else 'Khoảng nghỉ'
+        desc=describe(context)
+        if scenes:desc['queries']=list(scenes[-1]['queries'])
+        while left<right-.001:
+            to=min(right,left+5)
+            scenes.append(dict(id=len(scenes)+1,start=round(left-start,3),
+                source_start=round(left,3),duration=round(to-left,3),text='Khoảng nghỉ',**desc))
+            left=to
+    for segment in segments:
+        left=max(start,float(segment['start']),at)
+        right=min(end,float(segment['end']))
+        if right<=left:continue
+        if not str(segment.get('text','')).strip():
+            raise ValueError('Đoạn SRT có từ khóa cần có lời đọc.')
+        gap(at,left)
+        add(segment,left,right)
+        at=right
+    gap(at,end)
+    if not scenes:raise ValueError('Không có cảnh trong khoảng SRT đã chọn.')
+    return dict(scenes=scenes,duration=round(end-start,3),source_start=start,approximate=True,
+                imported_keywords=True)
 
 def repair_tiny_scenes(scenes,completed=()):
     """Borrow only from pending neighbours; preserve IDs, total voice and completed cuts."""

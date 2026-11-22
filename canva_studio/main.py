@@ -7,7 +7,7 @@ if getattr(sys,'frozen',False):
     os.environ['TCL_LIBRARY']='_tcl_data';os.environ['TK_LIBRARY']='_tk_data'
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from canva_studio.core import VERSION, load_transcript, read_script, make_plan, atomic_json, valid_canva, align_script,project_title
+from canva_studio.core import VERSION, load_transcript, read_script, make_plan, make_keyword_plan, atomic_json, valid_canva, align_script,project_title
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio.editorial import add_title_cards,render_titles,neighboring_script
 from canva_studio.browser import open_chrome,chrome_path
@@ -60,7 +60,7 @@ class App:
         self.name_hint=tk.StringVar(value='  Ví dụ: Bài 1 → Bài 1.2 → Bài 1.3')
         ttk.Label(name_row,textvariable=self.name_hint).pack(side='left')
         self.voice=tk.StringVar(value=self.settings.get('voice',''));self.script_path=tk.StringVar();self.transcript=tk.StringVar(value=self.settings.get('transcript',''))
-        for label,var,command in [('Voice MP3 / WAV',self.voice,self.choose_voice),('Kịch bản DOCX / TXT',self.script_path,self.choose_script),('Lời đọc có thời gian (tùy chọn)',self.transcript,self.choose_transcript)]:
+        for label,var,command in [('Voice MP3 / WAV',self.voice,self.choose_voice),('Kịch bản DOCX / TXT',self.script_path,self.choose_script),('Lời đọc / từ khóa SRT',self.transcript,self.choose_transcript)]:
             row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text=label,width=29).pack(side='left');ttk.Entry(row,textvariable=var).pack(side='left',fill='x',expand=True);ttk.Button(row,text='Chọn…',command=command).pack(side='left',padx=(8,0))
         self.script=tk.Text(build,height=2,wrap='word',font=('Segoe UI',10),relief='flat',padx=8,pady=7);self.script.pack(fill='x',pady=3)
         self.script.insert('1.0','')
@@ -454,7 +454,9 @@ class App:
         except Exception as e:messagebox.showerror('Không đọc được kịch bản',str(e))
     def choose_transcript(self):
         p=filedialog.askopenfilename(filetypes=[('Mốc lời đọc','*.json *.srt *.vtt')]);
-        if p:self.transcript.set(p)
+        if p:
+            self.transcript.set(p)
+            self.notice.set('Đã chọn lời đọc. SRT hỗ trợ dòng Từ khóa: mạch máu; máu dưới lời đọc. Bấm Phân tích & chia cảnh để nhập.')
     def save_settings(self):
         self.settings.update({k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript),('antigravity_path',self.antigravity_path)]})
         self.settings.update(keyword_provider=self.keyword_provider.get(),keyword_models={name:value.get() for name,value in self.keyword_models.items()})
@@ -476,7 +478,8 @@ class App:
                 'Sửa cảnh trên Canva rồi bấm Đã sửa trên Canva — tiếp tục. '
                 'Nếu muốn bắt đầu bài khác, chọn Dự án mới để lưu lại tiến độ trước.')
         try:
-            config=self.keyword_config()
+            imported=load_transcript(self.transcript.get()) if self.transcript.get().strip() else []
+            config=None if any(s.get('queries') for s in imported) else self.keyword_config()
             if not Path(self.voice.get()).is_file():raise ValueError('Chọn tệp voice có sẵn trên máy.')
             if not Path(self.ffmpeg.get()).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ.')
             a=float(self.start.get());b=float(self.end.get()) if self.end.get().strip() else probe_duration(self.ffmpeg.get(),self.voice.get());o=float(self.opening.get())
@@ -506,7 +509,12 @@ class App:
                 if c['b']>duration+.1:raise ValueError(f'Voice dài {duration:.2f} giây. Chọn điểm kết thúc trong khoảng đó.')
             subprocess.run([c['ffmpeg'],'-v','error','-y','-ss',str(c['a']),'-i',c['voice'],'-t',str(c['b']-c['a']),'-vn','-ar','16000','-ac','1','-c:a','pcm_s16le',str(clip)],check=True,creationflags=NO_WINDOW,capture_output=True)
             if c['transcript']:
-                seg=load_transcript(c['transcript']);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,c['a'],c['b'],c['o'])
+                seg=load_transcript(c['transcript'])
+                if any(s.get('queries') for s in seg):
+                    plan=make_keyword_plan(seg,c['a'],c['b'],c['o']);aligned=False
+                else:
+                    seg,aligned=align_script(seg,c['script'])
+                    plan=make_plan(seg,c['a'],c['b'],c['o'])
             else:
                 out=job/'transcript.json'
                 cached=cached_transcript(DATA/'Projects',clip)
@@ -524,9 +532,13 @@ class App:
                 seg=load_transcript(out);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,0,c['b']-c['a'],c['o'])
                 plan['source_start']=c['a']
                 for scene in plan['scenes']:scene['source_start']=round(scene['source_start']+c['a'],3)
-            plan=add_title_cards(plan,seg,c['script'],timing_offset=0 if c['transcript'] else c['a'])
-            updates, keyword_note = keyword_updates(plan['scenes'], c.get('keyword_config'),
-                                                    lambda msg: self.tasks.put(('keyword_progress',msg)))
+            if not plan.get('imported_keywords'):
+                plan=add_title_cards(plan,seg,c['script'],timing_offset=0 if c['transcript'] else c['a'])
+            if plan.get('imported_keywords'):
+                updates,keyword_note={},'Đã nhập lời đọc và từ khóa theo SRT.'
+            else:
+                updates, keyword_note = keyword_updates(plan['scenes'], c.get('keyword_config'),
+                                                        lambda msg: self.tasks.put(('keyword_progress',msg)))
             for scene in plan['scenes']:
                 scene.update(updates.get(scene['id'], {}))
             render_titles(plan,c['ffmpeg'],job)
