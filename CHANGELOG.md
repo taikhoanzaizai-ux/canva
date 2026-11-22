@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.14.26
+
+- Chọn SRT khi chưa có voice sẽ tự nhập danh sách cảnh, thời gian, lời đọc và từ khóa. Không cần FFmpeg hoặc đăng nhập AI cho bước này.
+- Giữ toàn bộ cảnh SRT, chia phần tối đa 50 cảnh; khi có voice sẽ kiểm tra và chuẩn bị âm thanh trước khi dựng.
+- Đặt lại phần đang hiển thị khi nhập bài mới để danh sách SRT không bị trạng thái dự án cũ thay thế.
+
 ## 0.14.25
 
 - Nhập lời đọc và từ khóa từ SRT qua dòng Từ khóa: bên dưới lời đọc. Giữ ranh giới đoạn, chia nhỏ đoạn dài và giữ nguyên bộ từ khóa khi dựng.
@@ -436,4 +442,3 @@
 ## 0.1.0
 
 - Bản thử lập cảnh từ voice/kịch bản và điều khiển trình dựng video Canva tiếng Việt.
-

@@ -7,7 +7,7 @@ if getattr(sys,'frozen',False):
     os.environ['TCL_LIBRARY']='_tcl_data';os.environ['TK_LIBRARY']='_tk_data'
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from canva_studio.core import VERSION, load_transcript, read_script, make_plan, make_keyword_plan, atomic_json, valid_canva, align_script,project_title
+from canva_studio.core import VERSION, load_transcript, read_script, make_plan, make_keyword_plan, split_batches, atomic_json, valid_canva, align_script,project_title
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio.editorial import add_title_cards,render_titles,neighboring_script
 from canva_studio.browser import open_chrome,chrome_path
@@ -453,10 +453,15 @@ class App:
         try:self.plan=None;self.script_path.set(p);self.script.delete('1.0','end');self.script.insert('1.0',read_script(p))
         except Exception as e:messagebox.showerror('Không đọc được kịch bản',str(e))
     def choose_transcript(self):
+        if self.worker_busy or self.engine.state['mode'] in ('running','opening','opening_resume'):
+            return messagebox.showinfo('Đang xử lý','Tạm dừng trước khi nhập SRT mới.')
         p=filedialog.askopenfilename(filetypes=[('Mốc lời đọc','*.json *.srt *.vtt')]);
         if p:
             self.transcript.set(p)
-            self.notice.set('Đã chọn lời đọc. SRT hỗ trợ dòng Từ khóa: mạch máu; máu dưới lời đọc. Bấm Phân tích & chia cảnh để nhập.')
+            if not self.voice.get().strip():
+                self.analyze()
+            else:
+                self.notice.set('Đã chọn SRT. Bấm Phân tích & chia cảnh để kiểm tra cùng voice đã chọn.')
     def save_settings(self):
         self.settings.update({k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript),('antigravity_path',self.antigravity_path)]})
         self.settings.update(keyword_provider=self.keyword_provider.get(),keyword_models={name:value.get() for name,value in self.keyword_models.items()})
@@ -479,8 +484,21 @@ class App:
                 'Nếu muốn bắt đầu bài khác, chọn Dự án mới để lưu lại tiến độ trước.')
         try:
             imported=load_transcript(self.transcript.get()) if self.transcript.get().strip() else []
+            if not self.voice.get().strip():
+                if not imported:raise ValueError('Chọn SRT hoặc voice để phân tích.')
+                plan=make_keyword_plan(imported,float(self.start.get()),
+                    float(self.end.get()) if self.end.get().strip() else None,float(self.opening.get()))
+                parts=split_batches(plan)
+                preview={**parts[0],'parts':parts,'transcript_only':True,
+                         'original_voice':'','script_aligned':True,'approximate':plan.get('approximate',False),
+                         'title_count':0,'keyword_note':'Lời đọc theo SRT; giữ từ khóa trong tệp, gợi ý cho đoạn còn thiếu.'}
+                self.save_settings()
+                self.worker_busy=True
+                self.plan_button.configure(state='disabled')
+                self.tasks.put(('plan',(preview,'')))
+                return
             config=None if any(s.get('queries') for s in imported) else self.keyword_config()
-            if not Path(self.voice.get()).is_file():raise ValueError('Chọn tệp voice có sẵn trên máy.')
+            if not Path(self.voice.get()).is_file():raise ValueError('Không tìm thấy voice đã chọn. Chọn lại tệp hoặc xóa đường dẫn để chỉ phân tích SRT.')
             if not Path(self.ffmpeg.get()).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ.')
             a=float(self.start.get());b=float(self.end.get()) if self.end.get().strip() else probe_duration(self.ffmpeg.get(),self.voice.get());o=float(self.opening.get())
             if not 0<=a<b:raise ValueError('Mốc thời gian không hợp lệ.')
@@ -659,7 +677,9 @@ class App:
             self.save_project_name()
             if not self.plan:
                 self.analyze();self.analyze_then_run=self.worker_busy;return
-            if not Path(self.voice.get()).is_file():raise ValueError('Chọn voice trước.')
+            if not Path(self.voice.get()).is_file():raise ValueError('Đã có danh sách SRT. Chọn voice tương ứng để kiểm tra thời lượng và bắt đầu dựng.')
+            if self.plan.get('transcript_only'):
+                self.analyze();self.analyze_then_run=self.worker_busy;return
             self.plan['project_name']=project_title(self.project_name.get())
             u=self.target.get().strip();st=self.engine.state
             if u and not valid_canva(u):raise ValueError('Link thiết kế chưa đúng. Để trống để phần mềm tự tạo Video khổ ngang.')
@@ -776,21 +796,26 @@ class App:
                     self.analyze_then_run=False
                     messagebox.showerror('Chưa lưu được bản dựng','Kiểm tra quyền ghi thư mục dữ liệu trước khi thay danh sách cảnh.')
                     continue
-                self.plan,clip=value;self.prepared_voice=clip;self.populate();self.target.set('')
-                self.engine.state.update(scenes=[],done=[],used=[],phase={},target='',voice='',voice_done=False,export_done=False,mode='ready')
+                self.plan,clip=value;self.prepared_voice=clip;self.target.set('')
+                self.display_part=0
+                self.engine.state.update(scenes=[],done=[],used=[],phase={},parts=[],history=[],part_index=0,target='',voice='',voice_done=False,export_done=False,mode='ready')
                 for key in ('manual_edit_scene','manual_review','manual_review_error'):self.engine.state.pop(key,None)
                 self.manual_scene.set('')
-                self.engine.save()
+                self.engine.save();self.populate()
                 n=len(self.plan['scenes']);note=f'Đã chia {n} cảnh phần đầu; {self.plan.get("title_count",0)} tiêu đề nền đen. Nhấp đúp để sửa từ khóa.'
                 if self.plan.get('approximate'):note+=' Mốc từ được ước lượng từ phụ đề; nên duyệt phần mở đầu.'
                 if self.script.get('1.0','end').strip() and not self.plan.get('script_aligned'):note+=' Chưa khớp chắc chắn kịch bản: đang dùng lời nhận diện từ voice.'
-                if self.plan.get('parts'):note+=f' Tổng {len(self.plan["parts"])} phần, tối đa 50 cảnh/phần; voice đã kiểm tra đủ thời lượng.'
+                if self.plan.get('parts'):
+                    total=sum(len(part['scenes']) for part in self.plan['parts'])
+                    note+=f' Tổng {total} cảnh, {len(self.plan["parts"])} phần, tối đa 50 cảnh/phần.'
+                    note+=' Chọn voice khi muốn dựng video.' if self.plan.get('transcript_only') else ' Voice đã kiểm tra đủ thời lượng.'
                 if self.plan.get('keyword_note'):
                     self.keyword_notice.set(self.plan['keyword_note'])
                     note+=' '+self.plan['keyword_note']
                 self.notice.set(note)
                 if self.analyze_then_run:
-                    self.analyze_then_run=False;self.root.after(0,self.run)
+                    self.analyze_then_run=False
+                    if not self.plan.get('transcript_only'):self.root.after(0,self.run)
         self.engine.watchdog()
         has_scenes=bool(self.plan and self.plan.get('scenes'))
         self.keyword_update_button.configure(state='normal' if has_scenes and not self.worker_busy else 'disabled')
@@ -807,7 +832,11 @@ class App:
             self.target.set(st['target'])
         n=len(st['scenes']);done=len(st['done']);self.progress['value']=100*done/max(1,n)
         self.refresh_scene_status()
-        self.status.set(f'Phần {st.get("part_index",0)+1}/{max(1,len(st.get("parts",[])))} • {done}/{n} cảnh  •  '+st['message'])
+        if self.plan and self.plan.get('transcript_only'):
+            parts=self.plan['parts'];total=sum(len(p['scenes']) for p in parts)
+            self.status.set(f'SRT • {total} cảnh • {len(parts)} phần • Chọn voice khi muốn dựng video.')
+        else:
+            self.status.set(f'Phần {st.get("part_index",0)+1}/{max(1,len(st.get("parts",[])))} • {done}/{n} cảnh  •  '+st['message'])
         self.connection.set(self.engine.connection_status()['message'])
         self.root.after(500,self.tick)
     def close(self):
