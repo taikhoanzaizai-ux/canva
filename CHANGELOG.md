@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.14.27
+
+- Ưu tiên SRT cho toàn bộ thời gian, lời đọc và từ khóa khi có SRT. Voice đi kèm chỉ được cắt và ghép làm âm thanh; chỉ nhận diện voice khi không có SRT.
+- Bỏ bước nhận diện, đối chiếu kịch bản lân cận và yêu cầu AI khi dùng SRT, kể cả SRT thường chưa có dòng từ khóa. Mốc kết thúc mặc định lấy từ SRT.
+- Tự nạp lại khi chọn SRT dù đã có voice; kiểm tra nguồn SRT của danh sách trước khi bắt đầu để tránh dựng lại nội dung cũ.
+
 ## 0.14.26
 
 - Chọn SRT khi chưa có voice sẽ tự nhập danh sách cảnh, thời gian, lời đọc và từ khóa. Không cần FFmpeg hoặc đăng nhập AI cho bước này.

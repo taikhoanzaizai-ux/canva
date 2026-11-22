@@ -458,10 +458,7 @@ class App:
         p=filedialog.askopenfilename(filetypes=[('Mốc lời đọc','*.json *.srt *.vtt')]);
         if p:
             self.transcript.set(p)
-            if not self.voice.get().strip():
-                self.analyze()
-            else:
-                self.notice.set('Đã chọn SRT. Bấm Phân tích & chia cảnh để kiểm tra cùng voice đã chọn.')
+            self.analyze()
     def save_settings(self):
         self.settings.update({k:v.get() for k,v in [('python',self.python),('model',self.model),('ffmpeg',self.ffmpeg),('voice',self.voice),('transcript',self.transcript),('antigravity_path',self.antigravity_path)]})
         self.settings.update(keyword_provider=self.keyword_provider.get(),keyword_models={name:value.get() for name,value in self.keyword_models.items()})
@@ -489,7 +486,7 @@ class App:
                 plan=make_keyword_plan(imported,float(self.start.get()),
                     float(self.end.get()) if self.end.get().strip() else None,float(self.opening.get()))
                 parts=split_batches(plan)
-                preview={**parts[0],'parts':parts,'transcript_only':True,
+                preview={**parts[0],'parts':parts,'transcript_only':True,'transcript_path':self.transcript.get().strip(),
                          'original_voice':'','script_aligned':True,'approximate':plan.get('approximate',False),
                          'title_count':0,'keyword_note':'Lời đọc theo SRT; giữ từ khóa trong tệp, gợi ý cho đoạn còn thiếu.'}
                 self.save_settings()
@@ -497,19 +494,22 @@ class App:
                 self.plan_button.configure(state='disabled')
                 self.tasks.put(('plan',(preview,'')))
                 return
-            config=None if any(s.get('queries') for s in imported) else self.keyword_config()
+            config=None if imported else self.keyword_config()
             if not Path(self.voice.get()).is_file():raise ValueError('Không tìm thấy voice đã chọn. Chọn lại tệp hoặc xóa đường dẫn để chỉ phân tích SRT.')
             if not Path(self.ffmpeg.get()).is_file():raise ValueError('Chọn FFmpeg trong Kết nối & công cụ.')
-            a=float(self.start.get());b=float(self.end.get()) if self.end.get().strip() else probe_duration(self.ffmpeg.get(),self.voice.get());o=float(self.opening.get())
+            a=float(self.start.get())
+            b=float(self.end.get()) if self.end.get().strip() else (imported[-1]['end'] if imported else probe_duration(self.ffmpeg.get(),self.voice.get()))
+            o=float(self.opening.get())
             if not 0<=a<b:raise ValueError('Mốc thời gian không hợp lệ.')
         except Exception as e:return messagebox.showerror('Chưa đủ dữ liệu',str(e))
         try:
-            if not self.script.get('1.0','end').strip():
+            if not imported and not self.script.get('1.0','end').strip():
                 nearby=neighboring_script(self.voice.get())
                 if nearby:
                     self.script_path.set(str(nearby));self.script.insert('1.0',read_script(nearby))
         except Exception as e:return messagebox.showerror('Không đọc được kịch bản',str(e))
-        self.save_settings();self.worker_busy=True;self.plan_button.configure(state='disabled');self.notice.set('Đang nhận diện voice trên máy. Có thể mất vài phút…')
+        self.save_settings();self.worker_busy=True;self.plan_button.configure(state='disabled')
+        self.notice.set('Đang lấy cảnh từ SRT và chuẩn bị voice đi kèm…' if imported else 'Đang nhận diện voice trên máy. Có thể mất vài phút…')
         inputs=dict(a=a,b=b,o=o,voice=self.voice.get(),ffmpeg=self.ffmpeg.get(),python=self.python.get(),model=self.model.get(),transcript=self.transcript.get(),script=self.script.get('1.0','end').strip(),keyword_config=config)
         threading.Thread(target=self.analyze_worker,args=(inputs,),daemon=True).start()
     def analyze_worker(self,c):
@@ -520,20 +520,12 @@ class App:
                 c.update(cpp=str(exe),model=str(model))
                 self.tasks.put(('recognizer_ready',str(model)))
             job=DATA/'Projects'/uuid.uuid4().hex;job.mkdir(parents=True)
-            clip=job/'recognition.wav'
-            probe=Path(c['ffmpeg']).with_name('ffprobe.exe' if os.name=='nt' else 'ffprobe')
-            if probe.is_file():
-                duration=float(subprocess.check_output([str(probe),'-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',c['voice']],creationflags=NO_WINDOW))
-                if c['b']>duration+.1:raise ValueError(f'Voice dài {duration:.2f} giây. Chọn điểm kết thúc trong khoảng đó.')
-            subprocess.run([c['ffmpeg'],'-v','error','-y','-ss',str(c['a']),'-i',c['voice'],'-t',str(c['b']-c['a']),'-vn','-ar','16000','-ac','1','-c:a','pcm_s16le',str(clip)],check=True,creationflags=NO_WINDOW,capture_output=True)
             if c['transcript']:
                 seg=load_transcript(c['transcript'])
-                if any(s.get('queries') for s in seg):
-                    plan=make_keyword_plan(seg,c['a'],c['b'],c['o']);aligned=False
-                else:
-                    seg,aligned=align_script(seg,c['script'])
-                    plan=make_plan(seg,c['a'],c['b'],c['o'])
+                plan=make_keyword_plan(seg,c['a'],c['b'],c['o']);aligned=True
             else:
+                clip=job/'recognition.wav'
+                subprocess.run([c['ffmpeg'],'-v','error','-y','-ss',str(c['a']),'-i',c['voice'],'-t',str(c['b']-c['a']),'-vn','-ar','16000','-ac','1','-c:a','pcm_s16le',str(clip)],check=True,creationflags=NO_WINDOW,capture_output=True)
                 out=job/'transcript.json'
                 cached=cached_transcript(DATA/'Projects',clip)
                 if cached:shutil.copy2(cached,out)
@@ -553,7 +545,7 @@ class App:
             if not plan.get('imported_keywords'):
                 plan=add_title_cards(plan,seg,c['script'],timing_offset=0 if c['transcript'] else c['a'])
             if plan.get('imported_keywords'):
-                updates,keyword_note={},'Đã nhập lời đọc và từ khóa theo SRT.'
+                updates,keyword_note={},'Nguồn nội dung là SRT. Voice đi kèm dùng làm âm thanh video.'
             else:
                 updates, keyword_note = keyword_updates(plan['scenes'], c.get('keyword_config'),
                                                         lambda msg: self.tasks.put(('keyword_progress',msg)))
@@ -561,7 +553,7 @@ class App:
                 scene.update(updates.get(scene['id'], {}))
             render_titles(plan,c['ffmpeg'],job)
             parts=prepare_parts(plan,c['voice'],c['ffmpeg'],job)
-            plan={**parts[0], 'parts':parts,'original_voice':c['voice'],'script_aligned':aligned,'approximate':plan.get('approximate',False),'title_count':plan.get('title_count',0)}
+            plan={**parts[0], 'parts':parts,'original_voice':c['voice'],'script_aligned':aligned,'approximate':plan.get('approximate',False),'title_count':plan.get('title_count',0),'planning_source':'srt' if c['transcript'] else 'voice','transcript_path':c['transcript'].strip()}
             plan['keyword_note']=keyword_note
             self.tasks.put(('plan',(plan,parts[0]['voice'])))
         except Exception as e:self.tasks.put(('error',str(e)))
@@ -678,7 +670,7 @@ class App:
             if not self.plan:
                 self.analyze();self.analyze_then_run=self.worker_busy;return
             if not Path(self.voice.get()).is_file():raise ValueError('Đã có danh sách SRT. Chọn voice tương ứng để kiểm tra thời lượng và bắt đầu dựng.')
-            if self.plan.get('transcript_only'):
+            if self.plan.get('transcript_only') or ('transcript_path' in self.plan and self.plan['transcript_path']!=self.transcript.get().strip()):
                 self.analyze();self.analyze_then_run=self.worker_busy;return
             self.plan['project_name']=project_title(self.project_name.get())
             u=self.target.get().strip();st=self.engine.state

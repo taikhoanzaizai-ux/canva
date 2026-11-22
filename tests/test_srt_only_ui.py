@@ -1,12 +1,14 @@
 """Exercise the app entry points without requiring a Windows display or audio tools."""
 import ast
+import os
 import queue
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-from canva_studio.core import load_transcript,make_keyword_plan,split_batches
+from canva_studio.core import load_transcript,make_keyword_plan,split_batches,make_plan
 
 
 class Value:
@@ -25,7 +27,7 @@ class SrtOnlyUiTests(unittest.TestCase):
             for i in range(123)),encoding='utf-8-sig')
         tree=ast.parse((Path(__file__).parents[1]/'canva_studio/main.py').read_text(encoding='utf8'))
         cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='App')
-        methods=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in ('analyze','choose_transcript','run','tick')]
+        methods=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in ('analyze','analyze_worker','choose_transcript','run','tick')]
         self.dialog=SimpleNamespace(showinfo=Mock(),showerror=Mock())
         self.thread=Mock()
         self.probe=Mock(return_value=369)
@@ -106,17 +108,65 @@ class SrtOnlyUiTests(unittest.TestCase):
         self.assertEqual(self.app.plan,{'sentinel':True})
         self.assertTrue(self.app.tasks.empty())
 
-    def test_valid_voice_enters_existing_audio_worker(self):
+    def test_srt_and_voice_prepare_audio_using_srt_end(self):
         audio=Path(self.tmp.name)/'voice.wav';audio.touch()
         tool=Path(self.tmp.name)/'ffmpeg.exe';tool.touch()
         self.app.voice.set(str(audio));self.app.ffmpeg.set(str(tool))
         self.app.analyze()
-        self.probe.assert_called_once()
+        self.probe.assert_not_called()
+        self.app.keyword_config.assert_not_called()
+        self.env['neighboring_script'].assert_not_called()
         self.thread.assert_called_once()
         inputs=self.thread.call_args.kwargs['args'][0]
         self.assertEqual(inputs['voice'],str(audio))
         self.assertEqual(inputs['transcript'],str(self.path))
+        self.assertEqual(inputs['b'],369)
         self.assertTrue(self.app.tasks.empty())
+
+    def test_plain_srt_with_voice_does_not_require_ai(self):
+        self.path.write_text('1\n00:00:00,000 --> 00:00:03,000\nĐi bộ.\n',encoding='utf8')
+        audio=Path(self.tmp.name)/'voice.wav';audio.touch()
+        tool=Path(self.tmp.name)/'ffmpeg.exe';tool.touch()
+        self.app.voice.set(str(audio));self.app.ffmpeg.set(str(tool))
+        self.app.analyze()
+        self.app.keyword_config.assert_not_called()
+        self.probe.assert_not_called()
+        self.assertEqual(self.thread.call_args.kwargs['args'][0]['b'],3)
+
+    def test_voice_without_srt_keeps_voice_analysis(self):
+        audio=Path(self.tmp.name)/'voice.wav';audio.touch()
+        tool=Path(self.tmp.name)/'ffmpeg.exe';tool.touch()
+        self.app.voice.set(str(audio));self.app.ffmpeg.set(str(tool));self.app.transcript.set('')
+        self.app.keyword_config=Mock(return_value=None)
+        self.app.analyze()
+        self.app.keyword_config.assert_called_once()
+        self.probe.assert_called_once()
+        self.assertEqual(self.thread.call_args.kwargs['args'][0]['transcript'],'')
+
+    def test_worker_uses_srt_for_both_plain_and_keyword_cues(self):
+        for suffix in ('','\nTừ khóa: quả cam; nước ép cam'):
+            with self.subTest(keywords=bool(suffix)):
+                self.path.write_text('1\n00:00:00,000 --> 00:00:03,000\nQuả cam.'+suffix+'\n',encoding='utf8')
+                def prepare(plan,*args):
+                    parts=split_batches(plan)
+                    for part in parts:part['voice']='prepared.wav'
+                    return parts
+                forbidden=Mock(side_effect=AssertionError('SRT must supply content'))
+                self.env.update(DATA=Path(self.tmp.name),uuid=uuid,os=os,NO_WINDOW=0,
+                    ensure_recognizer=forbidden,cached_transcript=forbidden,align_script=forbidden,
+                    subprocess=SimpleNamespace(run=forbidden,Popen=forbidden),make_plan=make_plan,
+                    add_title_cards=forbidden,keyword_updates=forbidden,render_titles=Mock(),
+                    prepare_parts=Mock(side_effect=prepare))
+                c=dict(transcript=str(self.path),voice='voice.wav',ffmpeg='ffmpeg.exe',
+                       python='',model='',a=0,b=3,o=35,script='Nội dung voice khác về tim.')
+                self.env['analyze_worker'](self.app,c)
+                kind,(plan,audio)=self.app.tasks.get_nowait()
+                self.assertEqual(kind,'plan')
+                self.assertEqual(plan['planning_source'],'srt')
+                self.assertEqual(plan['scenes'][0]['text'],'Quả cam.')
+                self.assertEqual(audio,'prepared.wav')
+                if suffix:self.assertEqual(plan['scenes'][0]['queries'],['quả cam','nước ép cam'])
+                forbidden.assert_not_called()
 
     def test_start_preview_with_voice_prepares_audio_before_canva(self):
         audio=Path(self.tmp.name)/'voice.wav';audio.touch()
@@ -127,3 +177,19 @@ class SrtOnlyUiTests(unittest.TestCase):
         self.app.analyze.assert_called_once()
         self.assertTrue(self.app.analyze_then_run)
         self.dialog.showerror.assert_not_called()
+
+    def test_start_rebuilds_stale_plan_after_srt_selection_changes(self):
+        audio=Path(self.tmp.name)/'voice.wav';audio.touch()
+        self.app.voice.set(str(audio))
+        self.app.plan={'transcript_path':'older.srt'}
+        self.app.analyze=Mock(side_effect=lambda:setattr(self.app,'worker_busy',True))
+        self.env['run'](self.app)
+        self.app.analyze.assert_called_once()
+        self.assertTrue(self.app.analyze_then_run)
+        self.dialog.showerror.assert_not_called()
+
+    def test_choosing_srt_with_voice_also_loads_it_immediately(self):
+        self.app.voice.set('voice.wav')
+        self.app.analyze=Mock()
+        self.env['choose_transcript'](self.app)
+        self.app.analyze.assert_called_once()
