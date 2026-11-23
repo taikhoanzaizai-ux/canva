@@ -1,5 +1,11 @@
 # Các bản cập nhật
 
+## 0.14.32
+
+- Thêm “Tạo SRT dựng Canva từ voice”: nhận diện lời đọc trên máy, chia cảnh, tạo từ khóa theo lựa chọn AI hiện tại và lưu SRT có thời gian đến mili giây.
+- Xuất toàn bộ cảnh trong một SRT, kể cả quá 50 cảnh. Nhập lại sẽ tự chia tối đa 50 cảnh/phần. Có thể chọn khoảng voice cần xuất bằng Từ giây / Đến giây.
+- Tạo SRT luôn đọc voice đã chọn dù ô SRT đang có tệp cũ; không thay đổi tiến độ dự án đang có, không cần mở Canva hay dựng video trước.
+
 ## 0.14.31
 
 - Ưu tiên nút “Áp dụng âm thanh” đúng tên voice trong kho Canva, tránh bấm nhầm vùng kéo thả hoặc nút nghe thử khiến voice không xuống timeline.

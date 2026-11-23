@@ -4,7 +4,7 @@ import difflib, json, math, os, re, unicodedata, zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-VERSION = '0.14.31'
+VERSION = '0.14.32'
 
 def project_title(name,part_index=0):
     name=' '.join(str(name or '').split())
@@ -258,6 +258,29 @@ def make_keyword_plan(segments,start=0,end=None,opening=35):
 
 def scene_time_bounds(scene):
     return scene.get('srt_start',scene['start']),scene.get('srt_end',scene['start']+scene['duration'])
+
+def keyword_srt(plan):
+    """Export the full unsplit plan on the original voice clock."""
+    def stamp(ms):
+        hours,ms=divmod(ms,3600000);minutes,ms=divmod(ms,60000);seconds,ms=divmod(ms,1000)
+        return f'{hours:02d}:{minutes:02d}:{seconds:02d},{ms:03d}'
+    def line(value):
+        return ' '.join(str(value).split())
+    blocks=[];previous=0
+    for index,scene in enumerate(plan['scenes'],1):
+        start=float(scene.get('source_start',plan.get('source_start',0)+scene['start']))
+        end=start+float(scene['duration'])
+        if not all(math.isfinite(v) for v in (start,end)) or start<0 or end<=start:
+            raise ValueError('Không thể xuất SRT: mốc thời gian cảnh không hợp lệ.')
+        a,b=round(start*1000),round(end*1000)
+        if a<previous or b<=a:raise ValueError('Không thể xuất SRT: cảnh chồng lấn hoặc quá ngắn.')
+        text=line(scene['text'])
+        queries=list(dict.fromkeys(line(q).replace('|',' ').replace(';',' ') for q in scene.get('queries',[]) if line(q)))
+        if not text or not queries:raise ValueError('Không thể xuất SRT: cảnh thiếu lời đọc hoặc từ khóa.')
+        blocks.append(f'{index}\n{stamp(a)} --> {stamp(b)}\nLời đọc: {text}\nTừ khóa Canva: '+ ' | '.join(queries))
+        previous=b
+    if not blocks:raise ValueError('Chưa có cảnh để xuất SRT.')
+    return '\n\n'.join(blocks)+'\n'
 
 def repair_tiny_scenes(scenes,completed=()):
     """Borrow only from pending neighbours; preserve IDs, total voice and completed cuts."""

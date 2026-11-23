@@ -7,7 +7,7 @@ if getattr(sys,'frozen',False):
     os.environ['TCL_LIBRARY']='_tcl_data';os.environ['TK_LIBRARY']='_tk_data'
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from canva_studio.core import VERSION, load_transcript, read_script, make_plan, make_keyword_plan, split_batches, scene_time_bounds, atomic_json, valid_canva, align_script,project_title
+from canva_studio.core import VERSION, load_transcript, read_script, make_plan, make_keyword_plan, split_batches, scene_time_bounds, atomic_json, valid_canva, align_script,project_title, keyword_srt
 from canva_studio.bridge import Engine, serve, compatible_extension, MIN_EXTENSION_VERSION
 from canva_studio.editorial import add_title_cards,render_titles,neighboring_script
 from canva_studio.browser import open_chrome,chrome_path
@@ -64,6 +64,8 @@ class App:
             row=ttk.Frame(build);row.pack(fill='x',pady=3);ttk.Label(row,text=label,width=29).pack(side='left');ttk.Entry(row,textvariable=var).pack(side='left',fill='x',expand=True);ttk.Button(row,text='Chọn…',command=command).pack(side='left',padx=(8,0))
         self.script=tk.Text(build,height=2,wrap='word',font=('Segoe UI',10),relief='flat',padx=8,pady=7);self.script.pack(fill='x',pady=3)
         self.script.insert('1.0','')
+        self.srt_export_button=ttk.Button(build,text='Tạo SRT dựng Canva từ voice',command=self.create_voice_srt)
+        self.srt_export_button.pack(anchor='w',pady=3)
         row=ttk.Frame(build);row.pack(fill='x',pady=6)
         self.start=tk.StringVar(value='0');self.end=tk.StringVar(value='');self.opening=tk.StringVar(value='35')
         for label,var in [('Từ giây',self.start),('Đến giây (trống = hết)',self.end),('Mở đầu dựng kỹ (giây)',self.opening)]:
@@ -478,7 +480,12 @@ class App:
         except ValueError as exc:
             if event is None:raise
             self.notice.set(str(exc))
-    def analyze(self):
+    def create_voice_srt(self):
+        if self.worker_busy:return messagebox.showinfo('Đang xử lý','Chờ tác vụ hiện tại hoàn tất rồi tạo SRT.')
+        if not Path(self.voice.get().strip()).is_file():return messagebox.showinfo('Chọn voice','Chọn tệp Voice MP3 / WAV trước khi tạo SRT.')
+        path=filedialog.asksaveasfilename(title='Lưu SRT dựng Canva',initialfile=Path(self.voice.get()).stem+'_Canva.srt',defaultextension='.srt',filetypes=[('SRT dựng Canva','*.srt')])
+        if path:self.analyze(srt_output=path)
+    def analyze(self,srt_output=None):
         if self.worker_busy:return
         if self.engine.state['mode'] in ('running','opening','opening_resume'):return messagebox.showinfo('Đang dựng','Hãy tạm dừng trước khi chia lại cảnh.')
         state=self.engine.state
@@ -487,7 +494,7 @@ class App:
                 'Sửa cảnh trên Canva rồi bấm Đã sửa trên Canva — tiếp tục. '
                 'Nếu muốn bắt đầu bài khác, chọn Dự án mới để lưu lại tiến độ trước.')
         try:
-            imported=load_transcript(self.transcript.get()) if self.transcript.get().strip() else []
+            imported=load_transcript(self.transcript.get()) if self.transcript.get().strip() and not srt_output else []
             if imported:
                 plan=make_keyword_plan(imported,float(self.start.get()),
                     float(self.end.get()) if self.end.get().strip() else None,float(self.opening.get()))
@@ -517,7 +524,7 @@ class App:
         except Exception as e:return messagebox.showerror('Không đọc được kịch bản',str(e))
         self.save_settings();self.worker_busy=True;self.plan_button.configure(state='disabled')
         self.notice.set('Đang lấy cảnh từ SRT và chuẩn bị voice đi kèm…' if imported else 'Đang nhận diện voice trên máy. Có thể mất vài phút…')
-        inputs=dict(a=a,b=b,o=o,voice=self.voice.get(),ffmpeg=self.ffmpeg.get(),python=self.python.get(),model=self.model.get(),transcript=self.transcript.get(),script=self.script.get('1.0','end').strip(),keyword_config=config)
+        inputs=dict(a=a,b=b,o=o,voice=self.voice.get(),ffmpeg=self.ffmpeg.get(),python=self.python.get(),model=self.model.get(),transcript='' if srt_output else self.transcript.get(),script=self.script.get('1.0','end').strip(),keyword_config=config,srt_output=srt_output)
         threading.Thread(target=self.analyze_worker,args=(inputs,),daemon=True).start()
     def prepare_srt_voice(self):
         try:
@@ -574,7 +581,7 @@ class App:
                 seg=load_transcript(out);seg,aligned=align_script(seg,c['script']);plan=make_plan(seg,0,c['b']-c['a'],c['o'])
                 plan['source_start']=c['a']
                 for scene in plan['scenes']:scene['source_start']=round(scene['source_start']+c['a'],3)
-            if not plan.get('imported_keywords'):
+            if not plan.get('imported_keywords') and not c.get('srt_output'):
                 plan=add_title_cards(plan,seg,c['script'],timing_offset=0 if c['transcript'] else c['a'])
             if plan.get('imported_keywords'):
                 updates,keyword_note={},'Nguồn nội dung là SRT. Voice đi kèm dùng làm âm thanh video.'
@@ -583,6 +590,10 @@ class App:
                                                         lambda msg: self.tasks.put(('keyword_progress',msg)))
             for scene in plan['scenes']:
                 scene.update(updates.get(scene['id'], {}))
+            if c.get('srt_output'):
+                Path(c['srt_output']).write_text(keyword_srt(plan),encoding='utf-8-sig')
+                self.tasks.put(('srt_exported',(c['srt_output'],len(plan['scenes']),keyword_note)))
+                return
             render_titles(plan,c['ffmpeg'],job)
             parts=prepare_parts(plan,c['voice'],c['ffmpeg'],job)
             plan={**parts[0], 'parts':parts,'original_voice':c['voice'],'script_aligned':aligned,'approximate':plan.get('approximate',False),'title_count':plan.get('title_count',0),'planning_source':'srt' if c['transcript'] else 'voice','transcript_path':c['transcript'].strip()}
@@ -816,6 +827,11 @@ class App:
             if kind=='keyword_progress':self.notice.set(value);self.keyword_notice.set(value);continue
             if kind=='chatgpt_signin':self.finish_chatgpt_signin(value);continue
             self.worker_busy=False;self.plan_button.configure(state='normal')
+            if kind=='srt_exported':
+                path,count,note=value
+                self.notice.set(f'Đã lưu SRT dựng Canva: {count} cảnh. '+note)
+                messagebox.showinfo('Đã tạo SRT',f'Đã lưu {count} cảnh có thời gian, lời đọc và từ khóa:\n{path}\n\nChọn tệp này ở Lời đọc / từ khóa SRT để nhập. Các cảnh sẽ tự chia tối đa 50 cảnh/phần.\nNên kiểm tra lời nhận diện và từ khóa trước khi dựng.')
+                continue
             if kind=='keyword_result':self.finish_keyword_update(value);continue
             if kind=='keyword_error':self.keyword_notice.set(value);self.notice.set(value);continue
             if kind=='error':self.analyze_then_run=False;self.notice.set('Phân tích chưa thành công.');messagebox.showerror('Chưa phân tích được',value)
@@ -927,6 +943,11 @@ def main():
         report=dict(version=VERSION,ui_opened=True,demo_scenes=len(app.tree.get_children()) if app.plan else 0,ffmpeg_found=Path(app.ffmpeg.get()).is_file(),whisper_found=Path(app.python.get()).is_file(),model_found=Path(app.model.get()).is_file(),pairing_code_visible=token_visible,pairing_copy_ok=copy_ok,update_button=app.update_button.cget('text')=='Kiểm tra cập nhật',portable_data=str(DATA),portable_temp=tempfile.gettempdir(),runtime_extracts_to_temp=bool(getattr(sys,'frozen',False) and Path(sys._MEIPASS).name!='_internal'),canva_live_tested=False)
         report.update(project_name_field=name_field,project_name_persisted=name_persisted,manual_repair_ui=manual_ui,error_row_visible=error_row,manual_number_kept=manual_number_kept)
         report['srt_import_ui']=srt_import_ui
+        exported=DATA/'Temp'/'self-test-export.srt'
+        exported.write_text(keyword_srt(dict(source_start=10,scenes=[dict(start=0,duration=4,text='Đi bộ.',queries=['đi bộ','walking'])])),encoding='utf-8-sig')
+        report['srt_export_ui']=(app.srt_export_button.cget('text')=='Tạo SRT dựng Canva từ voice'
+            and load_transcript(exported)[0]['queries']==['đi bộ','walking'])
+        if not report['srt_export_ui']:raise RuntimeError('SRT export UI or keyword round trip failed')
         if not srt_import_ui:raise RuntimeError('SRT import must preserve all 49 cues without voice or FFmpeg')
         if not all((token_visible,copy_ok,name_field,name_persisted,manual_ui,error_row,manual_number_kept)):raise RuntimeError('Pairing/project-name/manual-repair regression check failed')
         atomic_json(DATA/'self-test.json',report);app.close();return

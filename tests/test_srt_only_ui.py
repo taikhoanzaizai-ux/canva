@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-from canva_studio.core import load_transcript,make_keyword_plan,split_batches,make_plan
+from canva_studio.core import load_transcript,make_keyword_plan,split_batches,make_plan,keyword_srt
 
 
 class Value:
@@ -59,6 +59,42 @@ class SrtOnlyUiTests(unittest.TestCase):
         self.probe.assert_not_called()
         self.thread.assert_not_called()
         self.dialog.showerror.assert_not_called()
+
+    def test_voice_export_ignores_previously_selected_srt(self):
+        voice=Path(self.tmp.name)/'voice.wav';voice.touch()
+        ffmpeg=Path(self.tmp.name)/'ffmpeg.exe';ffmpeg.touch()
+        self.app.voice.set(str(voice));self.app.ffmpeg.set(str(ffmpeg))
+        self.app.keyword_config=Mock(return_value=None)
+        self.env['analyze'](self.app,srt_output=str(Path(self.tmp.name)/'output.srt'))
+        self.dialog.showerror.assert_not_called()
+        self.assertTrue(self.app.tasks.empty(),'Export must not replace the active project with imported SRT')
+        inputs=self.thread.call_args.kwargs['args'][0]
+        self.assertEqual(inputs['transcript'],'')
+        self.assertTrue(inputs['srt_output'].endswith('output.srt'))
+        self.probe.assert_called_once()
+
+    def test_voice_export_worker_skips_canva_media_preparation(self):
+        output=Path(self.tmp.name)/'export.srt'
+        tool=Path(self.tmp.name)/'python.exe';tool.touch()
+        model=Path(self.tmp.name)/'model.pt';model.touch()
+        cached=Path(self.tmp.name)/'cached.json'
+        cached.write_text('[{"start":0,"end":4,"text":"Đi bộ ngoài trời."}]',encoding='utf8')
+        no_media=Mock(side_effect=AssertionError('Export must not render titles or cut Canva voice parts'))
+        self.env.update(DATA=Path(self.tmp.name),uuid=uuid,os=os,shutil=__import__('shutil'),
+            subprocess=SimpleNamespace(run=Mock()),NO_WINDOW=0,cached_transcript=Mock(return_value=cached),
+            align_script=lambda seg,script:(seg,False),make_plan=make_plan,keyword_srt=keyword_srt,
+            keyword_updates=Mock(return_value=({1:{'queries':['đi bộ','walking']}},'AI test')),
+            render_titles=no_media,prepare_parts=no_media,add_title_cards=no_media)
+        self.env['analyze_worker'](self.app,dict(transcript='',python=str(tool),model=str(model),
+            ffmpeg='ffmpeg',voice='voice.wav',a=10,b=14,o=35,script='',srt_output=str(output)))
+        kind,payload=self.app.tasks.get_nowait()
+        self.assertEqual(kind,'srt_exported')
+        self.assertEqual(payload[0],str(output))
+        cue=load_transcript(output)[0]
+        self.assertEqual(cue['start'],10)
+        self.assertEqual(cue['end'],14)
+        self.assertEqual(cue['queries'],['đi bộ','walking'])
+        no_media.assert_not_called()
 
     def test_srt_preview_uses_selected_range(self):
         self.app.start.set('3');self.app.end.set('9')
