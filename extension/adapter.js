@@ -55,8 +55,23 @@
     const stem=name.replace(/\.[^.]+$/,'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     return new RegExp('(?:^|[^\\w])'+stem+'(?![\\w])','i').test(text||'');
   }
+  function audioBounds(element){
+    const sliders=[...(element.querySelectorAll?.('[role="slider"]')||[])];
+    const values=pattern=>sliders.filter(s=>pattern.test(norm(label(s)))).map(s=>{
+      const value=s.getAttribute('aria-valuenow');
+      return value!==null&&value!==''?Number(value)/1e6:NaN;
+    });
+    return {starts:values(/bien bat dau|start (?:edge|boundary|time)/),ends:values(/bien ket thuc|end (?:edge|boundary|time)/)};
+  }
+  function isTimelineAudio(element){
+    if(!/doan am thanh|audio clip/.test(norm(element.getAttribute('aria-label'))))return false;
+    const {starts,ends}=audioBounds(element);
+    // Library assets and their play controls can also be labelled audio clips.
+    // Only timeline clips have both editable edge handles with actual times.
+    return starts.length>0&&ends.length>0&&starts.every(Number.isFinite)&&ends.every(Number.isFinite)&&Math.max(...ends)>Math.min(...starts);
+  }
   function timelineAudio(root=document){
-    return [...root.querySelectorAll('button,[role="button"]')].filter(e=>/doan am thanh|audio clip/.test(norm(label(e))));
+    return [...root.querySelectorAll('button,[role="button"]')].filter(isTimelineAudio);
   }
   function audioOnTimeline(name,root=document){
     return timelineAudio(root).some(e=>voiceMatches(name,label(e)));
@@ -64,7 +79,7 @@
   function uploadedVoiceCard(name,root=document,{pending=false}={}){
     const matches=e=>[e.getAttribute('aria-label'),e.getAttribute('title'),e.textContent].some(text=>voiceMatches(name,text));
     const playback=e=>/^(phat|tam dung|nghe thu|xem truoc|play|pause|preview|more|tuy chon|thao tac khac)(\b|$)/.test(norm(e.getAttribute('aria-label')||e.getAttribute('title')));
-    const eligible=e=>visible(e)&&!playback(e)&&!/doan am thanh|audio clip/.test(norm(label(e)));
+    const eligible=e=>visible(e)&&!playback(e)&&!isTimelineAudio(e);
     const loading=e=>e.closest('[aria-busy="true"]')||e.querySelector('[role="progressbar"]');
     const ready=e=>eligible(e)&&(pending?loading(e):!loading(e)&&!e.disabled&&e.getAttribute('aria-disabled')!=='true');
     const selector='button,[role="button"],[draggable="true"]';
@@ -809,6 +824,10 @@
   }
   async function voiceTask(task,checkpoint,voice){
     const raw=await voice({metadata:true});
+    const checkOtherAudio=()=>{
+      const other=timelineAudio().find(e=>!voiceMatches(raw.name,label(e)));
+      if(other)throw Error('Timeline đã có âm thanh khác: '+label(other).slice(0,180)+'. Kiểm tra đúng phần và đúng voice rồi bấm Tiếp tục.');
+    };
     const confirmed=async()=>{
       let issue;
       try{
@@ -818,7 +837,7 @@
       }catch(error){throw issue&&error.message.startsWith('Hết thời gian chờ:')?issue:error;}
     };
     if(audioOnTimeline(raw.name))return confirmed();
-    if(timelineAudio().length)throw Error('Timeline đã có âm thanh khác. Kiểm tra đúng phần và đúng voice rồi bấm Tiếp tục.');
+    checkOtherAudio();
     const last=await tail();
     if(last.image||last.end>5.1)throw Error('Cần thiết kế video ngang trống để bắt đầu. Ứng dụng không ghi đè bản dựng có sẵn.');
     await ensureUploadPanel(false);
@@ -848,7 +867,7 @@
     if(!card)await wait(()=>findCard()||audioOnTimeline(raw.name),
       'Canva chưa hiện '+raw.name+' trong Tải lên → Âm thanh. Bấm Tiếp tục để kiểm tra lại',120000);
     if(audioOnTimeline(raw.name))return confirmed();
-    if(timelineAudio().length)throw Error('Timeline đã có âm thanh khác. Kiểm tra đúng phần và đúng voice rồi bấm Tiếp tục.');
+    checkOtherAudio();
     await checkpoint('voice_insert_intent',{asset:raw.name});
     if(audioOnTimeline(raw.name))return confirmed();
     card=findCard();
@@ -862,9 +881,8 @@
     if(!name)throw Error('Thiếu tên voice cần đối chiếu; chưa xác nhận phần dựng.');
     const audio=timelineAudio().find(e=>voiceMatches(name,label(e)));
     if(!audio)throw Error('Không xác nhận được voice trên timeline; không chuyển sang phần mới.');
-    const starts=[...audio.querySelectorAll('[role="slider"]')].filter(e=>label(e).includes('biên bắt đầu')).map(e=>Number(e.getAttribute('aria-valuenow'))/1e6);
+    const {starts,ends}=audioBounds(audio);
     if(!starts.length||starts.some(v=>!Number.isFinite(v)||Math.abs(v)>.12))throw Error('Voice chưa bắt đầu từ giây 0; cần đưa đúng voice về đầu timeline.');
-    const ends=[...audio.querySelectorAll('[role="slider"]')].filter(e=>label(e).includes('biên kết thúc')).map(e=>Number(e.getAttribute('aria-valuenow'))/1e6);
     if(!ends.length||!ends.every(Number.isFinite)||Math.abs(Math.max(...ends)-duration)>.12)throw Error('Voice trên Canva chưa đủ thời lượng phần này. Không xuất hoặc chuyển phần.');
     return {verified_voice_start:Math.min(...starts),verified_voice_end:Math.max(...ends),voice_name:name};
   }
@@ -996,7 +1014,7 @@
     }
     throw Error('MP4 chưa tải xong sau 10 phút. Giữ tab để Tiếp tục kiểm tra; không tự xuất trùng.');
   }
-  globalThis.SKSTAdapter={readVoiceChunks,norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,randomFallbackCard,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={timelineAudio,readVoiceChunks,norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,randomFallbackCard,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{

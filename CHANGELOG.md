@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.30
+
+- Phân biệt âm thanh trong kho Tải lên với clip thật trên timeline bằng các tay nắm thời gian, tránh báo nhầm có âm thanh khác khi thiết kế còn trống.
+- Dùng lại đúng voice đã tải, hỗ trợ nhãn tay nắm tiếng Anh và tiếng Việt. Nếu có âm thanh khác trên timeline, thông báo ghi tên clip đó.
+
 ## 0.14.29
 
 - Bỏ giới hạn 80 MB của voice trong SKST. Truyền voice qua tiện ích bằng các gói 512 KB và kiểm tra SHA-256 từng gói, tránh lỗi giới hạn thông điệp 64 MiB của Chrome.

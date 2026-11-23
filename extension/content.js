@@ -41,7 +41,7 @@
   async function cycle(){
     if(busy||!active())return;busy=true;let task,advance=false;
     try{
-      const blank_video=!!document.querySelector('button[aria-label="Thêm nội dung đa phương tiện/cảnh trống"]')&&!document.querySelector('[data-role="timeline-scene"] img')&&![...document.querySelectorAll('button,[role="button"]')].some(e=>(e.getAttribute('aria-label')||'').includes('đoạn âm thanh'));
+      const blank_video=!!document.querySelector('button[aria-label="Thêm nội dung đa phương tiện/cảnh trống"]')&&!document.querySelector('[data-role="timeline-scene"] img')&&SKSTAdapter.timelineAudio().length===0;
       const result=await api('next',{blank_video});showStatus(result);
       if(result.export_target){openExportTarget(result.export_target);return;}
       task=result.task;if(!task)return;

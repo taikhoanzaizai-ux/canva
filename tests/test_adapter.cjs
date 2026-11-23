@@ -29,13 +29,14 @@ const duration={getAttribute:key=>key==='placeholder'?'--':null};
 assert.equal(adapter.durationInput({querySelectorAll:()=>[duration]}),duration,'Observed Canva duration uses placeholder, not aria-label');
 assert(adapter.audioOnTimeline('test.mp3',{querySelectorAll:selector=>{
  assert(selector.includes('[role="button"]'));
- return [{getAttribute:k=>k==='aria-label'?'test.mp3, đoạn âm thanh':null}];
+ return [{getAttribute:k=>k==='aria-label'?'test.mp3, đoạn âm thanh':null,
+   querySelectorAll:()=>['biên bắt đầu','biên kết thúc'].map((label,index)=>({getAttribute:k=>k==='aria-label'?label:k==='aria-valuenow'?String(index*1000000):null}))}];
 }}),'Audio timeline DIV role=button must be recognized');
 console.log('Adapter ranking and Canva upload-input regression checks passed. Live full timeline still requires browser validation.');
 
 (async()=>{
  const name='SKST_voice_25ef76ab16becb2b.wav';
- let onTimeline=false,inserted=0;
+ let onTimeline=false,inserted=0,foreign=null,english=false;
  const node=(attrs,extra={})=>({
    offsetWidth:10,getAttribute:key=>attrs[key]||null,querySelector:()=>null,closest:()=>null,
    scrollIntoView(){},click(){assert.fail('Unexpected click');},...extra
@@ -43,14 +44,15 @@ console.log('Adapter ranking and Canva upload-input regression checks passed. Li
  const uploads=node({'aria-label':'Tải lên','aria-selected':'true'});
  const tab=node({'aria-label':'Âm thanh','aria-selected':'true','aria-controls':'audio-library'});
  const plus=node({'aria-label':'Thêm nội dung đa phương tiện/cảnh trống'});
- const preview=node({'aria-label':'Phát '+name});
- const other=node({'aria-label':'Thêm SKST_voice_aabbccddeeff1122.wav'});
- const card=node({'aria-label':'Thêm âm thanh',title:name},{
+ const preview=node({'aria-label':'Phát '+name+' đoạn âm thanh'});
+ const other=node({'aria-label':'SKST_voice_aabbccddeeff1122.wav đoạn âm thanh'});
+ const card=node({'aria-label':name+' đoạn âm thanh',title:name},{
    textContent:'SKST_voice_25ef76ab16be…',click(){onTimeline=true;inserted++;}
  });
  const slider=(label,time)=>node({'aria-label':label,'aria-valuenow':String(time*1e6)});
  const audio=node({'aria-label':name+' đoạn âm thanh'},{
-   querySelectorAll:()=>[slider('biên bắt đầu',0),slider('biên kết thúc',232)]
+   getAttribute:k=>k==='aria-label'?name+(english?' audio clip':' đoạn âm thanh'):null,
+   querySelectorAll:()=>[slider(english?'start edge':'biên bắt đầu',0),slider(english?'end edge':'biên kết thúc',232)]
  });
  const panel={querySelectorAll:()=>[preview,other,card]};
  const document={
@@ -58,7 +60,7 @@ console.log('Adapter ranking and Canva upload-input regression checks passed. Li
    querySelectorAll:selector=>{
      if(selector==='input[type="file"]')assert.fail('Do not upload an existing WAV again');
      if(selector==='[data-role="timeline-scene"]')return [];
-     return [uploads,tab,plus,...(onTimeline?[audio]:[])];
+     return [uploads,tab,plus,preview,other,card,...(foreign?[foreign]:[]),...(onTimeline?[audio]:[])];
    }
  };
  const env={globalThis:{},document,getComputedStyle:()=>({visibility:'visible'}),setTimeout:f=>f()};
@@ -70,7 +72,25 @@ console.log('Adapter ranking and Canva upload-input regression checks passed. Li
  assert.deepEqual(stages,['voice_insert_intent']);
  assert.equal((await run('voice_insert_intent')).voice_name,name);
  assert.equal(inserted,1,'A resumed voice already on the timeline must never be inserted twice');
+ english=true;
+ assert.equal((await run('voice_insert_intent')).voice_name,name,'English edge labels are also timeline handles');
+ assert.equal(inserted,1);
+ onTimeline=false;
+ foreign=node({'aria-label':'other.wav audio clip'},{querySelectorAll:()=>[slider('start boundary',0),slider('end boundary',5)]});
+ await assert.rejects(()=>run('upload_intent'),/âm thanh khác: other.wav/);
+ assert.equal(inserted,1,'A genuinely different timed audio clip must still block insertion');
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+{
+ const slider=(text,value)=>({getAttribute:k=>k==='aria-label'?text:k==='aria-valuenow'?value:null});
+ const clip=(name,handles)=>({getAttribute:k=>k==='aria-label'?name:null,querySelectorAll:()=>handles});
+ const library=clip('old.wav đoạn âm thanh',[]);
+ const seekOnly=clip('Preview old.wav audio clip',[slider('playback position','1000000')]);
+ const pending=clip('pending.wav audio clip',[slider('start edge','0'),slider('end edge',null)]);
+ const placed=clip('real.wav audio clip',[slider('start edge','0'),slider('end edge','4000000')]);
+ assert.equal(adapter.timelineAudio({querySelectorAll:()=>[library,seekOnly,pending]}).length,0);
+ assert.equal(adapter.timelineAudio({querySelectorAll:()=>[library,seekOnly,pending,placed]}).length,1);
+}
 
 (async()=>{
  let clicked=0;
