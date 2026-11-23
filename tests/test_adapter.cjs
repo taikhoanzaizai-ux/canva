@@ -36,7 +36,7 @@ console.log('Adapter ranking and Canva upload-input regression checks passed. Li
 
 (async()=>{
  const name='SKST_voice_25ef76ab16becb2b.wav';
- let onTimeline=false,inserted=0,foreign=null,english=false;
+ let onTimeline=false,inserted=0,foreign=null,english=false,applyEnglish=false;
  const node=(attrs,extra={})=>({
    offsetWidth:10,getAttribute:key=>attrs[key]||null,querySelector:()=>null,closest:()=>null,
    scrollIntoView(){},click(){assert.fail('Unexpected click');},...extra
@@ -44,9 +44,11 @@ console.log('Adapter ranking and Canva upload-input regression checks passed. Li
  const uploads=node({'aria-label':'Tải lên','aria-selected':'true'});
  const tab=node({'aria-label':'Âm thanh','aria-selected':'true','aria-controls':'audio-library'});
  const plus=node({'aria-label':'Thêm nội dung đa phương tiện/cảnh trống'});
- const preview=node({'aria-label':'Phát '+name+' đoạn âm thanh'});
+ const preview=node({'aria-label':'Bật/tắt phát xem trước đoạn âm thanh',title:name,'aria-pressed':'false'});
+ const wrapper=node({'draggable':'true'},{textContent:name});
  const other=node({'aria-label':'SKST_voice_aabbccddeeff1122.wav đoạn âm thanh'});
- const card=node({'aria-label':name+' đoạn âm thanh',title:name},{
+ const card=node({title:name},{
+   getAttribute:k=>k==='aria-label'?(applyEnglish?'Apply audio: ':'Áp dụng âm thanh: ')+name:k==='title'?name:null,
    textContent:'SKST_voice_25ef76ab16be…',click(){onTimeline=true;inserted++;}
  });
  const slider=(label,time)=>node({'aria-label':label,'aria-valuenow':String(time*1e6)});
@@ -54,7 +56,7 @@ console.log('Adapter ranking and Canva upload-input regression checks passed. Li
    getAttribute:k=>k==='aria-label'?name+(english?' audio clip':' đoạn âm thanh'):null,
    querySelectorAll:()=>[slider(english?'start edge':'biên bắt đầu',0),slider(english?'end edge':'biên kết thúc',232)]
  });
- const panel={querySelectorAll:()=>[preview,other,card]};
+ const panel={querySelectorAll:()=>[wrapper,other,card,preview]};
  const document={
    getElementById:id=>id==='audio-library'?panel:null,
    querySelectorAll:selector=>{
@@ -72,13 +74,16 @@ console.log('Adapter ranking and Canva upload-input regression checks passed. Li
  assert.deepEqual(stages,['voice_insert_intent']);
  assert.equal((await run('voice_insert_intent')).voice_name,name);
  assert.equal(inserted,1,'A resumed voice already on the timeline must never be inserted twice');
+ onTimeline=false;applyEnglish=true;
+ assert.equal((await run('upload_intent')).voice_name,name,'English apply action also beats the wrapper and preview');
+ assert.equal(inserted,2);
  english=true;
  assert.equal((await run('voice_insert_intent')).voice_name,name,'English edge labels are also timeline handles');
- assert.equal(inserted,1);
+ assert.equal(inserted,2);
  onTimeline=false;
  foreign=node({'aria-label':'other.wav audio clip'},{querySelectorAll:()=>[slider('start boundary',0),slider('end boundary',5)]});
  await assert.rejects(()=>run('upload_intent'),/âm thanh khác: other.wav/);
- assert.equal(inserted,1,'A genuinely different timed audio clip must still block insertion');
+ assert.equal(inserted,2,'A genuinely different timed audio clip must still block insertion');
 })().catch(e=>{console.error(e);process.exitCode=1;});
 
 {

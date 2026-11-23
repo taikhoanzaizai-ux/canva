@@ -78,13 +78,16 @@
   }
   function uploadedVoiceCard(name,root=document,{pending=false}={}){
     const matches=e=>[e.getAttribute('aria-label'),e.getAttribute('title'),e.textContent].some(text=>voiceMatches(name,text));
-    const playback=e=>/^(phat|tam dung|nghe thu|xem truoc|play|pause|preview|more|tuy chon|thao tac khac)(\b|$)/.test(norm(e.getAttribute('aria-label')||e.getAttribute('title')));
+    const playback=e=>e.getAttribute('aria-pressed')!==null||/^(bat\/tat|toggle|phat|tam dung|nghe thu|xem truoc|play|pause|preview|more|tuy chon|thao tac khac)(\b|$)/.test(norm(e.getAttribute('aria-label')||e.getAttribute('title')));
     const eligible=e=>visible(e)&&!playback(e)&&!isTimelineAudio(e);
     const loading=e=>e.closest('[aria-busy="true"]')||e.querySelector('[role="progressbar"]');
     const ready=e=>eligible(e)&&(pending?loading(e):!loading(e)&&!e.disabled&&e.getAttribute('aria-disabled')!=='true');
     const selector='button,[role="button"],[draggable="true"]';
     const cards=[...root.querySelectorAll(selector)].filter(e=>ready(e)&&matches(e));
-    const add=cards.find(e=>/^(them|add|chen|insert)\b/.test(norm(label(e))));
+    // Current Canva labels the real action "Áp dụng âm thanh: <filename>".
+    // Prefer that action over its draggable wrapper and nested preview controls.
+    const apply=cards.find(e=>/^(ap dung am thanh|apply audio)\s*:/.test(norm(label(e)))&&voiceMatches(name,label(e)));
+    const add=apply||cards.find(e=>/^(them|add|chen|insert)\b/.test(norm(label(e))));
     return add||cards.find(e=>e.getAttribute('draggable')==='true')||cards.at(-1)||
       [...root.querySelectorAll('[title],span')].find(e=>ready(e)&&!e.closest(selector)&&
         !e.childElementCount&&matches(e))||null;

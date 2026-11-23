@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.31
+
+- Ưu tiên nút “Áp dụng âm thanh” đúng tên voice trong kho Canva, tránh bấm nhầm vùng kéo thả hoặc nút nghe thử khiến voice không xuống timeline.
+- Nhận diện cả nhãn tiếng Việt và tiếng Anh; tiếp tục dùng lại voice đã tải, không chèn trùng clip đã có trên timeline.
+
 ## 0.14.30
 
 - Phân biệt âm thanh trong kho Tải lên với clip thật trên timeline bằng các tay nắm thời gian, tránh báo nhầm có âm thanh khác khi thiết kế còn trống.
