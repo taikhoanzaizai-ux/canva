@@ -788,8 +788,27 @@
     const last=await tail();if(Math.abs(last.start-s.start)>.12||Math.abs(last.end-s.start-s.duration)>.12)throw Error('Mốc cảnh tiêu đề chưa khớp voice. Kiểm tra cảnh cuối trước khi tiếp tục.');
     return {title:s.title_text,asset:task.fallback_id};
   }
+  async function readVoiceChunks(meta,request,check){
+    if(typeof meta.data==='string')return [Uint8Array.from(atob(meta.data),c=>c.charCodeAt(0))];
+    if(!Number.isSafeInteger(meta.size)||meta.size<=0||!Number.isInteger(meta.chunk_size)||meta.chunk_size<=0||meta.chunk_size>512*1024||!meta.transfer_id)
+      throw Error('Thông tin truyền voice không hợp lệ. Cập nhật ứng dụng và tiện ích rồi bấm Tiếp tục.');
+    const parts=[];
+    for(let offset=0;offset<meta.size;){
+      await check();
+      const chunk=await request({transfer_id:meta.transfer_id,offset});
+      if(chunk.offset!==offset||typeof chunk.data!=='string'||chunk.data.length>Math.ceil(meta.chunk_size/3)*4)
+        throw Error('Gói voice không đúng vị trí hoặc dung lượng. Bấm Tiếp tục để truyền lại.');
+      const bytes=Uint8Array.from(atob(chunk.data),c=>c.charCodeAt(0));
+      if(bytes.length!==Math.min(meta.chunk_size,meta.size-offset))throw Error('Gói voice bị thiếu dữ liệu. Bấm Tiếp tục để truyền lại.');
+      const hash=await crypto.subtle.digest('SHA-256',bytes);
+      const digest=Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+      if(digest!==chunk.sha256)throw Error('Gói voice không khớp kiểm tra toàn vẹn. Bấm Tiếp tục để truyền lại.');
+      parts.push(bytes);offset+=bytes.length;
+    }
+    await check();return parts;
+  }
   async function voiceTask(task,checkpoint,voice){
-    const raw=await voice();
+    const raw=await voice({metadata:true});
     const confirmed=async()=>{
       let issue;
       try{
@@ -816,8 +835,9 @@
     }
     if(!card&&!findCard({pending:true})){
       const input=await wait(()=>uploadInput(),'Không thấy ô tải voice trong Canva. Mở Tải lên rồi bấm Tiếp tục',30000);
-      const bytes=Uint8Array.from(atob(raw.data),c=>c.charCodeAt(0));
-      const transfer=new DataTransfer();transfer.items.add(new File([bytes],raw.name,{type:raw.mime||'audio/mpeg'}));
+      await checkpoint('voice_transferring',{asset:raw.name});
+      const parts=await readVoiceChunks(raw,voice,guard);
+      const transfer=new DataTransfer();transfer.items.add(new File(parts,raw.name,{type:raw.mime||'audio/mpeg'}));
       await checkpoint('upload_intent',{asset:raw.name});
       if(audioOnTimeline(raw.name))return confirmed();
       if(!findCard()&&!findCard({pending:true})){
@@ -976,7 +996,7 @@
     }
     throw Error('MP4 chưa tải xong sau 10 phút. Giữ tab để Tiếp tục kiểm tra; không tự xuất trùng.');
   }
-  globalThis.SKSTAdapter={norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,randomFallbackCard,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
+  globalThis.SKSTAdapter={readVoiceChunks,norm,label,score,realPerson,subjectMatch,illustrationScene,eligibleCards,reuseEligibleCards,relatedCards,stockCandidates,randomFallbackCard,stockDuration,searchReady,emptyVideoResult,timelineScroller,timeline,tail,photoDuration,timePhoto,rollbackScene,cards,photoCards,uploadInput,uploadedVideoTab,ensureUploadPanel,durationInput,audioOnTimeline,timelineTransitionMenu,closeMenu,errorImage,errorPlacement,auditTask,errorCardTask,titleTask,run:async(task,check,voice,titleAsset,fallbackAsset)=>{
     guard=()=>check();await guard();
     const checkpoint=async(stage,extra={})=>{await check(stage,extra);task.phase={stage,...extra};};
     try{

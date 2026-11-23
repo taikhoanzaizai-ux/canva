@@ -56,7 +56,7 @@
         }
         throw Error('Tư liệu dự phòng chưa chuẩn bị xong. Tiến độ được giữ để tiếp tục.');
       };
-      let output=await SKSTAdapter.run(task,check,()=>api('voice',{id:task.id}),()=>api('title',{id:task.id}),fallback);
+      let output=await SKSTAdapter.run(task,check,(extra={})=>api('voice',{...extra,id:task.id}),()=>api('title',{id:task.id}),fallback);
       if(task.kind==='next_design'){
         output=await chrome.runtime.sendMessage({type:'open_next',body:{id:task.id,client,phase:task.phase,create_url:output.create_url}});
         if(!output||output.error)throw Error(output?.error||'Chưa mở được thiết kế tiếp theo.');

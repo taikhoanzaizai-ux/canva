@@ -1,5 +1,10 @@
 # Các bản cập nhật
 
+## 0.14.29
+
+- Bỏ giới hạn 80 MB của voice trong SKST. Truyền voice qua tiện ích bằng các gói 512 KB và kiểm tra SHA-256 từng gói, tránh lỗi giới hạn thông điệp 64 MiB của Chrome.
+- Đọc thông tin voice trước, chỉ truyền dữ liệu khi cần tải tệp lên Canva; giữ nguyên các cảnh và thời gian SRT.
+
 ## 0.14.28
 
 - Nhập SRT độc lập ngay cả khi đã chọn voice. Giữ một đoạn SRT thành một cảnh, lời đọc và từ khóa đầy đủ, hiển thị đúng mốc SRT đến mili giây.

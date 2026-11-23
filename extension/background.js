@@ -39,7 +39,7 @@ async function refreshLocalBundle(token,force){
 async function bridgeFetch(route,body,token){
   const response=await fetch('http://127.0.0.1:8766/'+route,{
     method:'POST',headers:{'Content-Type':'application/json','X-SKST-Token':token||''},
-    body:JSON.stringify(body),signal:AbortSignal.timeout(20000)
+    body:JSON.stringify(body),signal:AbortSignal.timeout(route==='voice'?180000:20000)
   });
   const data=await response.json();if(!response.ok)throw Error(data.error||'Không kết nối được ứng dụng');return data;
 }

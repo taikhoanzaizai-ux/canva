@@ -7,7 +7,8 @@ from .editorial import refine_queries,repair_scene_texts
 from .downloads import merge_parts, save_part, verify_download
 from .broad_search import related_topic
 from .core import atomic_json, valid_canva, VERSION, repair_pending_keywords, describe,repair_tiny_scenes,project_title
-MIN_EXTENSION_VERSION='0.14.24'
+MIN_EXTENSION_VERSION='0.14.29'
+VOICE_CHUNK_BYTES=512*1024
 
 def canonical_url(value):return str(value or '').split('?')[0].split('#')[0]
 
@@ -28,6 +29,7 @@ class Engine:
         self.state=dict(mode='idle',message='Chọn voice để bắt đầu.',scenes=[],done=[],phase={},used=[],target='',voice='',voice_done=False,export_done=False)
         self.browser={}; self.peers={};self.running=None;self.last_activity=0;self.last_diagnostic=0
         self.events=[]
+        self.voice_transfer=None
         self.path=self.folder/'project.json'
         if self.path.exists():
             try:
@@ -40,6 +42,50 @@ class Engine:
                 refine_queries(self.state.get('scenes',[]),max([*self.state.get('done',[]),int(self.state.get('phase',{}).get('id',0)) if str(self.state.get('phase',{}).get('id','')).isdigit() else 0]))
                 self.state['mode']='paused'; self.state['message']='Đã khôi phục dự án. Kiểm tra đúng thiết kế Canva trước khi tiếp tục.'
             except (ValueError,OSError):pass
+
+    def voice_data(self,body):
+        def require_voice():
+            with self.lock:
+                if not self.check(body)['continue_']:raise ValueError('Đã tạm dừng theo yêu cầu.')
+                if not self.running or self.running['id']!='voice' or self.state['mode']!='running':
+                    raise ValueError('Không có lệnh tải voice.')
+                return Path(self.state['voice']).resolve()
+        path=require_voice()
+        def signature():
+            stat=path.stat()
+            return stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns
+        current=signature()
+        suffix=path.suffix.lower()
+        mime={'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'}.get(suffix,'audio/mpeg')
+        if body.get('metadata') is True:
+            if current[0]<=0:raise ValueError('Tệp voice rỗng.')
+            digest=hashlib.sha256()
+            with path.open('rb') as file:
+                while chunk:=file.read(4*1024*1024):
+                    if require_voice()!=path:raise ValueError('Voice đã thay đổi. Bấm Tiếp tục để đọc lại.')
+                    digest.update(chunk)
+            if signature()!=current:raise ValueError('Voice vừa thay đổi. Bấm Tiếp tục để đọc lại tệp.')
+            name='SKST_voice_'+digest.hexdigest()[:16]+suffix
+            transfer=secrets.token_urlsafe(24)
+            with self.lock:
+                if require_voice()!=path:raise ValueError('Voice đã thay đổi. Bấm Tiếp tục để đọc lại.')
+                self.voice_transfer=dict(token=transfer,path=path,signature=current)
+            return dict(name=name,mime=mime,size=current[0],chunk_size=VOICE_CHUNK_BYTES,transfer_id=transfer)
+        if 'transfer_id' in body:
+            transfer=self.voice_transfer
+            if not transfer or body['transfer_id']!=transfer['token'] or transfer['path']!=path or transfer['signature']!=current:
+                raise ValueError('Phiên truyền voice đã thay đổi. Bấm Tiếp tục để truyền lại đúng tệp.')
+            offset=body.get('offset')
+            if type(offset) is not int or not 0<=offset<current[0]:raise ValueError('Vị trí gói voice không hợp lệ.')
+            with path.open('rb') as file:
+                file.seek(offset);payload=file.read(VOICE_CHUNK_BYTES)
+            if require_voice()!=path or len(payload)!=min(VOICE_CHUNK_BYTES,current[0]-offset) or signature()!=current:
+                raise ValueError('Voice vừa thay đổi trong lúc truyền. Bấm Tiếp tục để đọc lại tệp.')
+            return dict(offset=offset,data=base64.b64encode(payload).decode(),sha256=hashlib.sha256(payload).hexdigest())
+        # Compatibility for existing local callers; the companion uses chunks.
+        payload=path.read_bytes()
+        return dict(name='SKST_voice_'+hashlib.sha256(payload).hexdigest()[:16]+suffix,
+                    mime=mime,data=base64.b64encode(payload).decode())
 
     def save(self): atomic_json(self.path,self.state)
     def archive_project(self):
@@ -389,8 +435,9 @@ class Engine:
             if stage in ('create_intent','create_open') and str(body.get('id'))!='next_design':raise ValueError('Không có lệnh mở thiết kế tiếp theo.')
             if stage:
                 self.state['phase']={**body,'id':str(body['id'])}; self.save()
-                if self.running['id']=='voice' and stage in ('upload_intent','voice_insert_intent'):
-                    action='Đang tải voice lên Canva' if stage=='upload_intent' else 'Đang đặt voice lên timeline'
+                if self.running['id']=='voice' and stage in ('voice_transferring','upload_intent','voice_insert_intent'):
+                    action={'voice_transferring':'Đang truyền voice qua tiện ích theo từng gói nhỏ',
+                            'upload_intent':'Đang tải voice lên Canva','voice_insert_intent':'Đang đặt voice lên timeline'}[stage]
                     self.log(action+'…')
             return dict(continue_=True)
     def result(self, body):
@@ -625,13 +672,7 @@ def serve(engine,port=8766):
                     key=hashlib.sha256(caption.encode()).hexdigest()[:16]
                     v=dict(card_text=caption,name=f'SKST_title_{key}.png')
                 elif self.path=='/voice':
-                    engine.check(body)
-                    if not engine.running or engine.running['id']!='voice' or engine.state['mode']!='running':raise ValueError('Không có lệnh tải voice.')
-                    path=Path(engine.state['voice'])
-                    if path.stat().st_size>80*1024*1024:raise ValueError('Voice vượt 80 MB. Hãy chọn đoạn ngắn hơn.')
-                    payload=path.read_bytes();suffix=path.suffix.lower()
-                    mime={'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'}.get(suffix,'audio/mpeg')
-                    v=dict(name='SKST_voice_'+hashlib.sha256(payload).hexdigest()[:16]+suffix,mime=mime,data=base64.b64encode(payload).decode())
+                    v=engine.voice_data(body)
                 elif self.path=='/companion/update':
                     from .companion import update_manifest
                     from .storage import application_dir

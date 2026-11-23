@@ -491,3 +491,36 @@ for(let i=0;i<500;i++){
  await run();assert.equal(activated,1,'An already named part is idempotent');
  let n=0;await assert.rejects(()=>env.globalThis.SKSTAdapter.run({kind:'rename',design_name:'Bài 9.6'},async()=>{if(++n===2)throw Error('Đã tạm dừng theo yêu cầu.');}),/tạm dừng/);
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+(async()=>{
+ const crypto=require('node:crypto');
+ const env={globalThis:{},crypto:crypto.webcrypto,atob,Uint8Array,ArrayBuffer,console};
+ vm.runInNewContext(fs.readFileSync('extension/adapter.js','utf8'),env);
+ const read=env.globalThis.SKSTAdapter.readVoiceChunks;
+ const size=90*1024*1024+3,chunkSize=512*1024;
+ const meta={size,chunk_size:chunkSize,transfer_id:'large-voice'};
+ let next=0,count=0,checks=0;
+ const reply=async body=>{
+   assert.equal(body.transfer_id,'large-voice');
+   assert.equal(body.offset,next);
+   const data=Buffer.alloc(Math.min(chunkSize,size-next),count%256);
+   const result={offset:next,data:data.toString('base64'),sha256:crypto.createHash('sha256').update(data).digest('hex')};
+   assert(Buffer.byteLength(JSON.stringify(result))<1024*1024,'Each response must stay below the Chrome message limit');
+   next+=data.length;count++;return result;
+ };
+ const parts=await read(meta,reply,async()=>{checks++;});
+ assert.equal(parts.reduce((total,p)=>total+p.length,0),size);
+ assert.equal(parts.at(-1).length,3);
+ assert(checks>=count);
+ assert.equal(next,size);
+ const small={size:3,chunk_size:chunkSize,transfer_id:'test'};
+ const raw=Buffer.from('abc');
+ const valid={offset:0,data:raw.toString('base64'),sha256:crypto.createHash('sha256').update(raw).digest('hex')};
+ await assert.rejects(()=>read(small,async()=>({...valid,offset:1}),async()=>{}),/vị trí/);
+ await assert.rejects(()=>read(small,async()=>({...valid,data:'YQ=='}),async()=>{}),/thiếu/);
+ await assert.rejects(()=>read(small,async()=>({...valid,sha256:'wrong'}),async()=>{}),/toàn vẹn/);
+ let requested=false;
+ await assert.rejects(()=>read(small,async()=>{requested=true;return valid;},async()=>{throw Error('paused');}),/paused/);
+ assert.equal(requested,false);
+ console.log('Large voice transfer, chunk integrity and pause checks passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
